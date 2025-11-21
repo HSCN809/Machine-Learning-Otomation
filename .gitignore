@@ -1,0 +1,25 @@
+# Sanal Ortam
+env/
+venv/
+.env
+
+# Proje Dokümanları
+Proje Başlatma Belgesi Hüseyin Berat Özen.docx
+Proje Başlatma Belgesi Hüseyin Berat Özen.txt
+Yapay Zeka ve Veri Bilimi Projesi Hüseyin Berat Özen.docx
+Yapay Zeka ve Veri Bilimi Projesi Hüseyin Berat Özen.txt
+
+# Diğer Dosyalar
+backend/temp/
+backend/logs/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.log
