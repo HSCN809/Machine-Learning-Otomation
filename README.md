@@ -129,3 +129,14 @@ Veri setlerini şu adresten indirebilirsiniz:
 
 İndirdiğiniz CSV dosyalarını `data_processing/sample_datasets/` klasörüne koyun. Veri setleri otomatik olarak `data_upload.py` sayfasından yüklenebilir.
 
+
+Proje Notları Yapılacaklar:
+1. Her bir aykırı değer tespit yöntemi için ayrı temizleme metotları uygulanacak.
+2. Encoding adımına llm önerisi eklenecek
+3. Llm önerilerine tümünü uygula butonu getirilecek böylece kullanıcı tek tek öneri uygulatmayacak
+4. Temizle Butonu koyulacak Veri yükleme Modülüne 
+5. EDA modülü llm önerileri kısmı incelenecek tekrardan (önemli)
+6. Feature Engineering e llm önerisi kısmı getir (opsiyonel)
+7. Feature engineering Yeni özellik kısmı ele alınacak (önemli)
+8. Llm önerilerindeki kartlar imleçle sağa sola fırlat (sağa öneri uygula sol öneri uygulanmasın) (opsiyonel)
+9. Bütün modüllere düzgün debug sistemi ve log çıktıları ekle (tasarımı güzel dili sade ve basit olmalı) (önemli)

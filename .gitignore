@@ -3,6 +3,8 @@ env/
 venv/
 .env
 
+.cursor/
+
 # Proje Dokümanları
 Proje Başlatma Belgesi Hüseyin Berat Özen.docx
 Proje Başlatma Belgesi Hüseyin Berat Özen.txt

@@ -642,6 +642,9 @@ with st.sidebar:
     if st.button("🔍 EDA", width='stretch', type="primary"):
         pass  # Already on this page
     
+    if st.button("🔧 Veri Ön İşleme", width='stretch'):
+        st.switch_page("pages/data_preprocessing.py")
+    
     st.markdown("---")
     st.markdown("### ⚙️ Ayarlar")
     

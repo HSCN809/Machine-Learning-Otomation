@@ -43,9 +43,47 @@ from backend.modules.data_preprocessing.outlier import (
     get_all_outlier_info
 )
 
+# Encoding functions - from new folder structure
+from backend.modules.data_preprocessing.encoding import (
+    label_encode,
+    one_hot_encode,
+    ordinal_encode,
+    binary_encode,
+    frequency_encode,
+    analyze_categorical_columns,
+    get_categorical_statistics
+)
+
+# Feature engineering functions - from new folder structure
+from backend.modules.data_preprocessing.feature_engineering import (
+    remove_duplicate_rows,
+    drop_columns,
+    create_numeric_feature,
+    create_datetime_feature,
+    create_categorical_combination,
+    apply_feature_engineering_method,
+    analyze_duplicate_rows,
+    analyze_irrelevant_columns,
+    get_feature_engineering_summary
+)
+
+# Scaling functions - from new folder structure
+from backend.modules.data_preprocessing.scaling import (
+    standard_scale,
+    minmax_scale,
+    robust_scale,
+    normalize,
+    power_transform,
+    apply_scaling_method,
+    analyze_numeric_columns,
+    get_scaling_statistics
+)
+
 # LLM enhancement for preprocessing - import from specific modules
 from backend.modules.data_preprocessing.missing_values.llm_enhancer import suggest_missing_values_steps
 from backend.modules.data_preprocessing.outlier.llm_enhancer import suggest_outlier_steps
+from backend.modules.data_preprocessing.encoding.llm_enhancer import suggest_encoding_steps
+from backend.modules.data_preprocessing.scaling.llm_enhancer import suggest_scaling_steps
 from backend.modules.data_upload.data_validator import get_data_summary
 from backend.modules.eda.eda_visualizer import create_box_plot
 from backend.modules.eda.eda_visualizer import create_missing_heatmap
@@ -270,11 +308,11 @@ analysis_level = determine_analysis_level(df, numeric_cols, categorical_cols, da
 
 # Steps definition
 steps = [
+    {"name": "Feature Engineering", "icon": "🛠️", "key": "feature_engineering"},
     {"name": "Eksik Değerler", "icon": "🔍", "key": "missing_values"},
     {"name": "Outlier", "icon": "🎯", "key": "outlier"},
     {"name": "Encoding", "icon": "🔤", "key": "encoding"},
     {"name": "Scaling", "icon": "📏", "key": "scaling"},
-    {"name": "Feature Engineering", "icon": "🛠️", "key": "feature_engineering"},
     {"name": "Özet", "icon": "📊", "key": "summary"}
 ]
 
@@ -366,18 +404,52 @@ for i, step in enumerate(steps):
 
 st.markdown("---")
 
-# Missing values analysis section (only for step 1)
-if current_step == 1:
-    st.markdown("### 📊 Eksik Değer Analizi")
+# Helper function to check if step has operations
+def check_step_has_operation(step_num):
+    """Check if current step has any applied operations."""
+    step_key = steps[step_num - 1]['key']
+    for history_item in st.session_state.preprocessing_history:
+        if history_item.get('step') == step_num or history_item.get('step_key') == step_key:
+            return True
+    return False
+
+# Step content rendering functions
+def render_feature_engineering_step(df):
+    """Render feature engineering preprocessing step."""
+    st.subheader(f"🛠️ {steps[0]['name']}")
     
-    # Check if any operations were applied - if so, show updated analysis
-    step_history = [h for h in st.session_state.preprocessing_history if h.get('step') == 1]
+    # CRITICAL: Use current preprocessed_data directly
+    current_df = st.session_state.preprocessed_data.copy()
+    
+    logger.debug(f"🔍 [FEATURE ENGINEERING STEP] render_feature_engineering_step called")
+    logger.debug(f"🔍 [FEATURE ENGINEERING STEP] current_df shape: {current_df.shape}")
+    logger.debug(f"🔍 [FEATURE ENGINEERING STEP] current_df columns: {list(current_df.columns)}")
+    
+    # Feature engineering analysis section
+    st.markdown("### 📊 Feature Engineering Analizi")
+    
+    # Check if any operations were applied
+    step_history = [h for h in st.session_state.preprocessing_history if h.get('step') == current_step]
     if step_history:
-        st.info("ℹ️ İşlemler uygulandıktan sonra eksik değer analizi güncellenmiştir.")
+        st.info("ℹ️ İşlemler uygulandıktan sonra analiz güncellenmiştir.")
     
-    missing_info = analyze_missing_values(df)
+    # Analyze feature engineering aspects
+    try:
+        duplicate_info = analyze_duplicate_rows(current_df)
+        irrelevant_info = analyze_irrelevant_columns(current_df)
+        logger.debug(f"🔍 [FEATURE ENGINEERING STEP] Analysis complete: {duplicate_info['total_duplicates']} duplicates, {len(irrelevant_info['all_irrelevant'])} irrelevant columns")
+    except Exception as e:
+        logger.error(f"❌ [FEATURE ENGINEERING STEP] Error in analysis: {e}", exc_info=True)
+        st.error(f"❌ Feature engineering analizi sırasında hata oluştu: {str(e)}")
+        return
     
-    # Metrics in cards
+    # Summary metrics - in purple cards
+    total_rows = len(current_df)
+    total_columns = len(current_df.columns)
+    duplicate_count = duplicate_info['total_duplicates']
+    duplicate_percentage = duplicate_info['duplicate_percentage']
+    irrelevant_count = len(irrelevant_info['all_irrelevant'])
+    
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.markdown(f"""
@@ -385,8 +457,627 @@ if current_step == 1:
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             padding: 20px;
             border-radius: 10px;
-            text-align: center;
             color: white;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            min-height: 120px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        '>
+            <div style='font-size: 0.9em; opacity: 0.9; margin-bottom: 8px;'>Toplam Satır</div>
+            <div style='font-size: 2em; font-weight: bold;'>{total_rows:,}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col2:
+        st.markdown(f"""
+        <div style='
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            min-height: 120px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        '>
+            <div style='font-size: 0.9em; opacity: 0.9; margin-bottom: 8px;'>Tekrarlayan Satır</div>
+            <div style='font-size: 2em; font-weight: bold;'>{duplicate_count:,}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col3:
+        st.markdown(f"""
+        <div style='
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            min-height: 120px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        '>
+            <div style='font-size: 0.9em; opacity: 0.9; margin-bottom: 8px;'>Tekrarlayan Yüzdesi</div>
+            <div style='font-size: 2em; font-weight: bold;'>{duplicate_percentage:.2f}%</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col4:
+        st.markdown(f"""
+        <div style='
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            min-height: 120px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        '>
+            <div style='font-size: 0.9em; opacity: 0.9; margin-bottom: 8px;'>Toplam Sütun</div>
+            <div style='font-size: 2em; font-weight: bold;'>{total_columns}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Duplicate rows table
+    if duplicate_count > 0:
+        st.markdown("#### 📋 Tekrarlayan Satırlar")
+        st.info(f"ℹ️ {duplicate_count:,} tekrarlayan satır bulundu ({duplicate_percentage:.2f}%)")
+    else:
+        st.markdown("#### 📋 Tekrarlayan Satırlar")
+        st.success("✅ Veri setinde tekrarlayan satır bulunmuyor!")
+    
+    st.markdown("---")
+    
+    # Irrelevant columns table
+    st.markdown("#### 📋 Gereksiz Sütunlar")
+    if irrelevant_count > 0:
+        irrelevant_data = []
+        for item in irrelevant_info['constant_columns']:
+            irrelevant_data.append({
+                'Sütun': item['column'],
+                'Sebep': item['reason'],
+                'Detay': f"Unique: {item['unique_count']}"
+            })
+        for item in irrelevant_info['low_variance_columns']:
+            irrelevant_data.append({
+                'Sütun': item['column'],
+                'Sebep': item['reason'],
+                'Detay': f"Varyans: {item['variance']:.6f}"
+            })
+        for item in irrelevant_info['high_unique_ratio_columns']:
+            irrelevant_data.append({
+                'Sütun': item['column'],
+                'Sebep': item['reason'],
+                'Detay': f"Unique: {item['unique_count']}/{item['total_rows']} ({item['unique_ratio']:.2%})"
+            })
+        
+        if irrelevant_data:
+            irrelevant_df = pd.DataFrame(irrelevant_data)
+            st.dataframe(irrelevant_df, width='stretch', hide_index=True)
+    else:
+        st.success("✅ Veri setinde gereksiz sütun bulunmuyor!")
+    
+    st.markdown("---")
+    
+    # DataFrame Preview
+    st.markdown("#### 📊 Veri Önizlemesi")
+    st.caption("Feature engineering işlemlerinden önce veri setinin güncel durumu")
+    
+    preview_rows = min(10, len(current_df))
+    st.dataframe(
+        current_df.head(preview_rows),
+        width='stretch',
+        hide_index=False
+    )
+    st.caption(f"Gösterilen: İlk {preview_rows} satır (Toplam: {len(current_df):,} satır, {len(current_df.columns)} sütun)")
+    
+    st.markdown("---")
+    
+    # LLM suggestions section removed - will be added back later if needed
+    
+    # Manual operations
+    st.markdown("### 🔧 Manuel İşlemler")
+    
+    step_key = 'feature_engineering'
+    
+    st.markdown("""
+    <div style='
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        padding: 25px;
+        border-radius: 15px;
+        margin: 20px 0;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    '>
+    """, unsafe_allow_html=True)
+    
+    # Tab 1: Duplicate Rows Removal
+    tab1, tab2, tab3 = st.tabs(["🔄 Tekrarlayan Satırlar", "🗑️ Sütun Silme", "➕ Yeni Özellik"])
+    
+    with tab1:
+        st.markdown("#### 🔄 Tekrarlayan Satırları Kaldır")
+        duplicate_count_tab = duplicate_info['total_duplicates']
+        
+        if duplicate_count_tab > 0:
+            st.info(f"ℹ️ {duplicate_count_tab:,} tekrarlayan satır bulundu")
+            keep_option = st.radio(
+                "Hangi tekrarları tut?",
+                options=['first', 'last', 'none'],
+                format_func=lambda x: {'first': 'İlkini tut', 'last': 'Sonunu tut', 'none': 'Hepsini kaldır'}[x],
+                key="duplicate_keep_option"
+            )
+            
+            if st.button("✅ Uygula", key="apply_duplicate_removal", type="primary", width='stretch'):
+                try:
+                    df_processed = current_df.copy()
+                    df_processed = remove_duplicate_rows(df_processed, keep=keep_option)
+                    
+                    st.session_state.preprocessed_data = df_processed
+                    
+                    st.session_state.preprocessing_history.append({
+                        'step': current_step,
+                        'step_key': step_key,
+                        'type': step_key,
+                        'method': 'remove_duplicates',
+                        'columns': [],
+                        'keep': keep_option,
+                        'timestamp': datetime.now().isoformat(),
+                        'before_data': current_df.copy()
+                    })
+                    
+                    st.success(f"✅ {duplicate_count_tab:,} tekrarlayan satır kaldırıldı!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Hata oluştu: {str(e)}")
+                    logger.error(f"Error removing duplicates: {e}", exc_info=True)
+        else:
+            st.success("✅ Veri setinde tekrarlayan satır bulunmuyor!")
+    
+    with tab2:
+        st.markdown("#### 🗑️ Gereksiz Sütunları Sil")
+        
+        # Get all columns
+        all_columns = current_df.columns.tolist()
+        
+        # Get already dropped columns from history
+        dropped_columns = set()
+        for hist in st.session_state.preprocessing_history:
+            if hist.get('type') == step_key and hist.get('method') == 'drop_column':
+                hist_columns = hist.get('columns', [])
+                if isinstance(hist_columns, list):
+                    dropped_columns.update(hist_columns)
+        
+        # Filter out already dropped columns
+        available_columns = [col for col in all_columns if col not in dropped_columns]
+        
+        if available_columns:
+            selected_columns_to_drop = st.multiselect(
+                "Silinecek sütunları seçin",
+                options=available_columns,
+                help=f"Silinebilir {len(available_columns)} sütun gösteriliyor",
+                label_visibility="collapsed"
+            )
+            
+            if selected_columns_to_drop:
+                st.info(f"✅ {len(selected_columns_to_drop)} sütun seçildi")
+                
+                if st.button("✅ Uygula", key="apply_column_drop", type="primary", width='stretch'):
+                    try:
+                        df_processed = current_df.copy()
+                        df_processed = drop_columns(df_processed, selected_columns_to_drop)
+                        
+                        st.session_state.preprocessed_data = df_processed
+                        
+                        st.session_state.preprocessing_history.append({
+                            'step': current_step,
+                            'step_key': step_key,
+                            'type': step_key,
+                            'method': 'drop_column',
+                            'columns': selected_columns_to_drop,
+                            'timestamp': datetime.now().isoformat(),
+                            'before_data': current_df.copy()
+                        })
+                        
+                        st.success(f"✅ {len(selected_columns_to_drop)} sütun başarıyla silindi: {', '.join(selected_columns_to_drop)}")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Hata oluştu: {str(e)}")
+                        logger.error(f"Error dropping columns: {e}", exc_info=True)
+            else:
+                st.info("ℹ️ Lütfen silmek istediğiniz sütunları seçin")
+        else:
+            st.success("✅ Tüm sütunlar zaten silinmiş veya silinecek sütun bulunmuyor!")
+    
+    with tab3:
+        st.markdown("#### ➕ Yeni Özellik Oluştur")
+        
+        # Sub-tabs for different feature creation types
+        subtab1, subtab2, subtab3 = st.tabs(["🔢 Sayısal İşlemler", "📅 Tarih/Saat", "🔗 Kategorik Birleştirme"])
+        
+        with subtab1:
+            st.markdown("##### 🔢 Sayısal Sütunlardan Yeni Özellik")
+            numeric_cols_fe = current_df.select_dtypes(include=[np.number]).columns.tolist()
+            
+            if len(numeric_cols_fe) >= 2:
+                selected_numeric_cols = st.multiselect(
+                    "İşlem yapılacak sayısal sütunları seçin (en az 2)",
+                    options=numeric_cols_fe,
+                    help="En az 2 sayısal sütun seçmelisiniz"
+                )
+                
+                if len(selected_numeric_cols) >= 2:
+                    operation = st.selectbox(
+                        "İşlem tipi",
+                        options=['add', 'subtract', 'multiply', 'divide'],
+                        format_func=lambda x: {'add': 'Toplama (+)', 'subtract': 'Çıkarma (-)', 'multiply': 'Çarpma (×)', 'divide': 'Bölme (÷)'}[x],
+                        key="numeric_operation"
+                    )
+                    
+                    new_column_name = st.text_input(
+                        "Yeni sütun adı",
+                        value=f"{'_'.join(selected_numeric_cols[:2])}_{operation}",
+                        key="new_numeric_column_name"
+                    )
+                    
+                    if new_column_name and new_column_name not in current_df.columns:
+                        if st.button("✅ Oluştur", key="create_numeric_feature", type="primary", width='stretch'):
+                            try:
+                                df_processed = current_df.copy()
+                                df_processed = create_numeric_feature(df_processed, operation, selected_numeric_cols, new_column_name)
+                                
+                                st.session_state.preprocessed_data = df_processed
+                                
+                                st.session_state.preprocessing_history.append({
+                                    'step': current_step,
+                                    'step_key': step_key,
+                                    'type': step_key,
+                                    'method': 'create_numeric_feature',
+                                    'columns': selected_numeric_cols,
+                                    'operation': operation,
+                                    'new_column_name': new_column_name,
+                                    'timestamp': datetime.now().isoformat(),
+                                    'before_data': current_df.copy()
+                                })
+                                
+                                st.success(f"✅ Yeni özellik '{new_column_name}' başarıyla oluşturuldu!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"❌ Hata oluştu: {str(e)}")
+                                logger.error(f"Error creating numeric feature: {e}", exc_info=True)
+                    elif new_column_name in current_df.columns:
+                        st.warning("⚠️ Bu sütun adı zaten mevcut!")
+                else:
+                    st.info("ℹ️ En az 2 sayısal sütun seçmelisiniz")
+            else:
+                st.info("ℹ️ Yeni sayısal özellik oluşturmak için en az 2 sayısal sütun gereklidir")
+        
+        with subtab2:
+            st.markdown("##### 📅 Tarih/Saat Sütunundan Özellik Çıkar")
+            datetime_cols = current_df.select_dtypes(include=['datetime']).columns.tolist()
+            
+            if datetime_cols:
+                selected_datetime_col = st.selectbox(
+                    "Tarih/saat sütunu seçin",
+                    options=datetime_cols,
+                    key="datetime_column_select"
+                )
+                
+                feature_type = st.selectbox(
+                    "Çıkarılacak özellik",
+                    options=['year', 'month', 'day', 'weekday', 'hour', 'minute', 'second'],
+                    format_func=lambda x: {
+                        'year': 'Yıl', 'month': 'Ay', 'day': 'Gün', 
+                        'weekday': 'Hafta Günü', 'hour': 'Saat', 
+                        'minute': 'Dakika', 'second': 'Saniye'
+                    }[x],
+                    key="datetime_feature_type"
+                )
+                
+                new_column_name = st.text_input(
+                    "Yeni sütun adı",
+                    value=f"{selected_datetime_col}_{feature_type}",
+                    key="new_datetime_column_name"
+                )
+                
+                if new_column_name and new_column_name not in current_df.columns:
+                    if st.button("✅ Oluştur", key="create_datetime_feature", type="primary", width='stretch'):
+                        try:
+                            df_processed = current_df.copy()
+                            df_processed = create_datetime_feature(df_processed, selected_datetime_col, feature_type, new_column_name)
+                            
+                            st.session_state.preprocessed_data = df_processed
+                            
+                            st.session_state.preprocessing_history.append({
+                                'step': current_step,
+                                'step_key': step_key,
+                                'type': step_key,
+                                'method': 'create_datetime_feature',
+                                'columns': [selected_datetime_col],
+                                'feature_type': feature_type,
+                                'new_column_name': new_column_name,
+                                'timestamp': datetime.now().isoformat(),
+                                'before_data': current_df.copy()
+                            })
+                            
+                            st.success(f"✅ Yeni özellik '{new_column_name}' başarıyla oluşturuldu!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Hata oluştu: {str(e)}")
+                            logger.error(f"Error creating datetime feature: {e}", exc_info=True)
+                elif new_column_name in current_df.columns:
+                    st.warning("⚠️ Bu sütun adı zaten mevcut!")
+            else:
+                st.info("ℹ️ Tarih/saat sütunu bulunmuyor")
+        
+        with subtab3:
+            st.markdown("##### 🔗 Kategorik Sütunları Birleştir")
+            categorical_cols_fe = current_df.select_dtypes(include=['object', 'category']).columns.tolist()
+            
+            if len(categorical_cols_fe) >= 2:
+                selected_categorical_cols = st.multiselect(
+                    "Birleştirilecek kategorik sütunları seçin (en az 2)",
+                    options=categorical_cols_fe,
+                    help="En az 2 kategorik sütun seçmelisiniz"
+                )
+                
+                if len(selected_categorical_cols) >= 2:
+                    separator = st.text_input(
+                        "Ayırıcı karakter",
+                        value="_",
+                        key="categorical_separator"
+                    )
+                    
+                    new_column_name = st.text_input(
+                        "Yeni sütun adı",
+                        value=f"{'_'.join(selected_categorical_cols[:2])}_combined",
+                        key="new_categorical_column_name"
+                    )
+                    
+                    if new_column_name and new_column_name not in current_df.columns:
+                        if st.button("✅ Oluştur", key="create_categorical_combination", type="primary", width='stretch'):
+                            try:
+                                df_processed = current_df.copy()
+                                df_processed = create_categorical_combination(df_processed, selected_categorical_cols, new_column_name, separator)
+                                
+                                st.session_state.preprocessed_data = df_processed
+                                
+                                st.session_state.preprocessing_history.append({
+                                    'step': current_step,
+                                    'step_key': step_key,
+                                    'type': step_key,
+                                    'method': 'create_categorical_combination',
+                                    'columns': selected_categorical_cols,
+                                    'separator': separator,
+                                    'new_column_name': new_column_name,
+                                    'timestamp': datetime.now().isoformat(),
+                                    'before_data': current_df.copy()
+                                })
+                                
+                                st.success(f"✅ Yeni özellik '{new_column_name}' başarıyla oluşturuldu!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"❌ Hata oluştu: {str(e)}")
+                                logger.error(f"Error creating categorical combination: {e}", exc_info=True)
+                    elif new_column_name in current_df.columns:
+                        st.warning("⚠️ Bu sütun adı zaten mevcut!")
+                else:
+                    st.info("ℹ️ En az 2 kategorik sütun seçmelisiniz")
+            else:
+                st.info("ℹ️ Yeni kategorik birleştirme oluşturmak için en az 2 kategorik sütun gereklidir")
+    
+    st.markdown("</div>", unsafe_allow_html=True)
+    
+    # Show applied operations for this step with undo functionality - ALWAYS SHOW
+    st.markdown("### 📋 Uygulanan İşlemler")
+    step_history = [h for h in st.session_state.preprocessing_history if h.get('step') == current_step]
+    if step_history:
+        for idx, hist in enumerate(step_history):
+            method_op = hist.get('method', '')
+            columns_op = hist.get('columns', [])
+            new_column_name_op = hist.get('new_column_name', '')
+            
+            col1, col2 = st.columns([4, 1])
+            with col1:
+                if method_op == 'remove_duplicates':
+                    keep_op = hist.get('keep', 'first')
+                    keep_text = {'first': 'ilkini', 'last': 'sonunu', 'none': 'hepsini'}.get(keep_op, keep_op)
+                    display_text = f"Tekrarlayan satırlar kaldırıldı ({keep_text} tutuldu)"
+                elif method_op == 'drop_column':
+                    display_text = f"{', '.join(columns_op)} sütunları silindi"
+                elif method_op in ['create_numeric_feature', 'create_datetime_feature', 'create_categorical_combination']:
+                    display_text = f"Yeni özellik '{new_column_name_op}' oluşturuldu ({method_op})"
+                else:
+                    display_text = f"{method_op} işlemi uygulandı"
+                
+                st.markdown(f"""
+                <div style='
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    padding: 15px;
+                    border-radius: 10px;
+                    margin: 5px 0;
+                    color: white;
+                '>
+                    <span style='font-size: 1.2em; margin-right: 10px;'>✅</span>
+                    {display_text}
+                </div>
+                """, unsafe_allow_html=True)
+            with col2:
+                if st.button("↶ Geri Al", key=f"undo_feature_engineering_{idx}", width='stretch'):
+                    # Remove from history
+                    operation_to_remove = step_history[idx]
+                    removed_method = operation_to_remove.get('method', '')
+                    removed_columns = operation_to_remove.get('columns', [])
+                    
+                    st.session_state.preprocessing_history.remove(operation_to_remove)
+                    
+                    # Rebuild dataframe - suppress INFO logs during rebuild
+                    original_log_level = logger.level
+                    logger.setLevel(logging.WARNING)
+                    try:
+                        df_rebuilt = st.session_state.original_data.copy()
+                        
+                        # Apply all operations in correct order: feature_engineering -> missing_values -> outlier -> encoding
+                        for op in st.session_state.preprocessing_history:
+                            op_type = op.get('type', '')
+                            
+                            if op_type == 'feature_engineering':
+                                op_method = op.get('method', '')
+                                if op_method == 'remove_duplicates':
+                                    df_rebuilt = remove_duplicate_rows(df_rebuilt, keep=op.get('keep', 'first'))
+                                elif op_method == 'drop_column':
+                                    df_rebuilt = drop_columns(df_rebuilt, op.get('columns', []))
+                                elif op_method == 'create_numeric_feature':
+                                    df_rebuilt = create_numeric_feature(
+                                        df_rebuilt,
+                                        op.get('operation', 'add'),
+                                        op.get('columns', []),
+                                        op.get('new_column_name', '')
+                                    )
+                                elif op_method == 'create_datetime_feature':
+                                    df_rebuilt = create_datetime_feature(
+                                        df_rebuilt,
+                                        op.get('columns', [])[0] if op.get('columns') else '',
+                                        op.get('feature_type', 'year'),
+                                        op.get('new_column_name', '')
+                                    )
+                                elif op_method == 'create_categorical_combination':
+                                    df_rebuilt = create_categorical_combination(
+                                        df_rebuilt,
+                                        op.get('columns', []),
+                                        op.get('new_column_name', ''),
+                                        op.get('separator', '_')
+                                    )
+                            elif op_type == 'missing_values':
+                                op_method_dict = op.get('method_dict')
+                                if op_method_dict:
+                                    if op_method_dict.get('numeric') and op_method_dict.get('numeric_cols'):
+                                        df_rebuilt = apply_missing_values_method(
+                                            df_rebuilt, 
+                                            op_method_dict['numeric_cols'], 
+                                            op_method_dict['numeric']
+                                        )
+                                    if op_method_dict.get('categorical') and op_method_dict.get('categorical_cols'):
+                                        df_rebuilt = apply_missing_values_method(
+                                            df_rebuilt, 
+                                            op_method_dict['categorical_cols'], 
+                                            op_method_dict['categorical']
+                                        )
+                                else:
+                                    df_rebuilt = apply_missing_values_method(
+                                        df_rebuilt, 
+                                        op.get('columns', []), 
+                                        op.get('method', '')
+                                    )
+                            elif op_type == 'outlier':
+                                outlier_method = op.get('method', '')
+                                method_parts = outlier_method.split('_')
+                                if len(method_parts) >= 2:
+                                    detection_method = '_'.join(method_parts[:-1])
+                                    action = method_parts[-1]
+                                    df_rebuilt = apply_outlier_method_wrapper(
+                                        df_rebuilt,
+                                        op.get('columns', []),
+                                        detection_method,
+                                        action
+                                    )
+                            elif op_type == 'encoding':
+                                op_columns = op.get('columns', [])
+                                op_method = op.get('method', '')
+                                
+                                if op_method in ['binary_encoding', 'one_hot_encoding']:
+                                    existing_columns = [col for col in op_columns if col in df_rebuilt.columns]
+                                    if existing_columns:
+                                        df_rebuilt = apply_encoding_method(
+                                            df_rebuilt,
+                                            existing_columns,
+                                            op_method
+                                        )
+                                else:
+                                    df_rebuilt = apply_encoding_method(
+                                        df_rebuilt,
+                                        op_columns,
+                                        op_method
+                                    )
+                    finally:
+                        logger.setLevel(original_log_level)
+                    
+                    st.session_state.preprocessed_data = df_rebuilt
+                    
+                    # Remove from applied_suggestion_ids if it was from LLM
+                    if operation_to_remove.get('from_llm'):
+                        remove_method = operation_to_remove.get('method', '')
+                        remove_columns = operation_to_remove.get('columns', [])
+                        step_key_undo = 'feature_engineering'
+                        suggestion_id = f"{step_key_undo}_{remove_method}_{'_'.join(remove_columns) if remove_columns else 'all'}"
+                        if suggestion_id in st.session_state.applied_suggestion_ids:
+                            st.session_state.applied_suggestion_ids.remove(suggestion_id)
+                    
+                    st.success("✅ İşlem geri alındı!")
+                    st.rerun()
+    else:
+        st.info("ℹ️ Henüz bu adımda işlem uygulanmadı.")
+    
+    # Add spacing before navigation buttons
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Action buttons - right aligned at bottom
+    col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
+    with col2:
+        if current_step > 1:
+            if st.button("← Geri", key="prev_step_feature_engineering", width='stretch'):
+                st.session_state.preprocessing_step -= 1
+                st.rerun()
+    with col3:
+        # Atla butonu - son adımda (Summary) gösterilmez
+        if current_step < len(steps):
+            if st.button("Atla", key="skip_step_feature_engineering", width='stretch'):
+                st.session_state.preprocessing_step += 1
+                st.rerun()
+    with col4:
+        has_operation = check_step_has_operation(current_step)
+        if st.button("İleri →", key="next_step_feature_engineering", disabled=not has_operation, width='stretch'):
+            st.session_state.preprocessing_step += 1
+            st.rerun()
+
+
+def render_missing_values_step(df):
+    """Render missing values preprocessing step."""
+    st.subheader(f"🔍 {steps[1]['name']}")
+    
+    # Missing values analysis section (before LLM suggestions)
+    st.markdown("### 📊 Eksik Değer Analizi")
+    
+    # Check if any operations were applied
+    step_history = [h for h in st.session_state.preprocessing_history if h.get('step') == current_step]
+    if step_history:
+        st.info("ℹ️ İşlemler uygulandıktan sonra eksik değer analizi güncellenmiştir.")
+    
+    # Analyze missing values from current dataframe
+    current_df = st.session_state.preprocessed_data.copy()
+    try:
+        missing_info = analyze_missing_values(current_df)
+    except Exception as e:
+        logger.error(f"❌ [MISSING VALUES STEP] Error in analyze_missing_values: {e}", exc_info=True)
+        st.error(f"❌ Eksik değer analizi sırasında hata oluştu: {str(e)}")
+        return
+    
+    # Summary metrics - in purple cards
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.markdown(f"""
+        <div style='
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            text-align: center;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         '>
             <div style='font-size: 0.9em; opacity: 0.9; margin-bottom: 8px;'>Toplam Eksik</div>
@@ -399,8 +1090,8 @@ if current_step == 1:
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             padding: 20px;
             border-radius: 10px;
-            text-align: center;
             color: white;
+            text-align: center;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         '>
             <div style='font-size: 0.9em; opacity: 0.9; margin-bottom: 8px;'>Eksik Yüzdesi</div>
@@ -413,8 +1104,8 @@ if current_step == 1:
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             padding: 20px;
             border-radius: 10px;
-            text-align: center;
             color: white;
+            text-align: center;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         '>
             <div style='font-size: 0.9em; opacity: 0.9; margin-bottom: 8px;'>Etkilenen Sütun</div>
@@ -422,16 +1113,16 @@ if current_step == 1:
         </div>
         """, unsafe_allow_html=True)
     with col4:
-        total_cells = len(df) * len(df.columns)
+        total_cells = len(current_df) * len(current_df.columns)
         complete_cells = total_cells - missing_info['total_missing']
-        complete_pct = (complete_cells/total_cells*100)
+        complete_pct = (complete_cells/total_cells*100) if total_cells > 0 else 100
         st.markdown(f"""
         <div style='
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             padding: 20px;
             border-radius: 10px;
-            text-align: center;
             color: white;
+            text-align: center;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         '>
             <div style='font-size: 0.9em; opacity: 0.9; margin-bottom: 8px;'>Tam Veri</div>
@@ -439,9 +1130,11 @@ if current_step == 1:
         </div>
         """, unsafe_allow_html=True)
     
+    st.markdown("---")
+    
     # Visual heatmap - Always show, even if no missing values
     st.markdown("#### 🔥 Eksik Değer Haritası")
-    missing_viz = create_missing_heatmap(df, library='plotly')
+    missing_viz = create_missing_heatmap(current_df, library='plotly')
     if missing_viz:
         st.plotly_chart(missing_viz, width='stretch', key="missing_heatmap_preprocessing")
     if not missing_info['columns_with_missing']:
@@ -452,7 +1145,7 @@ if current_step == 1:
     
     # Get data types for columns
     def get_dtype_name(col):
-        dtype = df[col].dtype
+        dtype = current_df[col].dtype
         if pd.api.types.is_integer_dtype(dtype):
             return 'Integer'
         elif pd.api.types.is_float_dtype(dtype):
@@ -469,7 +1162,7 @@ if current_step == 1:
             return str(dtype)
     
     # Create table with ALL columns, not just those with missing values
-    all_columns = df.columns.tolist()
+    all_columns = current_df.columns.tolist()
     missing_by_column = missing_info.get('missing_by_column', {})
     missing_percentage_by_column = missing_info.get('missing_percentage_by_column', {})
     
@@ -499,20 +1192,6 @@ if current_step == 1:
         st.success("✅ Veri setinde eksik değer bulunmuyor!")
     
     st.markdown("---")
-
-# Helper function to check if step has operations
-def check_step_has_operation(step_num):
-    """Check if current step has any applied operations."""
-    step_key = steps[step_num - 1]['key']
-    for history_item in st.session_state.preprocessing_history:
-        if history_item.get('step') == step_num or history_item.get('step_key') == step_key:
-            return True
-    return False
-
-# Step content rendering functions
-def render_missing_values_step(df):
-    """Render missing values preprocessing step."""
-    st.subheader(f"🔍 {steps[0]['name']}")
     
     # LLM suggestions
     if llm_enabled:
@@ -1173,13 +1852,12 @@ def render_missing_values_step(df):
     
     st.markdown("</div>", unsafe_allow_html=True)
     
-    # Action buttons in a styled row - Uygula, İleri, Atla yan yana
-    col1, col2, col3, col4 = st.columns([1, 1, 1, 3])
-    with col1:
-        if st.button("✅ Uygula", key="apply_missing", type="primary", width='stretch'):
-            if selected_columns and method:
+    # Action buttons - Uygula butonu tüm satırı kaplar
+    # Uygula butonu sadece yöntem seçildiğinde gösterilir (adım 1 mantığı)
+    if selected_columns and method:
+        if st.button("✅ Uygula", key="apply_missing", type="primary", use_container_width=True):
                 try:
-                    df_processed = df.copy()
+                    df_processed = current_df.copy()
                     total_filled = 0
                     processed_columns = []
                     
@@ -1221,8 +1899,11 @@ def render_missing_values_step(df):
                     
                     # If method is a simple string (backward compatibility)
                     elif isinstance(method, str):
-                        selected_numeric = [col for col in selected_columns if col in numeric_cols]
-                        selected_categorical = [col for col in selected_columns if col in categorical_cols]
+                        # Use current_df to get numeric and categorical columns (not global variables)
+                        current_numeric_cols = current_df.select_dtypes(include=[np.number]).columns.tolist()
+                        current_categorical_cols = current_df.select_dtypes(include=['object', 'category']).columns.tolist()
+                        selected_numeric = [col for col in selected_columns if col in current_numeric_cols]
+                        selected_categorical = [col for col in selected_columns if col in current_categorical_cols]
                         
                         if method in ['mean', 'median', 'interpolation', 'knn'] and selected_numeric:
                             missing_before = df_processed[selected_numeric].isnull().sum().sum()
@@ -1290,26 +1971,15 @@ def render_missing_values_step(df):
                     logger.error(f"Error applying missing values method: {e}", exc_info=True)
                     import traceback
                     logger.error(traceback.format_exc())
-            elif not selected_columns:
-                st.warning("⚠️ Lütfen en az bir sütun seçin")
-            elif not method:
-                st.warning("⚠️ Lütfen bir yöntem seçin")
+        elif not selected_columns:
+            st.warning("⚠️ Lütfen en az bir sütun seçin")
+        elif not method:
+            st.warning("⚠️ Lütfen bir yöntem seçin")
     
-    with col2:
-        has_operation = check_step_has_operation(current_step)
-        if st.button("İleri →", key="next_step_manual", disabled=not has_operation, width='stretch'):
-            st.session_state.preprocessing_step += 1
-            st.rerun()
-    
-    with col3:
-        if st.button("Atla", key="skip_step_manual", width='stretch'):
-            st.session_state.preprocessing_step += 1
-            st.rerun()
-    
-    # Show applied operations for this step with undo functionality
+    # Show applied operations for this step with undo functionality - ALWAYS SHOW
+    st.markdown("### 📋 Uygulanan İşlemler")
     step_history = [h for h in st.session_state.preprocessing_history if h.get('step') == current_step]
     if step_history:
-        st.markdown("### 📋 Uygulanan İşlemler")
         for idx, hist in enumerate(step_history):
             method = hist.get('method', '')
             columns = hist.get('columns', [])
@@ -1371,13 +2041,45 @@ def render_missing_values_step(df):
                     
                     st.session_state.preprocessing_history.remove(operation_to_remove)
                     
-                    # Rebuild the dataframe by reapplying all remaining operations in order
-                    df_rebuilt = st.session_state.original_data.copy()
-                    
-                    # Apply all operations except the removed one
-                    for op in st.session_state.preprocessing_history:
-                        if op.get('step') == current_step and op.get('type') == step_key:
-                            if op != operation_to_remove:
+                    # Rebuild the dataframe by reapplying ALL operations in order (all steps)
+                    # Suppress INFO logs during rebuild
+                    original_log_level = logger.level
+                    logger.setLevel(logging.WARNING)
+                    try:
+                        df_rebuilt = st.session_state.original_data.copy()
+                        
+                        # Apply all operations in correct order: feature_engineering -> missing_values -> outlier -> encoding
+                        for op in st.session_state.preprocessing_history:
+                            op_type = op.get('type', '')
+                            
+                            if op_type == 'feature_engineering':
+                                op_method = op.get('method', '')
+                                if op_method == 'remove_duplicates':
+                                    df_rebuilt = remove_duplicate_rows(df_rebuilt, keep=op.get('keep', 'first'))
+                                elif op_method == 'drop_column':
+                                    df_rebuilt = drop_columns(df_rebuilt, op.get('columns', []))
+                                elif op_method == 'create_numeric_feature':
+                                    df_rebuilt = create_numeric_feature(
+                                        df_rebuilt,
+                                        op.get('operation', 'add'),
+                                        op.get('columns', []),
+                                        op.get('new_column_name', '')
+                                    )
+                                elif op_method == 'create_datetime_feature':
+                                    df_rebuilt = create_datetime_feature(
+                                        df_rebuilt,
+                                        op.get('columns', [])[0] if op.get('columns') else '',
+                                        op.get('feature_type', 'year'),
+                                        op.get('new_column_name', '')
+                                    )
+                                elif op_method == 'create_categorical_combination':
+                                    df_rebuilt = create_categorical_combination(
+                                        df_rebuilt,
+                                        op.get('columns', []),
+                                        op.get('new_column_name', ''),
+                                        op.get('separator', '_')
+                                    )
+                            elif op_type == 'missing_values':
                                 op_method_dict = op.get('method_dict')
                                 if op_method_dict:
                                     # Handle dict method (numeric and categorical separately)
@@ -1400,6 +2102,27 @@ def render_missing_values_step(df):
                                         op.get('columns', []), 
                                         op.get('method', '')
                                     )
+                            elif op_type == 'outlier':
+                                outlier_method = op.get('method', '')
+                                method_parts = outlier_method.split('_')
+                                if len(method_parts) >= 2:
+                                    detection_method = '_'.join(method_parts[:-1])
+                                    action = method_parts[-1]
+                                    df_rebuilt = apply_outlier_method_wrapper(
+                                        df_rebuilt,
+                                        op.get('columns', []),
+                                        detection_method,
+                                        action
+                                    )
+                            elif op_type == 'encoding':
+                                df_rebuilt = apply_encoding_method(
+                                    df_rebuilt,
+                                    op.get('columns', []),
+                                    op.get('method', '')
+                                )
+                    finally:
+                        # Restore original log level
+                        logger.setLevel(original_log_level)
                     
                     # Update preprocessed data
                     st.session_state.preprocessed_data = df_rebuilt
@@ -1412,6 +2135,30 @@ def render_missing_values_step(df):
                     
                     st.success("✅ İşlem geri alındı!")
                     st.rerun()
+    else:
+        st.info("ℹ️ Henüz bu adımda işlem uygulanmadı.")
+    
+    # Add spacing before navigation buttons
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Action buttons - right aligned at bottom
+    col_nav1, col_nav2, col_nav3, col_nav4 = st.columns([3, 1, 1, 1])
+    with col_nav2:
+        if current_step > 1:
+            if st.button("← Geri", key="prev_step_missing_values", width='stretch'):
+                st.session_state.preprocessing_step -= 1
+                st.rerun()
+    with col_nav3:
+        # Atla butonu - son adımda (Summary) gösterilmez
+        if current_step < len(steps):
+            if st.button("Atla", key="skip_step_missing_values", width='stretch'):
+                st.session_state.preprocessing_step += 1
+                st.rerun()
+    with col_nav4:
+        has_operation = check_step_has_operation(current_step)
+        if st.button("İleri →", key="next_step_manual", disabled=not has_operation, width='stretch'):
+            st.session_state.preprocessing_step += 1
+            st.rerun()
 
 
 def apply_missing_values_method(df, columns, method):
@@ -1466,6 +2213,68 @@ def apply_missing_values_method(df, columns, method):
         raise
 
 
+def apply_encoding_method(df, columns, method):
+    """Apply encoding method."""
+    if not columns:
+        logger.warning("No columns provided to apply_encoding_method")
+        return df
+    
+    logger.debug(f"Applying encoding method '{method}' to columns: {columns}")
+    
+    try:
+        # Store original column count
+        original_col_count = len(df.columns)
+        logger.debug(f"Original column count: {original_col_count}")
+        
+        if method == 'label_encoding':
+            result = label_encode(df, columns)
+        elif method == 'one_hot_encoding':
+            result = one_hot_encode(df, columns)
+        elif method == 'ordinal_encoding':
+            result = ordinal_encode(df, columns)
+        elif method == 'binary_encoding':
+            result = binary_encode(df, columns)
+        elif method == 'frequency_encoding':
+            result = frequency_encode(df, columns)
+        else:
+            logger.warning(f"Unknown encoding method: {method}")
+            return df
+        
+        # Check column count change
+        new_col_count = len(result.columns)
+        col_diff = new_col_count - original_col_count
+        logger.debug(f"Column count after: {new_col_count}, Difference: {col_diff}")
+        
+        if col_diff > 0:
+            logger.info(f"✅ Encoding method {method} added {col_diff} new columns")
+        elif col_diff < 0:
+            logger.info(f"✅ Encoding method {method} removed {abs(col_diff)} columns")
+        else:
+            logger.info(f"✅ Encoding method {method} applied (column count unchanged)")
+        
+        return result
+    except Exception as e:
+        logger.error(f"Error in apply_encoding_method: {e}", exc_info=True)
+        raise
+
+
+def apply_scaling_method_wrapper(df, columns, method, **kwargs):
+    """Apply scaling method to specified columns."""
+    if not columns:
+        logger.warning("No columns provided to apply_scaling_method_wrapper")
+        return df
+    
+    logger.debug(f"Applying scaling method '{method}' to columns: {columns}")
+    
+    try:
+        result = apply_scaling_method(df, columns, method, **kwargs)
+        logger.info(f"✅ Scaling method {method} applied to {len(columns)} columns")
+        return result
+    except Exception as e:
+        logger.error(f"Error in apply_scaling_method_wrapper: {e}", exc_info=True)
+        raise
+
+
 def apply_outlier_method_wrapper(df, columns, detection_method, action, **kwargs):
     """Wrapper function to apply outlier method."""
     logger.debug(f"🔍 [OUTLIER WRAPPER] Called with detection_method: {detection_method}, action: {action}, columns: {columns}")
@@ -1505,10 +2314,20 @@ def apply_preprocessing_suggestion(df, suggestion, step_type):
     method = suggestion.get('method', '')
     columns = suggestion.get('columns', [])
     
+    # Convert to Python list if it's a protobuf object
+    if not isinstance(columns, list):
+        columns = list(columns)
+    
     logger.debug(f"🔍 [APPLY SUGGESTION] step_type: {step_type}, method: {method}, columns: {columns}")
     logger.debug(f"🔍 [APPLY SUGGESTION] df shape before: {df.shape if df is not None else 'None'}")
     
+    # Normalize columns list - filter out empty strings and None values
+    if isinstance(columns, list):
+        columns = [col for col in columns if col and col.strip()]
     suggestion_id = f"{step_type}_{method}_{'_'.join(columns) if columns else 'all'}"
+    logger.debug(f"🔍 [APPLY SUGGESTION] Checking suggestion_id: {suggestion_id}")
+    logger.debug(f"🔍 [APPLY SUGGESTION] step_type: {step_type}, method: {method}, columns: {columns}")
+    logger.debug(f"🔍 [APPLY SUGGESTION] Current applied_suggestion_ids: {st.session_state.applied_suggestion_ids}")
     if suggestion_id in st.session_state.applied_suggestion_ids:
         st.warning("Bu öneri zaten uygulandı")
         logger.warning(f"⚠️ [APPLY SUGGESTION] Suggestion already applied: {suggestion_id}")
@@ -1528,7 +2347,7 @@ def apply_preprocessing_suggestion(df, suggestion, step_type):
         logger.debug(f"🔍 [APPLY SUGGESTION] Outlier method parts: {method_parts}")
         if len(method_parts) >= 2:
             detection_method = '_'.join(method_parts[:-1])  # e.g., "isolation_forest"
-            action = method_parts[-1]  # "remove", "cap", or "winsorize"
+            action = method_parts[-1]  # "remove" or "cap"
             logger.debug(f"🔍 [APPLY SUGGESTION] Parsed - detection_method: {detection_method}, action: {action}")
             logger.debug(f"🔍 [APPLY SUGGESTION] df shape before outlier method: {df_processed.shape}")
             logger.debug(f"🔍 [APPLY SUGGESTION] df columns before: {list(df_processed.columns)}")
@@ -1544,12 +2363,42 @@ def apply_preprocessing_suggestion(df, suggestion, step_type):
             logger.warning(f"⚠️ [APPLY SUGGESTION] Invalid outlier method format: {method}")
             st.error(f"❌ Geçersiz yöntem formatı: {method}")
             return
+    elif step_type == 'encoding':
+        logger.debug(f"🔍 [APPLY SUGGESTION] Applying encoding method: {method}")
+        df_processed = apply_encoding_method(df_processed, columns, method)
+        logger.debug(f"🔍 [APPLY SUGGESTION] df shape after encoding: {df_processed.shape}")
+    elif step_type == 'scaling':
+        logger.debug(f"🔍 [APPLY SUGGESTION] Applying scaling method: {method}")
+        df_processed = apply_scaling_method_wrapper(df_processed, columns, method)
+        logger.debug(f"🔍 [APPLY SUGGESTION] df shape after scaling: {df_processed.shape}")
+    elif step_type == 'feature_engineering':
+        logger.debug(f"🔍 [APPLY SUGGESTION] Applying feature_engineering method: {method}")
+        # Parse method and extract parameters from suggestion
+        if method == 'remove_duplicates':
+            keep = suggestion.get('keep', 'first')
+            df_processed = remove_duplicate_rows(df_processed, keep=keep)
+        elif method == 'drop_column':
+            df_processed = drop_columns(df_processed, columns)
+        elif method == 'create_numeric_feature':
+            operation = suggestion.get('operation', 'add')
+            new_column_name = suggestion.get('new_column_name', '')
+            df_processed = create_numeric_feature(df_processed, operation, columns, new_column_name)
+        elif method == 'create_datetime_feature':
+            column = columns[0] if columns else ''
+            feature_type = suggestion.get('feature_type', 'year')
+            new_column_name = suggestion.get('new_column_name', '')
+            df_processed = create_datetime_feature(df_processed, column, feature_type, new_column_name)
+        elif method == 'create_categorical_combination':
+            separator = suggestion.get('separator', '_')
+            new_column_name = suggestion.get('new_column_name', '')
+            df_processed = create_categorical_combination(df_processed, columns, new_column_name, separator)
+        logger.debug(f"🔍 [APPLY SUGGESTION] df shape after feature_engineering: {df_processed.shape}")
     
     # Save to session state
-    logger.debug(f"🔍 [APPLY SUGGESTION] Saving to session state - df_processed shape: {df_processed.shape}")
     st.session_state.preprocessed_data = df_processed
     st.session_state.applied_suggestion_ids.append(suggestion_id)
-    st.session_state.preprocessing_history.append({
+    
+    history_item = {
         'step': current_step,
         'step_key': step_type,
         'type': step_type,
@@ -1558,15 +2407,1834 @@ def apply_preprocessing_suggestion(df, suggestion, step_type):
         'timestamp': datetime.now().isoformat(),
         'from_llm': True,
         'before_data': df.copy()  # Store before state for undo
-    })
-    logger.info(f"✅ [APPLY SUGGESTION] Suggestion applied successfully: {suggestion_id}")
-    st.success("✅ Öneri uygulandı!")
+    }
+    st.session_state.preprocessing_history.append(history_item)
+    
+    logger.info(f"✅ [APPLY] {step_type} - {method} applied")
+    if step_type == 'feature_engineering':
+        if method == 'remove_duplicates':
+            st.success(f"✅ Tekrarlayan satırlar başarıyla kaldırıldı!")
+        elif method == 'drop_column':
+            st.success(f"✅ {len(columns)} sütun başarıyla silindi: {', '.join(columns)}")
+        elif method in ['create_numeric_feature', 'create_datetime_feature', 'create_categorical_combination']:
+            new_column_name = suggestion.get('new_column_name', '')
+            st.success(f"✅ Yeni özellik '{new_column_name}' başarıyla oluşturuldu!")
+        else:
+            st.success(f"✅ Feature engineering işlemi başarıyla uygulandı!")
+    elif step_type == 'encoding':
+        st.success(f"✅ Encoding başarıyla uygulandı! {len(columns)} sütun işlendi: {', '.join(columns)}")
+    else:
+        st.success(f"✅ İşlem başarıyla uygulandı!")
     st.rerun()
+
+
+def get_processed_encoding_columns():
+    """Helper function to get all processed encoding columns from history."""
+    processed_columns = set()
+    encoding_methods = {}  # Store method used for each column
+    
+    # Check ALL preprocessing history for encoding operations
+    all_history = st.session_state.preprocessing_history
+    encoding_count = 0
+    
+    for hist in all_history:
+        hist_type = hist.get('type', '')
+        hist_step_key = hist.get('step_key', '')
+        is_encoding = (hist_type == 'encoding' or hist_step_key == 'encoding')
+        
+        if is_encoding:
+            hist_columns = hist.get('columns', [])
+            # Convert to Python list if it's a protobuf object
+            if not isinstance(hist_columns, list):
+                hist_columns = list(hist_columns)
+            hist_method = hist.get('method', '')
+            
+            if isinstance(hist_columns, list) and len(hist_columns) > 0:
+                encoding_count += 1
+                processed_columns.update(hist_columns)
+                # Store method for each column (keep first method if multiple)
+                for col in hist_columns:
+                    if col not in encoding_methods:
+                        encoding_methods[col] = hist_method
+    
+    logger.info(f"📊 [ENCODING] Found {encoding_count} encoding operation(s) → Processed columns: {sorted(processed_columns)}")
+    return processed_columns, encoding_methods
+
+
+def apply_feature_engineering_method_wrapper(df, method, **kwargs):
+    """Wrapper function to apply feature engineering method."""
+    logger.debug(f"🔍 [FEATURE ENGINEERING WRAPPER] Applying method: {method}")
+    from backend.modules.data_preprocessing.feature_engineering.processor import apply_feature_engineering_method as fe_apply
+    return fe_apply(df, method, **kwargs)
+
+
+def get_processed_feature_engineering_columns():
+    """Helper function to get all columns affected by feature engineering operations."""
+    processed_columns = set()
+    dropped_columns = set()
+    created_columns = set()
+    
+    # Check ALL preprocessing history for feature engineering operations
+    all_history = st.session_state.preprocessing_history
+    
+    for hist in all_history:
+        hist_type = hist.get('type', '')
+        hist_step_key = hist.get('step_key', '')
+        is_fe = (hist_type == 'feature_engineering' or hist_step_key == 'feature_engineering')
+        
+        if is_fe:
+            method = hist.get('method', '')
+            if method == 'drop_column':
+                hist_columns = hist.get('columns', [])
+                if not isinstance(hist_columns, list):
+                    hist_columns = list(hist_columns)
+                dropped_columns.update(hist_columns)
+            elif method in ['create_numeric_feature', 'create_datetime_feature', 'create_categorical_combination']:
+                new_column_name = hist.get('new_column_name', '')
+                if new_column_name:
+                    created_columns.add(new_column_name)
+    
+    processed_columns = dropped_columns | created_columns
+    logger.debug(f"🔍 [FEATURE ENGINEERING] Dropped columns: {sorted(dropped_columns)}, Created columns: {sorted(created_columns)}")
+    return processed_columns, dropped_columns, created_columns
+
+
+def render_scaling_step(df):
+    """Render scaling preprocessing step."""
+    st.subheader(f"📏 {steps[4]['name']}")
+    
+    # CRITICAL: Use current preprocessed_data directly
+    current_df = st.session_state.preprocessed_data.copy()
+    
+    # Recalculate numeric_cols from CURRENT dataframe
+    current_numeric_cols = current_df.select_dtypes(include=[np.number]).columns.tolist()
+    
+    logger.debug(f"🔍 [SCALING STEP] render_scaling_step called")
+    logger.debug(f"🔍 [SCALING STEP] current_df shape: {current_df.shape}")
+    logger.debug(f"🔍 [SCALING STEP] current_numeric_cols: {current_numeric_cols}")
+    
+    # Scaling analysis section
+    st.markdown("### 📊 Sayısal Sütun Analizi")
+    
+    # Check if any operations were applied
+    step_history = [h for h in st.session_state.preprocessing_history if h.get('step') == current_step]
+    if step_history:
+        st.info("ℹ️ İşlemler uygulandıktan sonra sayısal sütun analizi güncellenmiştir.")
+    
+    # Analyze numeric columns
+    try:
+        numeric_analysis = analyze_numeric_columns(current_df)
+        logger.debug(f"🔍 [SCALING STEP] Analysis complete: {numeric_analysis['total_numeric']} numeric columns")
+    except Exception as e:
+        logger.error(f"❌ [SCALING STEP] Error in analyze_numeric_columns: {e}", exc_info=True)
+        st.error(f"❌ Sayısal sütun analizi sırasında hata oluştu: {str(e)}")
+        return
+    
+    # Get processed scaling columns from history
+    processed_columns_for_count = set()
+    for hist in st.session_state.preprocessing_history:
+        hist_type = hist.get('type', '')
+        hist_step_key = hist.get('step_key', '')
+        is_scaling = (hist_type == 'scaling' or hist_step_key == 'scaling')
+        
+        if is_scaling:
+            hist_columns = hist.get('columns', [])
+            # Convert to Python list if it's a protobuf object
+            if not isinstance(hist_columns, list):
+                hist_columns = list(hist_columns)
+            if isinstance(hist_columns, list) and len(hist_columns) > 0:
+                processed_columns_for_count.update(hist_columns)
+    
+    # Summary metrics - in purple cards
+    total_numeric = len(current_numeric_cols)
+    total_rows = len(current_df)
+    scaled_count = len(processed_columns_for_count)
+    unscaled_count = max(0, total_numeric - scaled_count)
+    
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.markdown(f"""
+        <div style='
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        '>
+            <div style='font-size: 0.9em; opacity: 0.9; margin-bottom: 8px;'>Toplam Sayısal Sütun</div>
+            <div style='font-size: 2em; font-weight: bold;'>{total_numeric}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col2:
+        st.markdown(f"""
+        <div style='
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        '>
+            <div style='font-size: 0.9em; opacity: 0.9; margin-bottom: 8px;'>Ölçeklenen Sütun</div>
+            <div style='font-size: 2em; font-weight: bold;'>{scaled_count}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col3:
+        st.markdown(f"""
+        <div style='
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        '>
+            <div style='font-size: 0.9em; opacity: 0.9; margin-bottom: 8px;'>Ölçeklenmemiş Sütun</div>
+            <div style='font-size: 2em; font-weight: bold;'>{unscaled_count}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col4:
+        st.markdown(f"""
+        <div style='
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        '>
+            <div style='font-size: 0.9em; opacity: 0.9; margin-bottom: 8px;'>Toplam Satır Sayısı</div>
+            <div style='font-size: 2em; font-weight: bold;'>{total_rows:,}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Column-based detail table
+    st.markdown("#### 📋 Sütun Bazlı Detay")
+    scaling_detail_data = []
+    
+    # Get detailed statistics for outlier percentage and median
+    scaling_stats = get_scaling_statistics(current_df)
+    
+    for col_info in numeric_analysis.get('numeric_columns', []):
+        col_name = col_info.get('column_name', '')
+        is_scaled = col_name in processed_columns_for_count
+        scaling_status = '✅ Ölçeklendi' if is_scaled else '⏳ Bekliyor'
+        
+        # Get additional stats from get_scaling_statistics
+        col_stats = scaling_stats.get(col_name, {})
+        median_val = col_stats.get('median')
+        outlier_pct = col_stats.get('outlier_percentage', 0)
+        
+        # Get CV and Range from col_info
+        cv = col_info.get('coefficient_of_variation')
+        range_val = col_info.get('range')
+        
+        scaling_detail_data.append({
+            'Sütun': col_name,
+            'Ortalama': f"{col_info.get('mean', 0):.2f}" if col_info.get('mean') is not None else 'N/A',
+            'Medyan': f"{median_val:.2f}" if median_val is not None else 'N/A',
+            'Std Sapma': f"{col_info.get('std', 0):.2f}" if col_info.get('std') is not None else 'N/A',
+            'CV': f"{cv:.2f}" if cv is not None and not np.isinf(cv) else 'N/A',
+            'Min': f"{col_info.get('min', 0):.2f}" if col_info.get('min') is not None else 'N/A',
+            'Max': f"{col_info.get('max', 0):.2f}" if col_info.get('max') is not None else 'N/A',
+            'Aralık': f"{range_val:.2f}" if range_val is not None else 'N/A',
+            'Çarpıklık': f"{col_info.get('skewness', 0):.2f}" if col_info.get('skewness') is not None else 'N/A',
+            'Aykırı %': f"{outlier_pct:.2f}%" if outlier_pct is not None else 'N/A',
+            'Durum': scaling_status
+        })
+    
+    if scaling_detail_data:
+        scaling_df = pd.DataFrame(scaling_detail_data)
+        st.dataframe(scaling_df, width='stretch', hide_index=True)
+    else:
+        st.success("✅ Veri setinde sayısal sütun bulunmuyor!")
+    
+    st.markdown("---")
+    
+    # LLM suggestions section
+    if llm_enabled:
+        step_key = 'scaling'
+        suggestions_key = f'step_{current_step}_{step_key}'
+        index_key = f'preprocessing_suggestion_index_{step_key}'
+        
+        # Initialize suggestion index for this step
+        if index_key not in st.session_state:
+            st.session_state[index_key] = 0
+        
+        with st.expander("🤖 LLM Önerileri", expanded=True):
+            if not current_numeric_cols:
+                st.info("ℹ️ Sayısal sütun bulunmadığı için LLM önerisi alınamaz.")
+            elif suggestions_key not in st.session_state.preprocessing_suggestions:
+                if st.button("💡 LLM Önerilerini Al", key=f"get_suggestions_{step_key}"):
+                    with st.spinner("🤖 LLM önerileri oluşturuluyor..."):
+                        # Recalculate data_summary from current_df
+                        current_data_summary = get_data_summary(current_df)
+                        
+                        # Get scaling statistics to filter binary columns
+                        scaling_stats = get_scaling_statistics(current_df)
+                        
+                        # Filter out binary columns (Min=0, Max=1)
+                        non_binary_numeric_cols = []
+                        binary_cols_filtered = []
+                        for col in current_numeric_cols:
+                            col_stats = scaling_stats.get(col, {})
+                            min_val = col_stats.get('min')
+                            max_val = col_stats.get('max')
+                            # Binary sütun kontrolü: Min=0 ve Max=1 ise atla
+                            if isinstance(min_val, (int, float)) and isinstance(max_val, (int, float)):
+                                if min_val == 0 and max_val == 1:
+                                    binary_cols_filtered.append(col)
+                                    continue  # Binary sütun, LLM'e gönderme
+                            non_binary_numeric_cols.append(col)
+                        
+                        # Show info if binary columns were filtered
+                        if binary_cols_filtered:
+                            st.info(f"ℹ️ {len(binary_cols_filtered)} binary sütun (Min=0, Max=1) LLM önerilerinden çıkarıldı: {', '.join(binary_cols_filtered[:5])}{'...' if len(binary_cols_filtered) > 5 else ''}")
+                        
+                        # Update data_summary with scaling statistics for detailed metrics
+                        if 'scaling_statistics' not in current_data_summary:
+                            current_data_summary['scaling_statistics'] = {}
+                        current_data_summary['scaling_statistics'] = scaling_stats
+                        
+                        suggestions_result = suggest_scaling_steps(
+                            data_summary=current_data_summary,
+                            numeric_columns=non_binary_numeric_cols,  # Filtrelenmiş: binary sütunlar hariç
+                            categorical_columns=[],
+                            analysis_level=analysis_level
+                        )
+                        
+                        if suggestions_result.get('error'):
+                            st.error(f"❌ LLM önerisi alınamadı: {suggestions_result.get('error')}")
+                        else:
+                            suggestions = suggestions_result.get('suggestions', [])
+                            # Filter suggestions for scaling step and exclude binary columns
+                            filtered_suggestions = [
+                                s for s in suggestions 
+                                if s.get('preprocessing_type') == step_key
+                                and all(col in non_binary_numeric_cols for col in s.get('columns', []))
+                            ]
+                            
+                            st.session_state.preprocessing_suggestions[suggestions_key] = filtered_suggestions
+                            st.session_state[index_key] = 0
+                            if filtered_suggestions:
+                                st.success(f"✅ {len(filtered_suggestions)} öneri alındı")
+                            st.rerun()
+            else:
+                # Refresh button
+                if st.button("🔄 Yeni Öneriler Al", key=f"refresh_suggestions_{step_key}"):
+                    del st.session_state.preprocessing_suggestions[suggestions_key]
+                    st.session_state[index_key] = 0
+                    st.rerun()
+            
+            # Display suggestions in carousel format
+            if suggestions_key in st.session_state.preprocessing_suggestions:
+                suggestions = st.session_state.preprocessing_suggestions[suggestions_key]
+                if suggestions:
+                    current_index = st.session_state[index_key]
+                    
+                    st.markdown(f"<div style='text-align: center; margin: 10px 0;'><strong>{len(suggestions)} öneri sunuldu</strong> | <em>Öneri {current_index + 1}/{len(suggestions)}</em></div>", unsafe_allow_html=True)
+                    
+                    # Navigation buttons and current suggestion
+                    col1, col2, col3 = st.columns([1, 3, 1])
+                    
+                    with col1:
+                        if st.button("◀️ Önceki", key=f"prev_suggestion_{step_key}", disabled=(current_index == 0), width='stretch'):
+                            st.session_state[index_key] = max(0, current_index - 1)
+                            st.rerun()
+                    
+                    with col2:
+                        # Current suggestion - kart tasarımı
+                        suggestion = suggestions[current_index]
+                        method = suggestion.get('method', 'Bilinmeyen')
+                        columns = suggestion.get('columns', [])
+                        reason = suggestion.get('reason', '')
+                        priority = suggestion.get('priority', 'orta')
+                        analysis_level_sugg = suggestion.get('analysis_level', 'Temel')
+                        
+                        # HTML tag'lerini temizle
+                        import html as html_module
+                        import re
+                        if reason:
+                            try:
+                                reason = html_module.unescape(reason)
+                            except:
+                                pass
+                            reason = re.sub(r'<[^>]+>', '', reason, flags=re.DOTALL | re.IGNORECASE)
+                            reason = ' '.join(reason.split()).strip()
+                        
+                        # Priority ve level renkleri
+                        priority_colors = {'yüksek': '#f44336', 'orta': '#ff9800', 'düşük': '#4caf50'}
+                        level_colors = {'Temel': '#4CAF50', 'Orta': '#FF9800', 'Gelişmiş': '#F44336'}
+                        priority_color = priority_colors.get(priority, '#ff9800')
+                        level_color = level_colors.get(analysis_level_sugg, '#4CAF50')
+                        
+                        # Güvenli HTML
+                        method_safe = html_module.escape(str(method))
+                        reason_safe = html_module.escape(reason) if reason else 'Açıklama bulunamadı.'
+                        priority_safe = html_module.escape(priority)
+                        level_safe = html_module.escape(analysis_level_sugg)
+                        columns_display = ', '.join(columns) if columns else 'Tüm sütunlar'
+                        columns_safe = html_module.escape(columns_display)
+                        
+                        # Kart tasarımı
+                        card_html = f"""
+                        <div style='
+                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                            padding: 25px;
+                            border-radius: 15px;
+                            margin: 10px 0;
+                            color: white;
+                            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                            min-height: 180px;
+                            border-left: 5px solid #f0f0f0;
+                        '>
+                            <div style='display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;'>
+                                <h3 style='color: white; margin: 0; margin-right: 10px; font-size: 1.3em;'>
+                                    🎯 {method_safe}
+                                </h3>
+                                <div style='display: flex; gap: 10px;'>
+                                    <span style='
+                                        background: {priority_color};
+                                        color: white;
+                                        padding: 5px 12px;
+                                        border-radius: 20px;
+                                        font-size: 0.75em;
+                                        font-weight: bold;
+                                    '>
+                                        Öncelik: {priority_safe}
+                                    </span>
+                                    <span style='
+                                        background: {level_color};
+                                        color: white;
+                                        padding: 5px 12px;
+                                        border-radius: 20px;
+                                        font-size: 0.75em;
+                                        font-weight: bold;
+                                        text-transform: uppercase;
+                                    '>
+                                        {level_safe}
+                                    </span>
+                                </div>
+                            </div>
+                            <div style='
+                                background: rgba(255, 255, 255, 0.15);
+                                padding: 10px 15px;
+                                border-radius: 8px;
+                                margin-bottom: 15px;
+                                display: inline-block;
+                            '>
+                                <span style='color: #f0f0f0; font-size: 0.95em;'>
+                                    <strong>📍 Sütunlar:</strong> {columns_safe}
+                                </span>
+                            </div>
+                            <p style='
+                                color: white; 
+                                margin: 15px 0 0 0; 
+                                line-height: 1.7; 
+                                font-size: 1em;
+                                padding: 10px;
+                                background: rgba(255, 255, 255, 0.1);
+                                border-radius: 8px;
+                            '>
+                                {reason_safe}
+                            </p>
+                        </div>
+                        """
+                        st.markdown(card_html, unsafe_allow_html=True)
+                        
+                        # Uygula butonu
+                        method = suggestion.get('method', '')
+                        columns = suggestion.get('columns', [])
+                        
+                        # Check if already applied
+                        is_applied = False
+                        for col in columns:
+                            for history_item in st.session_state.preprocessing_history:
+                                if (history_item.get('step') == current_step and 
+                                    history_item.get('type') == step_key and
+                                    history_item.get('method') == method and
+                                    col in history_item.get('columns', [])):
+                                    is_applied = True
+                                    break
+                            if is_applied:
+                                break
+                        
+                        if is_applied:
+                            st.button("✅ Zaten Uygulandı", key=f"apply_suggestion_{step_key}_{current_index}", width='stretch', disabled=True)
+                        else:
+                            if st.button("✅ Uygula", key=f"apply_suggestion_{step_key}_{current_index}", width='stretch', type="primary"):
+                                apply_preprocessing_suggestion(current_df, suggestion, step_key)
+                    
+                    with col3:
+                        if st.button("Sonraki ▶️", key=f"next_suggestion_{step_key}", disabled=(current_index == len(suggestions) - 1), width='stretch'):
+                            st.session_state[index_key] = min(len(suggestions) - 1, current_index + 1)
+                            st.rerun()
+                    
+                    # Dots indicator
+                    dots_html = "<div style='text-align: center; margin-top: 15px;'>"
+                    for i in range(len(suggestions)):
+                        if i == current_index:
+                            dots_html += "🔵 "
+                        else:
+                            dots_html += "⚪ "
+                    dots_html += "</div>"
+                    st.markdown(dots_html, unsafe_allow_html=True)
+                else:
+                    st.info("ℹ️ Henüz öneri bulunmuyor.")
+    
+    st.markdown("---")
+    
+    # Manual operations section
+    st.markdown("### 🔧 Manuel İşlemler")
+    
+    # Create a styled container for manual operations
+    st.markdown("""
+    <div style='
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        padding: 25px;
+        border-radius: 15px;
+        margin: 20px 0;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    '>
+    """, unsafe_allow_html=True)
+    
+    # Sütun Seçimi
+    st.markdown("#### 📌 Sütun Seçimi")
+    
+    # Get already processed columns from step history
+    step_history = [h for h in st.session_state.preprocessing_history if h.get('step') == current_step]
+    processed_columns = set()
+    for hist in step_history:
+        hist_columns = hist.get('columns', [])
+        if isinstance(hist_columns, list):
+            processed_columns.update(hist_columns)
+    
+    # Filter out already processed columns from selection options
+    available_columns = [col for col in current_numeric_cols if col not in processed_columns]
+    
+    if available_columns:
+        selected_columns = st.multiselect(
+            "Ölçeklemek istediğiniz sütunları seçin",
+            options=available_columns,
+            help=f"Ölçeklenebilir {len(available_columns)} sütun gösteriliyor (Daha önce işlenen {len(processed_columns)} sütun gizlendi)",
+            label_visibility="collapsed"
+        )
+        
+        if selected_columns:
+            st.info(f"✅ {len(selected_columns)} sayısal sütun seçildi")
+        else:
+            st.info("ℹ️ Lütfen ölçeklemek istediğiniz sütunları seçin")
+    else:
+        if current_numeric_cols:
+            st.success(f"✅ Tüm sayısal sütunlar ölçeklendi! ({len(processed_columns)} sütun)")
+        else:
+            st.success("✅ Veri setinde sayısal sütun bulunmuyor!")
+        selected_columns = []
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Yöntem Seçimi
+    st.markdown("#### ⚙️ Yöntem Seçimi")
+    
+    all_columns_processed = len(current_numeric_cols) > 0 and len(available_columns) == 0
+    
+    if selected_columns:
+        method = st.selectbox(
+            "Scaling Yöntemi",
+            options=['standard_scaler', 'minmax_scaler', 'robust_scaler', 'normalizer', 'power_transform'],
+            key="scaling_method",
+            help="Sayısal sütunları ölçeklemek için yöntem seçin",
+            label_visibility="collapsed"
+        )
+        
+        # Method info card
+        method_info = {
+            'standard_scaler': {
+                'name': 'Standard Scaler',
+                'description': '<strong>Nasıl Çalışır:</strong> Ortalama=0, Standart sapma=1 olacak şekilde ölçekler. Formül: (x - mean) / std<br><br><strong>✓ Avantajları:</strong> Çoğu ML algoritması için uygun, normal dağılımlı veriler için ideal<br><strong>✗ Dezavantajları:</strong> Aykırı değerlerden etkilenir<br><strong>📌 Kullanım:</strong> Normal dağılıma yakın veriler için'
+            },
+            'minmax_scaler': {
+                'name': 'Min-Max Scaler',
+                'description': '<strong>Nasıl Çalışır:</strong> Verileri 0-1 aralığına ölçekler. Formül: (x - min) / (max - min)<br><br><strong>✓ Avantajları:</strong> Sinir ağları için ideal, sınırlı aralık<br><strong>✗ Dezavantajları:</strong> Aykırı değerlerden etkilenir<br><strong>📌 Kullanım:</strong> Sinir ağları ve 0-1 aralığı gerektiren algoritmalar için'
+            },
+            'robust_scaler': {
+                'name': 'Robust Scaler',
+                'description': '<strong>Nasıl Çalışır:</strong> Median ve IQR kullanarak ölçekler. Formül: (x - median) / IQR<br><br><strong>✓ Avantajları:</strong> Aykırı değerlere dayanıklı<br><strong>✗ Dezavantajları:</strong> Normal dağılımdan uzaklaşabilir<br><strong>📌 Kullanım:</strong> Aykırı değer içeren veriler için'
+            },
+            'normalizer': {
+                'name': 'Normalizer',
+                'description': '<strong>Nasıl Çalışır:</strong> Her satırı (örnek) birim normuna ölçekler (l2 norm)<br><br><strong>✓ Avantajları:</strong> Satır bazlı normalizasyon, metin sınıflandırma için uygun<br><strong>✗ Dezavantajları:</strong> Sütun bazlı değil, satır bazlı<br><strong>📌 Kullanım:</strong> Metin sınıflandırma, kümeleme için'
+            },
+            'power_transform': {
+                'name': 'Power Transform',
+                'description': '<strong>Nasıl Çalışır:</strong> Veriyi normal dağılıma yaklaştırır (Yeo-Johnson veya Box-Cox)<br><br><strong>✓ Avantajları:</strong> Çarpık verileri düzeltir, normal dağılıma yaklaştırır<br><strong>✗ Dezavantajları:</strong> Daha yavaş, parametre ayarı gerekir<br><strong>📌 Kullanım:</strong> Çarpık veriler için'
+            }
+        }
+        
+        method_info_text = method_info.get(method, {'name': method, 'description': 'İşlem bilgisi bulunamadı'})
+        
+        # Show method info card
+        card_id = f"method_card_{method}"
+        col_left, col_center, col_right = st.columns([1, 3, 1])
+        with col_center:
+            st.markdown(f"""
+            <div id="{card_id}" style="width: 100%; height: 180px; perspective: 1000px; margin: 10px 0;">
+                <div class="method-card-inner" style="position: relative; width: 100%; height: 100%; text-align: center; transition: transform 0.6s; transform-style: preserve-3d;">
+                    <div class="method-card-front" style="position: absolute; width: 100%; height: 100%; backface-visibility: hidden; border-radius: 10px; display: flex; align-items: center; justify-content: center; padding: 15px 30px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                        <div style="text-align: center; width: 100%;">
+                            <div style="font-size: 1.5em; font-weight: bold; margin-bottom: 5px;">📊 Bilgi Kartı</div>
+                            <div style="font-size: 1.4em;">{method_info_text['name']}</div>
+                        </div>
+                    </div>
+                    <div class="method-card-back" style="position: absolute; width: 100%; height: 100%; backface-visibility: hidden; border-radius: 10px; display: flex; align-items: center; justify-content: center; padding: 15px 30px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); background: linear-gradient(135deg, #764ba2 0%, #667eea 100%); color: white; transform: rotateY(180deg); font-size: 0.9em; line-height: 1.5; text-align: center; overflow-y: auto;">
+                        <div style="width: 100%;">
+                            <div style="font-weight: bold; margin-bottom: 8px; font-size: 1.1em;">{method_info_text['name']}</div>
+                            <div style="padding: 0 10px; font-size: 0.9em; line-height: 1.5;">{method_info_text['description']}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <style>
+                #{card_id}:hover .method-card-inner {{
+                    transform: rotateY(180deg);
+                }}
+            </style>
+            """, unsafe_allow_html=True)
+    else:
+        method = None
+        if all_columns_processed:
+            st.info("ℹ️ Bütün sayısal sütunlar ölçeklenmiştir. Sonraki adıma geçebilirsiniz.")
+        else:
+            st.info("ℹ️ Önce sütun seçin")
+    
+    st.markdown("</div>", unsafe_allow_html=True)
+    
+    # Action buttons - Uygula butonu
+    if selected_columns and method:
+        if st.button("✅ Uygula", key="apply_scaling", type="primary", use_container_width=True):
+            try:
+                df_processed = current_df.copy()
+                df_processed = apply_scaling_method_wrapper(df_processed, selected_columns, method)
+                
+                # Save to session state
+                st.session_state.preprocessed_data = df_processed
+                
+                # Add to history
+                st.session_state.preprocessing_history.append({
+                    'step': current_step,
+                    'step_key': 'scaling',
+                    'type': 'scaling',
+                    'method': method,
+                    'columns': selected_columns,
+                    'timestamp': datetime.now().isoformat(),
+                    'before_data': current_df.copy()
+                })
+                
+                st.success(f"✅ İşlem başarıyla uygulandı! {len(selected_columns)} sütun ölçeklendi: {', '.join(selected_columns)}")
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ Hata oluştu: {str(e)}")
+                logger.error(f"Error applying scaling method: {e}", exc_info=True)
+    elif not method:
+        pass
+    
+    # Show applied operations for this step with undo functionality
+    st.markdown("### 📋 Uygulanan İşlemler")
+    step_history = [h for h in st.session_state.preprocessing_history if h.get('step') == current_step]
+    if step_history:
+        for i, operation in enumerate(step_history):
+            col1, col2 = st.columns([4, 1])
+            with col1:
+                method_op = operation.get('method', 'Bilinmeyen')
+                columns_op = operation.get('columns', [])
+                display_text = f"{', '.join(columns_op)} sütunları - {method_op} ile ölçeklendi" if columns_op else f"Tüm sütunlar - {method_op} ile ölçeklendi"
+                
+                st.markdown(f"""
+                <div style='
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    padding: 15px;
+                    border-radius: 10px;
+                    margin: 5px 0;
+                    color: white;
+                '>
+                    <span style='font-size: 1.2em; margin-right: 10px;'>✅</span>
+                    {display_text}
+                </div>
+                """, unsafe_allow_html=True)
+            with col2:
+                if st.button("↶ Geri Al", key=f"undo_scaling_{i}", width='stretch'):
+                    # Remove from history
+                    operation_to_remove = step_history[i]
+                    
+                    # Remove from preprocessing_history
+                    st.session_state.preprocessing_history.remove(operation_to_remove)
+                    
+                    # Rebuild the dataframe by reapplying ALL operations in order
+                    original_log_level = logger.level
+                    logger.setLevel(logging.WARNING)
+                    try:
+                        df_rebuilt = st.session_state.original_data.copy()
+                        
+                        # Apply all operations in correct order
+                        for op in st.session_state.preprocessing_history:
+                            op_type = op.get('type', '')
+                            
+                            if op_type == 'feature_engineering':
+                                op_method = op.get('method', '')
+                                if op_method == 'remove_duplicates':
+                                    df_rebuilt = remove_duplicate_rows(df_rebuilt, keep=op.get('keep', 'first'))
+                                elif op_method == 'drop_column':
+                                    df_rebuilt = drop_columns(df_rebuilt, op.get('columns', []))
+                                elif op_method == 'create_numeric_feature':
+                                    df_rebuilt = create_numeric_feature(
+                                        df_rebuilt,
+                                        op.get('operation', 'add'),
+                                        op.get('columns', []),
+                                        op.get('new_column_name', '')
+                                    )
+                                elif op_method == 'create_datetime_feature':
+                                    df_rebuilt = create_datetime_feature(
+                                        df_rebuilt,
+                                        op.get('columns', [])[0] if op.get('columns') else '',
+                                        op.get('feature_type', 'year'),
+                                        op.get('new_column_name', '')
+                                    )
+                                elif op_method == 'create_categorical_combination':
+                                    df_rebuilt = create_categorical_combination(
+                                        df_rebuilt,
+                                        op.get('columns', []),
+                                        op.get('new_column_name', ''),
+                                        op.get('separator', '_')
+                                    )
+                            elif op_type == 'missing_values':
+                                op_method_dict = op.get('method_dict')
+                                if op_method_dict:
+                                    if op_method_dict.get('numeric') and op_method_dict.get('numeric_cols'):
+                                        df_rebuilt = apply_missing_values_method(
+                                            df_rebuilt, 
+                                            op_method_dict['numeric_cols'], 
+                                            op_method_dict['numeric']
+                                        )
+                                    if op_method_dict.get('categorical') and op_method_dict.get('categorical_cols'):
+                                        df_rebuilt = apply_missing_values_method(
+                                            df_rebuilt, 
+                                            op_method_dict['categorical_cols'], 
+                                            op_method_dict['categorical']
+                                        )
+                                else:
+                                    df_rebuilt = apply_missing_values_method(
+                                        df_rebuilt, 
+                                        op.get('columns', []), 
+                                        op.get('method', '')
+                                    )
+                            elif op_type == 'outlier':
+                                outlier_method = op.get('method', '')
+                                method_parts = outlier_method.split('_')
+                                if len(method_parts) >= 2:
+                                    detection_method = '_'.join(method_parts[:-1])
+                                    action = method_parts[-1]
+                                    df_rebuilt = apply_outlier_method_wrapper(
+                                        df_rebuilt,
+                                        op.get('columns', []),
+                                        detection_method,
+                                        action
+                                    )
+                            elif op_type == 'encoding':
+                                df_rebuilt = apply_encoding_method(
+                                    df_rebuilt,
+                                    op.get('columns', []),
+                                    op.get('method', '')
+                                )
+                            elif op_type == 'scaling':
+                                df_rebuilt = apply_scaling_method_wrapper(
+                                    df_rebuilt,
+                                    op.get('columns', []),
+                                    op.get('method', '')
+                                )
+                    finally:
+                        logger.setLevel(original_log_level)
+                    
+                    st.session_state.preprocessed_data = df_rebuilt
+                    
+                    # Remove from applied_suggestion_ids if it was from LLM
+                    if operation_to_remove.get('from_llm'):
+                        remove_method = operation_to_remove.get('method', '')
+                        remove_columns = operation_to_remove.get('columns', [])
+                        # Use 'scaling' as step_key since we're in scaling step
+                        step_key_undo = 'scaling'
+                        suggestion_id = f"{step_key_undo}_{remove_method}_{'_'.join(remove_columns) if remove_columns else 'all'}"
+                        if suggestion_id in st.session_state.applied_suggestion_ids:
+                            st.session_state.applied_suggestion_ids.remove(suggestion_id)
+                    
+                    st.success("✅ İşlem geri alındı!")
+                    st.rerun()
+    else:
+        st.info("ℹ️ Henüz bu adımda işlem uygulanmadı.")
+    
+    # Add spacing before navigation buttons
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Action buttons - right aligned at bottom
+    col_nav1, col_nav2, col_nav3, col_nav4 = st.columns([3, 1, 1, 1])
+    with col_nav2:
+        if current_step > 1:
+            if st.button("← Geri", key="prev_step_scaling", width='stretch'):
+                st.session_state.preprocessing_step -= 1
+                st.rerun()
+    with col_nav3:
+        if current_step < len(steps):
+            if st.button("Atla", key="skip_step_scaling", width='stretch'):
+                st.session_state.preprocessing_step += 1
+                st.rerun()
+    with col_nav4:
+        has_operation = check_step_has_operation(current_step)
+        if st.button("İleri →", key="next_step_scaling", disabled=not has_operation, width='stretch'):
+            st.session_state.preprocessing_step += 1
+            st.rerun()
+
+
+def render_encoding_step(df):
+    """Render encoding preprocessing step."""
+    st.subheader(f"🔤 {steps[3]['name']}")
+    
+    # CRITICAL: Use current preprocessed_data directly (like outlier step does)
+    # Don't rely on df parameter - get fresh copy from session state
+    current_df = st.session_state.preprocessed_data.copy()
+    
+    # Get categorical columns from CURRENT dataframe ONLY (object and category types)
+    # IMPORTANT: We only work with columns that exist in current_df
+    current_categorical_cols = current_df.select_dtypes(include=['object', 'category']).columns.tolist()
+    
+    logger.debug(f"🔍 [ENCODING STEP] render_encoding_step called")
+    logger.debug(f"🔍 [ENCODING STEP] current_df shape: {current_df.shape}")
+    logger.debug(f"🔍 [ENCODING STEP] current_df columns: {list(current_df.columns)}")
+    logger.debug(f"🔍 [ENCODING STEP] current_categorical_cols: {current_categorical_cols}")
+    
+    # Get processed encoding columns ONCE at the beginning (reusable everywhere)
+    processed_columns, encoding_methods = get_processed_encoding_columns()
+    
+    logger.debug(f"🔍 [ENCODING STEP] Processed columns: {processed_columns}")
+    logger.debug(f"🔍 [ENCODING STEP] Encoding methods: {encoding_methods}")
+    
+    # Encoding analysis section
+    st.markdown("### 📊 Kategorik Sütun Analizi")
+    
+    # Check if any operations were applied
+    step_history = [h for h in st.session_state.preprocessing_history if h.get('step') == current_step]
+    if step_history:
+        st.info("ℹ️ İşlemler uygulandıktan sonra kategorik sütun analizi güncellenmiştir.")
+    
+    # Analyze categorical columns from current dataframe
+    try:
+        categorical_analysis = analyze_categorical_columns(current_df)
+        logger.debug(f"🔍 [ENCODING STEP] Analysis complete: {categorical_analysis['total_categorical']} categorical columns")
+    except Exception as e:
+        logger.error(f"❌ [ENCODING STEP] Error in analyze_categorical_columns: {e}", exc_info=True)
+        st.error(f"❌ Kategorik sütun analizi sırasında hata oluştu: {str(e)}")
+        return
+    
+    # Summary metrics - in purple cards
+    # Calculate processed columns directly from preprocessing_history (like manual operations)
+    processed_columns_for_count = set()
+    for hist in st.session_state.preprocessing_history:
+        hist_type = hist.get('type', '')
+        hist_step_key = hist.get('step_key', '')
+        is_encoding = (hist_type == 'encoding' or hist_step_key == 'encoding')
+        
+        if is_encoding:
+            hist_columns = hist.get('columns', [])
+            # Convert to Python list if it's a protobuf object
+            if not isinstance(hist_columns, list):
+                hist_columns = list(hist_columns)
+            if isinstance(hist_columns, list) and len(hist_columns) > 0:
+                processed_columns_for_count.update(hist_columns)
+    
+    logger.info(f"📊 [CARDS] Encoded columns count: {len(processed_columns_for_count)} → {sorted(processed_columns_for_count)}")
+    
+    # Get categorical columns from CURRENT dataframe (before encoding step)
+    # This is the dataframe that came from previous steps (feature_engineering, missing values, outlier, etc.)
+    # We need to rebuild the state BEFORE encoding to get accurate count
+    # Temporarily suppress INFO logs during rebuild to avoid noise
+    original_log_level = logger.level
+    logger.setLevel(logging.WARNING)
+    try:
+        df_before_encoding = st.session_state.original_data.copy()
+        # Apply all operations EXCEPT encoding to get the state before encoding step
+        for hist in st.session_state.preprocessing_history:
+            hist_type = hist.get('type', '')
+            hist_step_key = hist.get('step_key', '')
+            # Skip encoding operations - we want state BEFORE encoding
+            if hist_type == 'encoding' or hist_step_key == 'encoding':
+                continue
+            
+            # Apply feature_engineering operations
+            if hist_type == 'feature_engineering':
+                op_method = hist.get('method', '')
+                if op_method == 'remove_duplicates':
+                    df_before_encoding = remove_duplicate_rows(df_before_encoding, keep=hist.get('keep', 'first'))
+                elif op_method == 'drop_column':
+                    df_before_encoding = drop_columns(df_before_encoding, hist.get('columns', []))
+                elif op_method == 'create_numeric_feature':
+                    df_before_encoding = create_numeric_feature(
+                        df_before_encoding,
+                        hist.get('operation', 'add'),
+                        hist.get('columns', []),
+                        hist.get('new_column_name', '')
+                    )
+                elif op_method == 'create_datetime_feature':
+                    df_before_encoding = create_datetime_feature(
+                        df_before_encoding,
+                        hist.get('columns', [])[0] if hist.get('columns') else '',
+                        hist.get('feature_type', 'year'),
+                        hist.get('new_column_name', '')
+                    )
+                elif op_method == 'create_categorical_combination':
+                    df_before_encoding = create_categorical_combination(
+                        df_before_encoding,
+                        hist.get('columns', []),
+                        hist.get('new_column_name', ''),
+                        hist.get('separator', '_')
+                    )
+            # Apply missing_values operations
+            elif hist_type == 'missing_values':
+                op_method_dict = hist.get('method_dict')
+                if op_method_dict:
+                    # Handle dict method (numeric and categorical separately)
+                    if op_method_dict.get('numeric') and op_method_dict.get('numeric_cols'):
+                        df_before_encoding = apply_missing_values_method(
+                            df_before_encoding, 
+                            op_method_dict['numeric_cols'], 
+                            op_method_dict['numeric']
+                        )
+                    if op_method_dict.get('categorical') and op_method_dict.get('categorical_cols'):
+                        df_before_encoding = apply_missing_values_method(
+                            df_before_encoding, 
+                            op_method_dict['categorical_cols'], 
+                            op_method_dict['categorical']
+                        )
+                else:
+                    # Handle string method
+                    df_before_encoding = apply_missing_values_method(
+                        df_before_encoding,
+                        hist.get('columns', []),
+                        hist.get('method', '')
+                    )
+            # Apply outlier operations
+            elif hist_type == 'outlier':
+                outlier_method = hist.get('method', '')
+                method_parts = outlier_method.split('_')
+                if len(method_parts) >= 2:
+                    detection_method = '_'.join(method_parts[:-1])
+                    action = method_parts[-1]
+                    df_before_encoding = apply_outlier_method_wrapper(
+                        df_before_encoding,
+                        hist.get('columns', []),
+                        detection_method,
+                        action
+                    )
+    finally:
+        # Restore original log level
+        logger.setLevel(original_log_level)
+    
+    # Get categorical columns from dataframe BEFORE encoding step
+    categorical_cols_before_encoding = df_before_encoding.select_dtypes(include=['object', 'category']).columns.tolist()
+    
+    # Total categorical = categorical columns in dataframe BEFORE encoding step
+    total_categorical = len(categorical_cols_before_encoding)
+    total_rows = len(current_df)
+    
+    # Count: encoded = all processed columns (even if removed), unencoded = total - encoded
+    encoded_count = len(processed_columns_for_count)
+    unencoded_count = max(0, total_categorical - encoded_count)  # Ensure non-negative
+    
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.markdown(f"""
+        <div style='
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        '>
+            <div style='font-size: 0.9em; opacity: 0.9; margin-bottom: 8px;'>Toplam Kategorik Sütun</div>
+            <div style='font-size: 2em; font-weight: bold;'>{total_categorical}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col2:
+        st.markdown(f"""
+        <div style='
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        '>
+            <div style='font-size: 0.9em; opacity: 0.9; margin-bottom: 8px;'>Encoding Yapılmamış</div>
+            <div style='font-size: 2em; font-weight: bold;'>{unencoded_count}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col3:
+        st.markdown(f"""
+        <div style='
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        '>
+            <div style='font-size: 0.9em; opacity: 0.9; margin-bottom: 8px;'>Encoding Yapılmış</div>
+            <div style='font-size: 2em; font-weight: bold;'>{encoded_count}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col4:
+        st.markdown(f"""
+        <div style='
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        '>
+            <div style='font-size: 0.9em; opacity: 0.9; margin-bottom: 8px;'>Toplam Sütun Sayısı</div>
+            <div style='font-size: 2em; font-weight: bold;'>{len(current_df.columns)}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Categorical columns table
+    st.markdown("#### 📋 Kategorik Sütun Detayları")
+    
+    # Use processed_columns and encoding_methods already calculated at the beginning
+    # No need to recalculate - already available from get_processed_encoding_columns()
+    
+    logger.debug(f"🔍 [ENCODING TABLE] Processed columns: {processed_columns}")
+    logger.debug(f"🔍 [ENCODING TABLE] Encoding methods: {encoding_methods}")
+    
+    # Create table data - include both current categorical columns AND encoded columns that were removed
+    # This ensures encoded columns (even if removed) are shown with "Yapıldı" status
+    # Use categorical_cols_before_encoding instead of current_categorical_cols to include columns that were removed by encoding
+    all_columns_to_show = set(categorical_cols_before_encoding) | processed_columns
+    
+    # Get original data for columns that were removed (only for display purposes)
+    original_df = st.session_state.original_data if 'original_data' in st.session_state else current_df
+    
+    table_data = []
+    for col_name in all_columns_to_show:
+        # Check if column exists in current dataframe
+        if col_name in current_df.columns:
+            # Column exists in current dataframe - get current info
+            if col_name in current_categorical_cols:
+                # Still categorical - get from analysis
+                col_info = next((c for c in categorical_analysis['categorical_columns'] if c['column_name'] == col_name), None)
+                if col_info:
+                    unique_count = col_info['unique_count']
+                    cardinality = col_info['cardinality']
+                    data_type = col_info['data_type']
+                else:
+                    unique_count = current_df[col_name].nunique()
+                    cardinality = 'Yüksek' if unique_count > 10 else 'Düşük'
+                    data_type = str(current_df[col_name].dtype)
+            else:
+                # Column was encoded but still exists (e.g., frequency encoding keeps original)
+                # Get info from current_df
+                unique_count = current_df[col_name].nunique()
+                cardinality = 'Yüksek' if unique_count > 10 else 'Düşük'
+                data_type = str(current_df[col_name].dtype)
+        else:
+            # Column was removed (e.g., one-hot, binary encoding removed original)
+            # Get original info for display (only for showing encoding status)
+            if col_name in original_df.columns:
+                unique_count = original_df[col_name].nunique()
+                cardinality = 'Yüksek' if unique_count > 10 else 'Düşük'
+                data_type = str(original_df[col_name].dtype)
+            else:
+                # Fallback if column not in original either
+                unique_count = 0
+                cardinality = 'Bilinmiyor'
+                data_type = 'object'
+        
+        # Check encoding status - directly from preprocessing_history (like manual operations)
+        encoding_status = 'Yapılmadı'
+        
+        for hist in st.session_state.preprocessing_history:
+            hist_type = hist.get('type', '')
+            hist_step_key = hist.get('step_key', '')
+            is_encoding = (hist_type == 'encoding' or hist_step_key == 'encoding')
+            
+            if is_encoding:
+                hist_columns = hist.get('columns', [])
+                # Convert to Python list if it's a protobuf object
+                if not isinstance(hist_columns, list):
+                    hist_columns = list(hist_columns)
+                if isinstance(hist_columns, list) and col_name in hist_columns:
+                    encoding_status = 'Yapıldı'
+                    break
+        
+        logger.info(f"📋 [TABLE] {col_name}: {encoding_status}")
+        
+        table_data.append({
+            'Sütun Adı': col_name,
+            'Veri Türü': data_type,
+            'Unique Değer Sayısı': unique_count,
+            'Cardinality': cardinality,
+            'Encoding Durumu': encoding_status
+        })
+    
+    if table_data:
+        df_table = pd.DataFrame(table_data)
+        st.dataframe(df_table, width='stretch', hide_index=True)
+    else:
+        st.success("✅ Veri setinde kategorik sütun bulunmuyor!")
+    
+    st.markdown("---")
+    
+    # DataFrame Önizleme
+    st.markdown("#### 📊 Veri Önizlemesi")
+    st.caption("Encoding işlemlerinden sonra veri setinin güncel durumu")
+    
+    # Show preview of current dataframe
+    preview_rows = min(10, len(current_df))
+    st.dataframe(
+        current_df.head(preview_rows),
+        width='stretch',
+        hide_index=False
+    )
+    st.caption(f"Gösterilen: İlk {preview_rows} satır (Toplam: {len(current_df):,} satır, {len(current_df.columns)} sütun)")
+    
+    # Show column info
+    col1, col2 = st.columns(2)
+    with col1:
+        st.info(f"📊 **Toplam Sütun:** {len(current_df.columns)} | **Toplam Satır:** {len(current_df):,}")
+    with col2:
+        # Show encoding status summary
+        # Use processed_columns already calculated at the beginning
+        if processed_columns:
+            st.success(f"✅ **Encoding Yapıldı:** {len(processed_columns)} sütun encode edildi")
+        else:
+            st.info("ℹ️ Henüz encoding yapılmadı")
+    
+    st.markdown("---")
+    
+    # LLM suggestions - EXACTLY like missing_values and outlier steps (moved here, after analysis, before manual operations)
+    if llm_enabled:
+        step_key = 'encoding'
+        suggestions_key = f'step_{current_step}_{step_key}'
+        index_key = f'preprocessing_suggestion_index_{step_key}'
+        
+        # Initialize suggestion index for this step
+        if index_key not in st.session_state:
+            st.session_state[index_key] = 0
+        
+        with st.expander("🤖 LLM Önerileri", expanded=True):
+            # Button to get suggestions
+            if suggestions_key not in st.session_state.preprocessing_suggestions:
+                if st.button("💡 LLM Önerilerini Al", key=f"get_suggestions_{step_key}"):
+                    with st.spinner("🤖 LLM önerileri oluşturuluyor..."):
+                        # Get categorical columns info for prompt
+                        categorical_analysis_step = analyze_categorical_columns(current_df)
+                        categorical_cols_step = [col['column_name'] for col in categorical_analysis_step.get('categorical_columns', [])]
+                        
+                        # Update data_summary with categorical columns info
+                        data_summary_with_encoding = data_summary.copy()
+                        
+                        # IMPORTANT: categorical_columns might be an integer (count) in data_summary
+                        # We need to convert it to a dictionary structure for prompts
+                        # Save the original count if it exists
+                        categorical_columns_count = data_summary_with_encoding.get('categorical_columns', 0)
+                        if isinstance(categorical_columns_count, int):
+                            # If it's an integer, create a new dictionary structure
+                            data_summary_with_encoding['categorical_columns'] = {}
+                            # Optionally save the count in a separate key
+                            data_summary_with_encoding['categorical_columns_count'] = categorical_columns_count
+                        elif not isinstance(data_summary_with_encoding.get('categorical_columns'), dict):
+                            # If it's not a dict, initialize it
+                            data_summary_with_encoding['categorical_columns'] = {}
+                        
+                        # Add categorical statistics
+                        categorical_stats = get_categorical_statistics(current_df)
+                        for col in categorical_cols_step:
+                            if col in categorical_stats:
+                                data_summary_with_encoding['categorical_columns'][col] = {
+                                    'unique_count': categorical_stats[col]['unique_count'],
+                                    'cardinality': 'Yüksek' if categorical_stats[col]['unique_count'] > 10 else 'Düşük'
+                                }
+                        
+                        if step_key == 'encoding':
+                            suggestions_result = suggest_encoding_steps(
+                                data_summary_with_encoding,
+                                numeric_cols,
+                                categorical_cols_step,
+                                analysis_level
+                            )
+                        else:
+                            suggestions_result = {"suggestions": []}
+                        
+                        if suggestions_result.get('error'):
+                            st.error(f"❌ LLM önerisi alınamadı: {suggestions_result.get('error')}")
+                        else:
+                            suggestions = suggestions_result.get('suggestions', [])
+                            # Filter suggestions for this step type
+                            filtered_suggestions = [s for s in suggestions if s.get('preprocessing_type') == step_key]
+                            
+                            # Otomatik öncelik hesaplaması (LLM'in verdiği önceliği override et)
+                            if step_key == 'encoding':
+                                for suggestion in filtered_suggestions:
+                                    # Önceliği kategorik sütun sayısına göre belirle
+                                    total_categorical = len(categorical_cols_step)
+                                    if total_categorical > 5:
+                                        suggestion['priority'] = 'yüksek'
+                                    elif total_categorical >= 2:
+                                        suggestion['priority'] = 'orta'
+                                    else:
+                                        suggestion['priority'] = 'düşük'
+                            
+                            st.session_state.preprocessing_suggestions[suggestions_key] = filtered_suggestions
+                            st.session_state[index_key] = 0  # Reset index
+                            if filtered_suggestions:
+                                st.success(f"✅ {len(filtered_suggestions)} öneri alındı")
+                            st.rerun()
+            else:
+                # Yeniden öneri al butonu (öneriler varsa)
+                if st.button("🔄 Yeni Öneriler Al", key=f"refresh_suggestions_{step_key}"):
+                    # Önerileri temizle ve yeniden al
+                    del st.session_state.preprocessing_suggestions[suggestions_key]
+                    st.session_state[index_key] = 0
+                    st.rerun()
+            
+            # Display suggestions in carousel format - EXACTLY like missing_values and outlier
+            if suggestions_key in st.session_state.preprocessing_suggestions:
+                suggestions = st.session_state.preprocessing_suggestions[suggestions_key]
+                if suggestions:
+                    current_index = st.session_state[index_key]
+                    
+                    st.markdown(f"<div style='text-align: center; margin: 10px 0;'><strong>{len(suggestions)} öneri sunuldu</strong> | <em>Öneri {current_index + 1}/{len(suggestions)}</em></div>", unsafe_allow_html=True)
+                    
+                    # Navigation buttons and current suggestion
+                    col1, col2, col3 = st.columns([1, 3, 1])
+                    
+                    with col1:
+                        if st.button("◀️ Önceki", key=f"prev_suggestion_{step_key}", disabled=(current_index == 0), width='stretch'):
+                            st.session_state[index_key] = max(0, current_index - 1)
+                            st.rerun()
+                    
+                    with col2:
+                        # Current suggestion - kart tasarımı (EXACTLY like missing_values/outlier, sadece emoji değişir: 🔤)
+                        suggestion = suggestions[current_index]
+                        method = suggestion.get('method', 'Bilinmeyen')
+                        columns = suggestion.get('columns', [])
+                        reason = suggestion.get('reason', '')
+                        priority = suggestion.get('priority', 'orta')
+                        analysis_level_sugg = suggestion.get('analysis_level', 'Temel')
+                        
+                        # HTML tag'lerini temizle
+                        import html as html_module
+                        import re
+                        if reason:
+                            try:
+                                reason = html_module.unescape(reason)
+                            except:
+                                pass
+                            reason = re.sub(r'<[^>]+>', '', reason, flags=re.DOTALL | re.IGNORECASE)
+                            reason = ' '.join(reason.split()).strip()
+                        
+                        # Priority ve level renkleri
+                        priority_colors = {'yüksek': '#f44336', 'orta': '#ff9800', 'düşük': '#4caf50'}
+                        level_colors = {'Temel': '#4CAF50', 'Orta': '#FF9800', 'Gelişmiş': '#F44336'}
+                        priority_color = priority_colors.get(priority, '#ff9800')
+                        level_color = level_colors.get(analysis_level_sugg, '#4CAF50')
+                        
+                        # Güvenli HTML
+                        method_safe = html_module.escape(str(method))
+                        reason_safe = html_module.escape(reason) if reason else 'Açıklama bulunamadı.'
+                        priority_safe = html_module.escape(priority)
+                        level_safe = html_module.escape(analysis_level_sugg)
+                        columns_display = ', '.join(columns) if columns else 'Tüm sütunlar'
+                        columns_safe = html_module.escape(columns_display)
+                        
+                        # Kart tasarımı (EXACTLY like missing_values/outlier, sadece emoji değişir: 🔤)
+                        if columns:
+                            card_html = f"""
+                        <div style='
+                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                            padding: 25px;
+                            border-radius: 15px;
+                            margin: 10px 0;
+                            color: white;
+                            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                            min-height: 180px;
+                            border-left: 5px solid #f0f0f0;
+                        '>
+                            <div style='display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;'>
+                                <h3 style='color: white; margin: 0; margin-right: 10px; font-size: 1.3em;'>
+                                    🔤 {method_safe}
+                                </h3>
+                                <div style='display: flex; gap: 10px;'>
+                                    <span style='
+                                        background: {priority_color};
+                                        color: white;
+                                        padding: 5px 12px;
+                                        border-radius: 20px;
+                                        font-size: 0.75em;
+                                        font-weight: bold;
+                                    '>
+                                        Öncelik: {priority_safe}
+                                    </span>
+                                    <span style='
+                                        background: {level_color};
+                                        color: white;
+                                        padding: 5px 12px;
+                                        border-radius: 20px;
+                                        font-size: 0.75em;
+                                        font-weight: bold;
+                                        text-transform: uppercase;
+                                    '>
+                                        {level_safe}
+                                    </span>
+                                </div>
+                            </div>
+                            <div style='
+                                background: rgba(255, 255, 255, 0.15);
+                                padding: 10px 15px;
+                                border-radius: 8px;
+                                margin-bottom: 15px;
+                                display: inline-block;
+                            '>
+                                <span style='color: #f0f0f0; font-size: 0.95em;'>
+                                    <strong>📍 Sütunlar:</strong> {columns_safe}
+                                </span>
+                            </div>
+                            <p style='
+                                color: white; 
+                                margin: 15px 0 0 0; 
+                                line-height: 1.7; 
+                                font-size: 1em;
+                                padding: 10px;
+                                background: rgba(255, 255, 255, 0.1);
+                                border-radius: 8px;
+                            '>
+                                {reason_safe}
+                            </p>
+                        </div>
+                        """
+                            st.markdown(card_html, unsafe_allow_html=True)
+                            
+                            # Uygula butonu - Check if method+column combination already applied (EXACTLY like missing_values and outlier)
+                            method = suggestion.get('method', '')
+                            columns = suggestion.get('columns', [])
+                            
+                            # Check if this method+column combination is already applied
+                            is_applied = False
+                            is_manual_operation = False
+                            button_text = "✅ Zaten Uygulandı"
+                            
+                            # First check by suggestion_id (this is the primary check for LLM suggestions)
+                            suggestion_id = f"{step_key}_{method}_{'_'.join(columns) if columns else 'all'}"
+                            is_applied = suggestion_id in st.session_state.applied_suggestion_ids
+                            if is_applied:
+                                button_text = "✅ Zaten Uygulandı"
+                            
+                            # If not found in applied_suggestion_ids, check history
+                            if not is_applied and step_key == 'encoding' and columns:
+                                # Get all processed columns from step history (step 4 = encoding)
+                                step_history = [h for h in st.session_state.preprocessing_history if h.get('step') == current_step]
+                                processed_columns = set()
+                                for hist in step_history:
+                                    hist_columns = hist.get('columns', [])
+                                    if isinstance(hist_columns, list):
+                                        processed_columns.update(hist_columns)
+                                
+                                # Check if any of the suggested columns are already processed (regardless of method)
+                                already_processed_cols = [col for col in columns if col in processed_columns]
+                                
+                                if already_processed_cols:
+                                    # Check if it was applied via LLM suggestion or manually
+                                    # If the method in history matches the suggestion method AND from_llm is True, it's from LLM
+                                    # Otherwise, it's manual
+                                    is_llm_applied = False
+                                    for col in already_processed_cols:
+                                        for history_item in step_history:
+                                            if (history_item.get('type') == step_key and
+                                                history_item.get('method') == method and
+                                                col in history_item.get('columns', []) and
+                                                history_item.get('from_llm', False)):
+                                                is_llm_applied = True
+                                                break
+                                        if is_llm_applied:
+                                            break
+                                    
+                                    is_applied = True
+                                    if not is_llm_applied:
+                                        # Manual operation
+                                        is_manual_operation = True
+                                        button_text = f"ℹ️ Bu sütun üzerinde Manuel olarak işlem yapıldı: {', '.join(already_processed_cols)}"
+                                    else:
+                                        # LLM suggestion was applied (but not in applied_suggestion_ids - should not happen, but handle it)
+                                        button_text = "✅ Zaten Uygulandı"
+                                else:
+                                    # Also check if this specific method+column combination is already applied
+                                    for col in columns:
+                                        # Check in preprocessing_history
+                                        for history_item in st.session_state.preprocessing_history:
+                                            if (history_item.get('step') == current_step and 
+                                                history_item.get('type') == step_key and
+                                                history_item.get('method') == method and
+                                                col in history_item.get('columns', []) and
+                                                history_item.get('from_llm', False)):
+                                                is_applied = True
+                                                button_text = "✅ Zaten Uygulandı"
+                                                break
+                                        if is_applied:
+                                            break
+                            
+                            if is_applied:
+                                st.button(button_text, key=f"apply_suggestion_{step_key}_{current_index}", width='stretch', disabled=True)
+                            else:
+                                if st.button("✅ Uygula", key=f"apply_suggestion_{step_key}_{current_index}", width='stretch', type="primary"):
+                                    # Validate method for encoding step
+                                    if step_key == 'encoding':
+                                        valid_methods = ['label_encoding', 'one_hot_encoding', 'ordinal_encoding', 'binary_encoding', 'frequency_encoding']
+                                        if method not in valid_methods:
+                                            st.error(f"❌ Bilinmeyen yöntem: '{method}'. Lütfen geçerli bir yöntem seçin: {', '.join(valid_methods)}")
+                                            logger.warning(f"Unknown method for encoding: {method}")
+                                        else:
+                                            apply_preprocessing_suggestion(current_df, suggestion, step_key)
+                                    else:
+                                        apply_preprocessing_suggestion(current_df, suggestion, step_key)
+                        else:
+                            # No columns case (shouldn't happen for encoding)
+                            card_html = f"""
+                        <div style='
+                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                            padding: 25px;
+                            border-radius: 15px;
+                            margin: 10px 0;
+                            color: white;
+                            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                            min-height: 150px;
+                            border-left: 5px solid #f0f0f0;
+                        '>
+                            <div style='display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;'>
+                                <h3 style='color: white; margin: 0; font-size: 1.4em; font-weight: bold;'>
+                                    🔤 {method_safe}
+                                </h3>
+                                <div style='display: flex; gap: 10px;'>
+                                    <span style='
+                                        background: {priority_color};
+                                        color: white;
+                                        padding: 5px 12px;
+                                        border-radius: 20px;
+                                        font-size: 0.75em;
+                                        font-weight: bold;
+                                    '>
+                                        Öncelik: {priority_safe}
+                                    </span>
+                                    <span style='
+                                        background: {level_color};
+                                        color: white;
+                                        padding: 5px 12px;
+                                        border-radius: 20px;
+                                        font-size: 0.75em;
+                                        font-weight: bold;
+                                        text-transform: uppercase;
+                                    '>
+                                        {level_safe}
+                                    </span>
+                                </div>
+                            </div>
+                            <p style='
+                                color: white; 
+                                margin: 0; 
+                                line-height: 1.8; 
+                                font-size: 1.05em;
+                                padding: 15px;
+                                background: rgba(255, 255, 255, 0.15);
+                                border-radius: 8px;
+                                font-weight: 500;
+                            '>
+                                {reason_safe}
+                            </p>
+                        </div>
+                        """
+                            st.markdown(card_html, unsafe_allow_html=True)
+                            st.info("ℹ️ Bu öneri için sütun bilgisi bulunamadı.")
+                    
+                    with col3:
+                        if st.button("Sonraki ▶️", key=f"next_suggestion_{step_key}", disabled=(current_index >= len(suggestions) - 1), width='stretch'):
+                            st.session_state[index_key] = min(len(suggestions) - 1, current_index + 1)
+                            st.rerun()
+                    
+                    # Dots indicator
+                    dots_html = "<div style='text-align: center; margin-top: 15px;'>"
+                    for i in range(len(suggestions)):
+                        if i == current_index:
+                            dots_html += "🔵 "
+                        else:
+                            dots_html += "⚪ "
+                    dots_html += "</div>"
+                    st.markdown(dots_html, unsafe_allow_html=True)
+                else:
+                    st.info("ℹ️ Henüz öneri bulunmuyor. 'LLM Önerilerini Al' butonuna tıklayın.")
+    
+    st.markdown("---")
+    
+    # Manual operations
+    st.markdown("### 🔧 Manuel İşlemler")
+    
+    # Define step_key for encoding step (for manual operations)
+    step_key = 'encoding'
+    
+    st.markdown("""
+    <div style='
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        padding: 25px;
+        border-radius: 15px;
+        margin: 20px 0;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    '>
+    """, unsafe_allow_html=True)
+    
+    # Column selection
+    st.markdown("#### 📌 Sütun Seçimi")
+    
+    # Use processed_columns already calculated at the beginning (from get_processed_encoding_columns)
+    # This includes ALL encoding operations from history, not just current step
+    
+    # Use CURRENT categorical columns ONLY - filter out already processed columns
+    available_columns = [
+        col for col in current_categorical_cols 
+        if col not in processed_columns
+    ]
+    
+    logger.debug(f"🔍 [ENCODING SELECTION] current_categorical_cols: {current_categorical_cols}")
+    logger.debug(f"🔍 [ENCODING SELECTION] current_df.columns: {list(current_df.columns)}")
+    logger.debug(f"🔍 [ENCODING SELECTION] processed_columns: {processed_columns}")
+    logger.debug(f"🔍 [ENCODING SELECTION] available_columns: {available_columns}")
+    
+    if available_columns:
+        selected_columns = st.multiselect(
+            "Encoding yapmak istediğiniz kategorik sütunları seçin",
+            options=available_columns,
+            help=f"Encoding yapılabilir {len(available_columns)} sütun gösteriliyor (Daha önce işlenen {len(processed_columns)} sütun gizlendi)",
+            label_visibility="collapsed"
+        )
+        
+        if selected_columns:
+            st.info(f"✅ {len(selected_columns)} sütun seçildi")
+        else:
+            st.info("ℹ️ Lütfen encoding yapmak istediğiniz sütunları seçin")
+    else:
+        if current_categorical_cols:
+            if len(processed_columns) > 0:
+                st.success(f"✅ Tüm kategorik sütunlar encode edildi! ({len(processed_columns)} sütun)")
+            else:
+                st.info("ℹ️ Mevcut DataFrame'de kategorik sütun bulunmuyor.")
+        else:
+            st.success("✅ Veri setinde kategorik sütun bulunmuyor!")
+        selected_columns = []
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Method selection
+    st.markdown("#### ⚙️ Yöntem Seçimi")
+    
+    if selected_columns:
+        method = st.selectbox(
+            "Encoding yöntemi",
+            options=['label_encoding', 'one_hot_encoding', 'ordinal_encoding', 'binary_encoding', 'frequency_encoding'],
+            key="encoding_method_select",
+            help="Kategorik sütunlar için encoding yöntemleri"
+        )
+        
+        method_info = {
+            'label_encoding': {
+                'name': 'Label Encoding',
+                'description': 'Her kategoriye benzersiz bir tam sayı atar. Sıralı veriler veya kategoriler arasında doğal bir sıralama varsa uygundur.<br><br><strong>✓ Avantajları:</strong> Basit ve hızlı, sütun sayısını artırmaz, bellek kullanımı düşük.<br><strong>✗ Dezavantajları:</strong> Kategoriler arasında mesafe yaratır (örn: 0,1,2), nominal veriler için uygun değil.<br><strong>📌 Kullanım:</strong> Sıralı kategoriler (düşük, orta, yüksek), ağaç tabanlı modeller için idealdir.'
+            },
+            'one_hot_encoding': {
+                'name': 'One-Hot Encoding',
+                'description': 'Her kategori için ayrı bir binary sütun oluşturur. Nominal veriler için idealdir.<br><br><strong>✓ Avantajları:</strong> Kategoriler arasında mesafe yaratmaz, nominal veriler için mükemmel, doğrusal modeller için uygun.<br><strong>✗ Dezavantajları:</strong> Yüksek cardinality durumunda çok sayıda sütun oluşturur, bellek kullanımı artar.<br><strong>📌 Kullanım:</strong> Düşük cardinality (<10) nominal veriler, şehir, renk, kategori gibi değişkenler için idealdir.'
+            },
+            'ordinal_encoding': {
+                'name': 'Ordinal Encoding',
+                'description': 'Kategorilere özel bir sıralama atar. Manuel mapping veya otomatik sıralama kullanılabilir.<br><br><strong>✓ Avantajları:</strong> Sıralı veriler için mantıklı, sütun sayısını artırmaz, özel sıralama tanımlanabilir.<br><strong>✗ Dezavantajları:</strong> Manuel mapping gerektirebilir, nominal veriler için uygun değil.<br><strong>📌 Kullanım:</strong> Eğitim seviyesi (ilkokul, ortaokul, lise), derecelendirme (1-5 yıldız) gibi sıralı veriler için idealdir.'
+            },
+            'binary_encoding': {
+                'name': 'Binary Encoding',
+                'description': 'Kategorileri binary (ikili) formatta kodlar. Yüksek cardinality için one-hot encoding\'e alternatif.<br><br><strong>✓ Avantajları:</strong> Yüksek cardinality için uygun, one-hot\'tan daha az sütun oluşturur, bellek verimli.<br><strong>✗ Dezavantajları:</strong> One-hot kadar yaygın değil, bazı modeller için uygun olmayabilir.<br><strong>📌 Kullanım:</strong> Yüksek cardinality (>10) kategorik veriler, ZIP kodları, ürün kategorileri için idealdir.'
+            },
+            'frequency_encoding': {
+                'name': 'Frequency Encoding',
+                'description': 'Kategorileri frekans değerleriyle değiştirir. Orijinal sütun korunur, yeni bir frekans sütunu eklenir.<br><br><strong>✓ Avantajları:</strong> Veri kaybı olmaz, orijinal sütun korunur, frekans bilgisi model için yararlı olabilir.<br><strong>✗ Dezavantajları:</strong> Yeni sütun ekler, aynı frekansa sahip kategoriler aynı değeri alır.<br><strong>📌 Kullanım:</strong> Frekans bilgisinin önemli olduğu durumlar, nadir kategorilerin tespiti için idealdir.'
+            }
+        }
+        
+        method_info_display = method_info.get(method, {'name': method, 'description': 'Yöntem bilgisi bulunamadı'})
+        st.markdown(f"""
+        <div class="flip-card">
+            <div class="flip-card-inner">
+                <div class="flip-card-front">
+                    <div>
+                        <div style="font-size: 2.1em; font-weight: bold; margin-bottom: 5px;">📊 Bilgi Kartı</div>
+                        <div style="font-size: 1.9em;">{method_info_display['name']}</div>
+                    </div>
+                </div>
+                <div class="flip-card-back">
+                    <div style="width: 100%;">
+                        <div style="font-weight: bold; margin-bottom: 10px; font-size: 1.1em; text-align: center;">{method_info_display['name']}</div>
+                        <div style="text-align: center; padding: 0 10px;">{method_info_display['description']}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        method = None
+        if not current_categorical_cols:
+            st.info("ℹ️ Encoding yapılacak kategorik sütun bulunmuyor.")
+        else:
+            st.info("ℹ️ Önce sütun seçin")
+    
+    st.markdown("</div>", unsafe_allow_html=True)
+    
+    # Action buttons - Uygula butonu tüm satırı kaplar
+    # Uygula butonu sadece yöntem seçildiğinde gösterilir (adım 1 mantığı)
+    if selected_columns and method:
+        if st.button("✅ Uygula", key="apply_encoding", type="primary", use_container_width=True):
+                try:
+                    df_processed = current_df.copy()
+                    
+                    # Apply encoding
+                    df_processed = apply_encoding_method(df_processed, selected_columns, method)
+                    
+                    # Save to session state
+                    st.session_state.preprocessed_data = df_processed
+                    
+                    # Add to history
+                    st.session_state.preprocessing_history.append({
+                        'step': current_step,
+                        'step_key': step_key,
+                        'type': step_key,
+                        'method': method,
+                        'columns': selected_columns,
+                        'timestamp': datetime.now().isoformat(),
+                        'before_data': current_df.copy()
+                    })
+                    
+                    st.success(f"✅ Encoding başarıyla uygulandı! {len(selected_columns)} sütun işlendi: {', '.join(selected_columns)}")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Hata oluştu: {str(e)}")
+                    logger.error(f"Error applying encoding method: {e}", exc_info=True)
+        elif not selected_columns:
+            st.warning("⚠️ Lütfen en az bir sütun seçin")
+        elif not method:
+            st.warning("⚠️ Lütfen bir yöntem seçin")
+    
+    # Show applied operations for this step with undo functionality - ALWAYS SHOW
+    st.markdown("### 📋 Uygulanan İşlemler")
+    step_history = [h for h in st.session_state.preprocessing_history if h.get('step') == current_step]
+    if step_history:
+        for idx, hist in enumerate(step_history):
+            method_op = hist.get('method', '')
+            columns_op = hist.get('columns', [])
+            
+            col1, col2 = st.columns([4, 1])
+            with col1:
+                if columns_op:
+                    display_text = f"{', '.join(columns_op)} sütunları - {method_op} ile encode edildi"
+                else:
+                    display_text = f"Tüm sütunlar - {method_op} ile encode edildi"
+                
+                st.markdown(f"""
+                <div style='
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    padding: 15px;
+                    border-radius: 10px;
+                    margin: 5px 0;
+                    color: white;
+                '>
+                    <span style='font-size: 1.2em; margin-right: 10px;'>✅</span>
+                    {display_text}
+                </div>
+                """, unsafe_allow_html=True)
+            with col2:
+                if st.button("↶ Geri Al", key=f"undo_encoding_{idx}", width='stretch'):
+                    # Remove from history
+                    operation_to_remove = step_history[idx]
+                    removed_method = operation_to_remove.get('method', '')
+                    removed_columns = operation_to_remove.get('columns', [])
+                    
+                    st.session_state.preprocessing_history.remove(operation_to_remove)
+                    
+                    # Rebuild dataframe - suppress INFO logs during rebuild
+                    original_log_level = logger.level
+                    logger.setLevel(logging.WARNING)
+                    try:
+                        df_rebuilt = st.session_state.original_data.copy()
+                        
+                        # Apply all operations in correct order: feature_engineering -> missing_values -> outlier -> encoding
+                        for op in st.session_state.preprocessing_history:
+                            op_type = op.get('type', '')
+                            
+                            if op_type == 'feature_engineering':
+                                op_method = op.get('method', '')
+                                if op_method == 'remove_duplicates':
+                                    df_rebuilt = remove_duplicate_rows(df_rebuilt, keep=op.get('keep', 'first'))
+                                elif op_method == 'drop_column':
+                                    df_rebuilt = drop_columns(df_rebuilt, op.get('columns', []))
+                                elif op_method == 'create_numeric_feature':
+                                    df_rebuilt = create_numeric_feature(
+                                        df_rebuilt,
+                                        op.get('operation', 'add'),
+                                        op.get('columns', []),
+                                        op.get('new_column_name', '')
+                                    )
+                                elif op_method == 'create_datetime_feature':
+                                    df_rebuilt = create_datetime_feature(
+                                        df_rebuilt,
+                                        op.get('columns', [])[0] if op.get('columns') else '',
+                                        op.get('feature_type', 'year'),
+                                        op.get('new_column_name', '')
+                                    )
+                                elif op_method == 'create_categorical_combination':
+                                    df_rebuilt = create_categorical_combination(
+                                        df_rebuilt,
+                                        op.get('columns', []),
+                                        op.get('new_column_name', ''),
+                                        op.get('separator', '_')
+                                    )
+                            elif op_type == 'missing_values':
+                                op_method_dict = op.get('method_dict')
+                                if op_method_dict:
+                                    # Handle dict method (numeric and categorical separately)
+                                    if op_method_dict.get('numeric') and op_method_dict.get('numeric_cols'):
+                                        df_rebuilt = apply_missing_values_method(
+                                            df_rebuilt, 
+                                            op_method_dict['numeric_cols'], 
+                                            op_method_dict['numeric']
+                                        )
+                                    if op_method_dict.get('categorical') and op_method_dict.get('categorical_cols'):
+                                        df_rebuilt = apply_missing_values_method(
+                                            df_rebuilt, 
+                                            op_method_dict['categorical_cols'], 
+                                            op_method_dict['categorical']
+                                        )
+                                else:
+                                    # Handle string method
+                                    df_rebuilt = apply_missing_values_method(
+                                        df_rebuilt,
+                                        op.get('columns', []),
+                                        op.get('method', '')
+                                    )
+                            elif op_type == 'outlier':
+                                outlier_method = op.get('method', '')
+                                method_parts = outlier_method.split('_')
+                                if len(method_parts) >= 2:
+                                    detection_method = '_'.join(method_parts[:-1])
+                                    action = method_parts[-1]
+                                    df_rebuilt = apply_outlier_method_wrapper(
+                                        df_rebuilt,
+                                        op.get('columns', []),
+                                        detection_method,
+                                        action
+                                    )
+                            elif op_type == 'encoding':
+                                # Check if columns exist before applying encoding
+                                op_columns = op.get('columns', [])
+                                op_method = op.get('method', '')
+                                
+                                # For binary/one-hot encoding, check if original columns exist
+                                if op_method in ['binary_encoding', 'one_hot_encoding']:
+                                    # Filter columns that exist in dataframe
+                                    existing_columns = [col for col in op_columns if col in df_rebuilt.columns]
+                                    if existing_columns:
+                                        df_rebuilt = apply_encoding_method(
+                                            df_rebuilt,
+                                            existing_columns,
+                                            op_method
+                                        )
+                                    else:
+                                        logger.warning(f"⚠️ [UNDO ENCODING] Columns {op_columns} not found in dataframe, skipping encoding")
+                                else:
+                                    # For other encoding methods, apply normally
+                                    df_rebuilt = apply_encoding_method(
+                                        df_rebuilt,
+                                        op_columns,
+                                        op_method
+                                    )
+                    finally:
+                        # Restore original log level
+                        logger.setLevel(original_log_level)
+                    
+                    # If binary/one-hot encoding was removed, restore original columns from before_data
+                    if removed_method in ['binary_encoding', 'one_hot_encoding'] and removed_columns:
+                        before_data = operation_to_remove.get('before_data')
+                        if before_data is not None:
+                            for col in removed_columns:
+                                # Remove binary/one-hot columns first
+                                binary_cols = [c for c in df_rebuilt.columns if c.startswith(f"{col}_bin_")]
+                                one_hot_cols = [c for c in df_rebuilt.columns if c.startswith(f"{col}_") and c != col]
+                                cols_to_remove = binary_cols + one_hot_cols
+                                if cols_to_remove:
+                                    df_rebuilt = df_rebuilt.drop(columns=cols_to_remove)
+                                
+                                # Restore original column from before_data if it exists
+                                if col in before_data.columns and col not in df_rebuilt.columns:
+                                    df_rebuilt[col] = before_data[col]
+                                    logger.debug(f"🔍 [UNDO ENCODING] Restored original column: {col}")
+                    
+                    st.session_state.preprocessed_data = df_rebuilt
+                    
+                    # Remove from applied_suggestion_ids if it was from LLM
+                    if operation_to_remove.get('from_llm'):
+                        remove_method = operation_to_remove.get('method', '')
+                        remove_columns = operation_to_remove.get('columns', [])
+                        # Use 'encoding' as step_key since we're in encoding step
+                        step_key_undo = 'encoding'
+                        suggestion_id = f"{step_key_undo}_{remove_method}_{'_'.join(remove_columns) if remove_columns else 'all'}"
+                        if suggestion_id in st.session_state.applied_suggestion_ids:
+                            st.session_state.applied_suggestion_ids.remove(suggestion_id)
+                    
+                    st.success("✅ İşlem geri alındı!")
+                    st.rerun()
+    else:
+        st.info("ℹ️ Henüz bu adımda işlem uygulanmadı.")
+    
+    # Add spacing before navigation buttons
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Action buttons - right aligned at bottom
+    col_nav1, col_nav2, col_nav3, col_nav4 = st.columns([3, 1, 1, 1])
+    with col_nav2:
+        if current_step > 1:
+            if st.button("← Geri", key="prev_step_encoding", width='stretch'):
+                st.session_state.preprocessing_step -= 1
+                st.rerun()
+    with col_nav3:
+        # Atla butonu - son adımda (Summary) gösterilmez
+        if current_step < len(steps):
+            if st.button("Atla", key="skip_step_encoding", width='stretch'):
+                st.session_state.preprocessing_step += 1
+                st.rerun()
+    with col_nav4:
+        has_operation = check_step_has_operation(current_step)
+        if st.button("İleri →", key="next_step_encoding", disabled=not has_operation, width='stretch'):
+            st.session_state.preprocessing_step += 1
+            st.rerun()
 
 
 def render_outlier_step(df):
     """Render outlier handling preprocessing step."""
-    st.subheader(f"🎯 {steps[1]['name']}")
+    st.subheader(f"🎯 {steps[2]['name']}")
     
     # CRITICAL: Use current preprocessed_data directly (like missing values step does)
     # Don't rely on df parameter - get fresh copy from session state
@@ -2315,7 +4983,7 @@ def render_outlier_step(df):
                             if st.button("✅ Uygula", key=f"apply_suggestion_{step_key}_{detection_method_for_table}_{current_index}", width='stretch', type="primary"):
                                 # Validate method for outlier step
                                 if step_key == 'outlier':
-                                    valid_methods = ['iqr_remove', 'iqr_cap', 'iqr_winsorize', 'zscore_remove', 'zscore_cap', 'zscore_winsorize', 'isolation_forest_remove', 'lof_remove']
+                                    valid_methods = ['iqr_remove', 'iqr_cap', 'zscore_remove', 'zscore_cap', 'isolation_forest_remove', 'lof_remove']
                                     if method not in valid_methods:
                                         st.error(f"❌ Bilinmeyen yöntem: '{method}'. Lütfen geçerli bir yöntem seçin: {', '.join(valid_methods)}")
                                         logger.warning(f"Unknown method for outlier: {method}")
@@ -2424,17 +5092,12 @@ def render_outlier_step(df):
         # Get detection method from table selection
         detection_method = st.session_state.get('outlier_detection_method_for_table', 'iqr')
         
-        # Action selection (remove, cap, or winsorize) - only action selection here
-        if detection_method in ['iqr', 'zscore']:
-            action_options = ['remove', 'cap', 'winsorize']
-        else:
-            action_options = ['remove']
-        
+        # Action selection (remove or cap) - only action selection here
         action = st.selectbox(
             "İşlem Tipi",
-            options=action_options,
+            options=['remove', 'cap'] if detection_method in ['iqr', 'zscore'] else ['remove'],
             key="outlier_action",
-            help="Aykırı değerleri kaldır (remove), sınırla (cap) veya yüzdelik bazlı sınırla (winsorize)",
+            help="Aykırı değerleri kaldır (remove) veya sınırla (cap)",
             label_visibility="collapsed"
         )
         
@@ -2447,10 +5110,6 @@ def render_outlier_step(df):
             'cap': {
                 'name': 'Sınırla (Cap)',
                 'description': 'Aykırı değerleri belirlenen sınırlara (alt/üst) çeker, değerleri korur.<br><br><strong>✓ Avantajları:</strong> Veri kaybı olmaz, örneklem boyutu korunur.<br><strong>✗ Dezavantajları:</strong> Aykırı değerler hala mevcut, sadece sınırlanmış durumda.<br><strong>📌 Kullanım:</strong> Veri kaybından kaçınmak istendiğinde kullanılır.'
-            },
-            'winsorize': {
-                'name': 'Winsorize (Yüzdelik Bazlı Sınırlama)',
-                'description': 'Aykırı değerleri yüzdelik bazlı sınırlara çeker (örn. üst %5 ve alt %5).<br><br><strong>✓ Avantajları:</strong> Veri kaybı olmaz, yüzdelik bazlı esnek sınırlama, istatistiksel olarak daha güvenilir.<br><strong>✗ Dezavantajları:</strong> Aykırı değerler hala mevcut, sadece sınırlanmış durumda.<br><strong>📌 Kullanım:</strong> Yüzdelik bazlı sınırlama istendiğinde kullanılır (varsayılan: %5).'
             }
         }
         
@@ -2495,11 +5154,10 @@ def render_outlier_step(df):
     
     st.markdown("</div>", unsafe_allow_html=True)
     
-    # Action buttons
-    col1, col2, col3, col4 = st.columns([1, 1, 1, 3])
-    with col1:
-        if st.button("✅ Uygula", key="apply_outlier", type="primary", width='stretch'):
-            if selected_columns and method:
+    # Action buttons - Uygula butonu tüm satırı kaplar
+    # Uygula butonu sadece yöntem seçildiğinde gösterilir (adım 1 mantığı)
+    if selected_columns and method:
+        if st.button("✅ Uygula", key="apply_outlier", type="primary", use_container_width=True):
                 try:
                     df_processed = current_df.copy()
                     
@@ -2532,40 +5190,46 @@ def render_outlier_step(df):
                 except Exception as e:
                     st.error(f"❌ Hata oluştu: {str(e)}")
                     logger.error(f"Error applying outlier method: {e}", exc_info=True)
-            elif not selected_columns:
-                st.warning("⚠️ Lütfen en az bir sütun seçin")
-            elif not method:
-                st.warning("⚠️ Lütfen bir yöntem seçin")
+        elif not selected_columns:
+            st.warning("⚠️ Lütfen en az bir sütun seçin")
+        elif not method:
+            st.warning("⚠️ Lütfen bir yöntem seçin")
     
-    with col2:
-        has_operation = check_step_has_operation(current_step)
-        if st.button("İleri →", key="next_step_manual_outlier", disabled=not has_operation, width='stretch'):
-            st.session_state.preprocessing_step += 1
-            st.rerun()
-    
-    with col3:
-        if st.button("Atla", key="skip_step_manual_outlier", width='stretch'):
-            st.session_state.preprocessing_step += 1
-            st.rerun()
-    
-    # Show applied operations for this step with undo functionality
+    # Show applied operations for this step with undo functionality - ALWAYS SHOW
+    st.markdown("### 📋 Uygulanan İşlemler")
     step_history = [h for h in st.session_state.preprocessing_history if h.get('step') == current_step]
     if step_history:
-        st.markdown("### 📋 Uygulanan İşlemler")
         for i, operation in enumerate(step_history):
             col1, col2 = st.columns([4, 1])
             with col1:
                 method_op = operation.get('method', 'Bilinmeyen')
                 columns_op = operation.get('columns', [])
+                
+                # Parse method for display
                 if columns_op:
-                    # Parse method for display
                     method_parts = method_op.split('_')
                     if len(method_parts) >= 2:
                         detection_display = '_'.join(method_parts[:-1]).upper()
                         action_display = method_parts[-1].upper()
-                        st.info(f"✅ {', '.join(columns_op)} sütunları - {detection_display} ({action_display}) ile işlendi")
+                        display_text = f"{', '.join(columns_op)} sütunları - {detection_display} ({action_display}) ile işlendi"
                     else:
-                        st.info(f"✅ {', '.join(columns_op)} sütunları - {method_op} ile işlendi")
+                        display_text = f"{', '.join(columns_op)} sütunları - {method_op} ile işlendi"
+                else:
+                    display_text = f"Tüm sütunlar - {method_op} ile işlendi"
+                
+                # Create a styled card for each operation
+                st.markdown(f"""
+                <div style='
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    padding: 15px;
+                    border-radius: 10px;
+                    margin: 5px 0;
+                    color: white;
+                '>
+                    <span style='font-size: 1.2em; margin-right: 10px;'>✅</span>
+                    {display_text}
+                </div>
+                """, unsafe_allow_html=True)
             with col2:
                 if st.button("↶ Geri Al", key=f"undo_outlier_{i}", width='stretch'):
                     # Remove from history
@@ -2576,20 +5240,88 @@ def render_outlier_step(df):
                     # Remove from preprocessing_history
                     st.session_state.preprocessing_history.remove(operation_to_remove)
                     
-                    # Rebuild the dataframe by reapplying all remaining operations in order
-                    df_rebuilt = st.session_state.original_data.copy()
-                    
-                    # Apply all operations except the removed one
-                    for op in st.session_state.preprocessing_history:
-                        if op.get('step') == current_step and op.get('type') == 'outlier':
-                            op_method = op.get('method', '')
-                            op_columns = op.get('columns', [])
-                            if op_method and op_columns:
-                                method_parts = op_method.split('_')
+                    # Rebuild the dataframe by reapplying ALL operations in order (all steps)
+                    # Suppress INFO logs during rebuild
+                    original_log_level = logger.level
+                    logger.setLevel(logging.WARNING)
+                    try:
+                        df_rebuilt = st.session_state.original_data.copy()
+                        
+                        # Apply all operations in correct order: feature_engineering -> missing_values -> outlier -> encoding
+                        for op in st.session_state.preprocessing_history:
+                            op_type = op.get('type', '')
+                            
+                            if op_type == 'feature_engineering':
+                                op_method = op.get('method', '')
+                                if op_method == 'remove_duplicates':
+                                    df_rebuilt = remove_duplicate_rows(df_rebuilt, keep=op.get('keep', 'first'))
+                                elif op_method == 'drop_column':
+                                    df_rebuilt = drop_columns(df_rebuilt, op.get('columns', []))
+                                elif op_method == 'create_numeric_feature':
+                                    df_rebuilt = create_numeric_feature(
+                                        df_rebuilt,
+                                        op.get('operation', 'add'),
+                                        op.get('columns', []),
+                                        op.get('new_column_name', '')
+                                    )
+                                elif op_method == 'create_datetime_feature':
+                                    df_rebuilt = create_datetime_feature(
+                                        df_rebuilt,
+                                        op.get('columns', [])[0] if op.get('columns') else '',
+                                        op.get('feature_type', 'year'),
+                                        op.get('new_column_name', '')
+                                    )
+                                elif op_method == 'create_categorical_combination':
+                                    df_rebuilt = create_categorical_combination(
+                                        df_rebuilt,
+                                        op.get('columns', []),
+                                        op.get('new_column_name', ''),
+                                        op.get('separator', '_')
+                                    )
+                            elif op_type == 'missing_values':
+                                op_method_dict = op.get('method_dict')
+                                if op_method_dict:
+                                    # Handle dict method (numeric and categorical separately)
+                                    if op_method_dict.get('numeric') and op_method_dict.get('numeric_cols'):
+                                        df_rebuilt = apply_missing_values_method(
+                                            df_rebuilt, 
+                                            op_method_dict['numeric_cols'], 
+                                            op_method_dict['numeric']
+                                        )
+                                    if op_method_dict.get('categorical') and op_method_dict.get('categorical_cols'):
+                                        df_rebuilt = apply_missing_values_method(
+                                            df_rebuilt, 
+                                            op_method_dict['categorical_cols'], 
+                                            op_method_dict['categorical']
+                                        )
+                                else:
+                                    # Handle string method
+                                    df_rebuilt = apply_missing_values_method(
+                                        df_rebuilt, 
+                                        op.get('columns', []), 
+                                        op.get('method', '')
+                                    )
+                            elif op_type == 'outlier':
+                                outlier_method = op.get('method', '')
+                                method_parts = outlier_method.split('_')
                                 if len(method_parts) >= 2:
                                     detection_method = '_'.join(method_parts[:-1])
                                     action = method_parts[-1]
-                                    df_rebuilt = apply_outlier_method_wrapper(df_rebuilt, op_columns, detection_method, action)
+                                    df_rebuilt = apply_outlier_method_wrapper(
+                                        df_rebuilt,
+                                        op.get('columns', []),
+                                        detection_method,
+                                        action
+                                    )
+                            elif op_type == 'encoding':
+                                df_rebuilt = apply_encoding_method(
+                                    df_rebuilt,
+                                    op.get('columns', []),
+                                    op.get('method', '')
+                                )
+                    finally:
+                        # Restore original log level
+                        logger.setLevel(original_log_level)
                     
                     # Update preprocessed data
                     st.session_state.preprocessed_data = df_rebuilt
@@ -2603,28 +5335,77 @@ def render_outlier_step(df):
                     st.success("✅ İşlem geri alındı!")
                     st.rerun()
     else:
-        st.info("ℹ️ Henüz işlem uygulanmadı.")
+        st.info("ℹ️ Henüz bu adımda işlem uygulanmadı.")
+    
+    # Add spacing before navigation buttons
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Action buttons - right aligned at bottom
+    col_nav1, col_nav2, col_nav3, col_nav4 = st.columns([3, 1, 1, 1])
+    with col_nav2:
+        if current_step > 1:
+            if st.button("← Geri", key="prev_step_outlier", width='stretch'):
+                st.session_state.preprocessing_step -= 1
+                st.rerun()
+    with col_nav3:
+        # Atla butonu - son adımda (Summary) gösterilmez
+        if current_step < len(steps):
+            if st.button("Atla", key="skip_step_outlier", width='stretch'):
+                st.session_state.preprocessing_step += 1
+                st.rerun()
+    with col_nav4:
+        has_operation = check_step_has_operation(current_step)
+        if st.button("İleri →", key="next_step_manual_outlier", disabled=not has_operation, width='stretch'):
+            st.session_state.preprocessing_step += 1
+            st.rerun()
 
 
 # Render step content based on current step
 if current_step == 1:
-    render_missing_values_step(df)
+    render_feature_engineering_step(df)
 elif current_step == 2:
-    render_outlier_step(df)
+    render_missing_values_step(df)
 elif current_step == 3:
-    st.info("Encoding step - Implementation in progress...")
+    render_outlier_step(df)
 elif current_step == 4:
-    st.info("Scaling step - Implementation in progress...")
+    render_encoding_step(df)
 elif current_step == 5:
-    st.info("Feature Engineering step - Implementation in progress...")
+    render_scaling_step(df)
 elif current_step == 6:
     st.info("Summary step - Implementation in progress...")
+    
+    # Show applied operations for this step - ALWAYS SHOW
+    st.markdown("### 📋 Uygulanan İşlemler")
+    step_history = [h for h in st.session_state.preprocessing_history if h.get('step') == current_step]
+    if step_history:
+        for idx, hist in enumerate(step_history):
+            method_op = hist.get('method', '')
+            columns_op = hist.get('columns', [])
+            st.info(f"✅ {method_op} işlemi uygulandı")
+    else:
+        st.info("ℹ️ Henüz bu adımda işlem uygulanmadı.")
+    
+    # Add spacing before navigation buttons
+    st.markdown("<br>", unsafe_allow_html=True)
 
-# Navigation buttons (only Geri button at bottom, İleri and Atla are in manual operations section)
-if current_step > 1:
-    col1, col2, col3 = st.columns([1, 1, 4])
-    with col1:
-        if st.button("← Geri", key="prev_step", width='stretch'):
-            st.session_state.preprocessing_step -= 1
+    # Action buttons - right aligned at bottom
+    col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
+    with col2:
+        if current_step > 1:
+            if st.button("← Geri", key="prev_step_summary", width='stretch'):
+                st.session_state.preprocessing_step -= 1
+                st.rerun()
+    with col3:
+        # Atla butonu - son adımda (Summary) gösterilmez
+        if current_step < len(steps):
+            if st.button("Atla", key="skip_step_summary", width='stretch'):
+                st.session_state.preprocessing_step += 1
+                st.rerun()
+    with col4:
+        has_operation = check_step_has_operation(current_step)
+        if st.button("İleri →", key="next_step_summary", disabled=not has_operation, width='stretch'):
+            st.session_state.preprocessing_step += 1
             st.rerun()
+
+# Navigation buttons are now in each step (Geri, Atla, İleri)
 

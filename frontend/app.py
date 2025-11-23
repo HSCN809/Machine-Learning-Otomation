@@ -74,6 +74,9 @@ with st.sidebar:
     if st.button("🔍 EDA", width='stretch', type="primary" if current_page == 'EDA' else "secondary"):
         st.switch_page("pages/eda.py")
     
+    if st.button("🔧 Veri Ön İşleme", width='stretch', type="primary" if current_page == 'Veri Ön İşleme' else "secondary"):
+        st.switch_page("pages/data_preprocessing.py")
+    
     st.markdown("---")
     
     # About section with styled box

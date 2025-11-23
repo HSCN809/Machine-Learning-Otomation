@@ -283,8 +283,9 @@ def create_missing_heatmap(
     
     missing_matrix = df.isnull().astype(int)
     
-    if missing_matrix.sum().sum() == 0:
-        return None
+    # Always create heatmap, even if no missing values (will show all zeros)
+    # if missing_matrix.sum().sum() == 0:
+    #     return None
     
     if library == 'plotly':
         try:
