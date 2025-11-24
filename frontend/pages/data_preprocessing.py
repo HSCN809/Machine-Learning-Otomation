@@ -7,6 +7,8 @@ from pathlib import Path
 import sys
 import logging
 from datetime import datetime
+import json
+import io
 
 # Add project root to path for imports
 project_root = Path(__file__).resolve().parent.parent.parent
@@ -103,7 +105,28 @@ st.set_page_config(
 # Hide default page navigation
 st.markdown("""
 <style>
+    /* Streamlit varsayılan sayfa navigasyon menüsünü gizle */
     [data-testid="stSidebarNav"] {
+        display: none !important;
+    }
+    
+    /* Sayfa navigasyon dropdown'unu da gizle */
+    [data-testid="stSidebarNav"] ul {
+        display: none !important;
+    }
+    
+    /* Sidebar'daki sayfa listesini gizle */
+    section[data-testid="stSidebar"] > div:nth-child(2) > div > div > div > div > div > div > nav {
+        display: none !important;
+    }
+    
+    /* Tüm sidebar navigasyon elementlerini gizle */
+    .css-1d391kg {
+        display: none !important;
+    }
+    
+    /* Streamlit'in sayfa navigasyon butonlarını gizle */
+    button[data-testid="baseButton-secondary"] {
         display: none !important;
     }
     
@@ -194,6 +217,9 @@ with st.sidebar:
     
     if st.button("🔧 Veri Ön İşleme", width='stretch', type="primary"):
         pass  # Already on this page
+    
+    if st.button("🤖 Model Seçimi", width='stretch'):
+        st.switch_page("pages/model_selection.py")
     
     st.markdown("---")
     st.markdown("### ⚙️ Ayarlar")
@@ -1855,7 +1881,7 @@ def render_missing_values_step(df):
     # Action buttons - Uygula butonu tüm satırı kaplar
     # Uygula butonu sadece yöntem seçildiğinde gösterilir (adım 1 mantığı)
     if selected_columns and method:
-        if st.button("✅ Uygula", key="apply_missing", type="primary", use_container_width=True):
+        if st.button("✅ Uygula", key="apply_missing", type="primary", width='stretch'):
                 try:
                     df_processed = current_df.copy()
                     total_filled = 0
@@ -2915,18 +2941,47 @@ def render_scaling_step(df):
     # Filter out already processed columns from selection options
     available_columns = [col for col in current_numeric_cols if col not in processed_columns]
     
+    # Binary sütun kontrolü - LLM önerileri kısmındaki gibi
     if available_columns:
-        selected_columns = st.multiselect(
-            "Ölçeklemek istediğiniz sütunları seçin",
-            options=available_columns,
-            help=f"Ölçeklenebilir {len(available_columns)} sütun gösteriliyor (Daha önce işlenen {len(processed_columns)} sütun gizlendi)",
-            label_visibility="collapsed"
-        )
+        # Get scaling statistics to filter binary columns
+        scaling_stats = get_scaling_statistics(current_df)
         
-        if selected_columns:
-            st.info(f"✅ {len(selected_columns)} sayısal sütun seçildi")
+        # Filter out binary columns (Min=0, Max=1)
+        non_binary_available_columns = []
+        binary_cols_filtered = []
+        for col in available_columns:
+            col_stats = scaling_stats.get(col, {})
+            min_val = col_stats.get('min')
+            max_val = col_stats.get('max')
+            # Binary sütun kontrolü: Min=0 ve Max=1 ise atla
+            if isinstance(min_val, (int, float)) and isinstance(max_val, (int, float)):
+                if min_val == 0 and max_val == 1:
+                    binary_cols_filtered.append(col)
+                    continue  # Binary sütun, seçim listesinden çıkar
+            non_binary_available_columns.append(col)
+        
+        # Show info if binary columns were filtered
+        if binary_cols_filtered:
+            st.info(f"ℹ️ {len(binary_cols_filtered)} binary sütun (Min=0, Max=1) seçim listesinden çıkarıldı: {', '.join(binary_cols_filtered[:5])}{'...' if len(binary_cols_filtered) > 5 else ''}")
+        
+        if non_binary_available_columns:
+            selected_columns = st.multiselect(
+                "Ölçeklemek istediğiniz sütunları seçin",
+                options=non_binary_available_columns,
+                help=f"Ölçeklenebilir {len(non_binary_available_columns)} sütun gösteriliyor (Daha önce işlenen {len(processed_columns)} sütun ve {len(binary_cols_filtered)} binary sütun gizlendi)",
+                label_visibility="collapsed"
+            )
+            
+            if selected_columns:
+                st.info(f"✅ {len(selected_columns)} sayısal sütun seçildi")
+            else:
+                st.info("ℹ️ Lütfen ölçeklemek istediğiniz sütunları seçin")
         else:
-            st.info("ℹ️ Lütfen ölçeklemek istediğiniz sütunları seçin")
+            if binary_cols_filtered:
+                st.info(f"ℹ️ Tüm mevcut sütunlar binary sütun (Min=0, Max=1) olduğu için ölçekleme gerekmez.")
+            else:
+                st.info("ℹ️ Ölçeklenebilir sütun bulunamadı")
+            selected_columns = []
     else:
         if current_numeric_cols:
             st.success(f"✅ Tüm sayısal sütunlar ölçeklendi! ({len(processed_columns)} sütun)")
@@ -3014,7 +3069,7 @@ def render_scaling_step(df):
     
     # Action buttons - Uygula butonu
     if selected_columns and method:
-        if st.button("✅ Uygula", key="apply_scaling", type="primary", use_container_width=True):
+        if st.button("✅ Uygula", key="apply_scaling", type="primary", width='stretch'):
             try:
                 df_processed = current_df.copy()
                 df_processed = apply_scaling_method_wrapper(df_processed, selected_columns, method)
@@ -4008,7 +4063,7 @@ def render_encoding_step(df):
     # Action buttons - Uygula butonu tüm satırı kaplar
     # Uygula butonu sadece yöntem seçildiğinde gösterilir (adım 1 mantığı)
     if selected_columns and method:
-        if st.button("✅ Uygula", key="apply_encoding", type="primary", use_container_width=True):
+        if st.button("✅ Uygula", key="apply_encoding", type="primary", width='stretch'):
                 try:
                     df_processed = current_df.copy()
                     
@@ -4230,6 +4285,437 @@ def render_encoding_step(df):
         if st.button("İleri →", key="next_step_encoding", disabled=not has_operation, width='stretch'):
             st.session_state.preprocessing_step += 1
             st.rerun()
+
+
+def render_summary_step(df):
+    """Render summary/preprocessing overview step."""
+    st.subheader(f"📊 {steps[5]['name']}")
+    
+    # Get original and preprocessed data
+    original_df = st.session_state.original_data.copy()
+    preprocessed_df = st.session_state.preprocessed_data.copy()
+    history = st.session_state.preprocessing_history.copy()
+    
+    # 1. Genel Özet Kartları
+    st.markdown("### 📈 Genel Özet")
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.markdown(f"""
+        <div style='
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        '>
+            <div style='font-size: 0.9em; opacity: 0.9; margin-bottom: 8px;'>Toplam İşlem</div>
+            <div style='font-size: 2em; font-weight: bold;'>{len(history)}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        row_diff = len(preprocessed_df) - len(original_df)
+        st.markdown(f"""
+        <div style='
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        '>
+            <div style='font-size: 0.9em; opacity: 0.9; margin-bottom: 8px;'>Satır Değişimi</div>
+            <div style='font-size: 2em; font-weight: bold;'>{row_diff:+,}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        col_diff = len(preprocessed_df.columns) - len(original_df.columns)
+        st.markdown(f"""
+        <div style='
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        '>
+            <div style='font-size: 0.9em; opacity: 0.9; margin-bottom: 8px;'>Sütun Değişimi</div>
+            <div style='font-size: 2em; font-weight: bold;'>{col_diff:+,}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col4:
+        # Count unique steps with operations
+        steps_with_ops = set()
+        for hist in history:
+            step_num = hist.get('step', 0)
+            if step_num > 0:
+                steps_with_ops.add(step_num)
+        st.markdown(f"""
+        <div style='
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        '>
+            <div style='font-size: 0.9em; opacity: 0.9; margin-bottom: 8px;'>İşlem Yapılan Step</div>
+            <div style='font-size: 2em; font-weight: bold;'>{len(steps_with_ops)}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # 2. Step Bazlı İşlem Özeti
+    st.markdown("### 📋 Step Bazlı İşlem Özeti")
+    
+    # Group operations by step
+    operations_by_step = {}
+    for hist in history:
+        step_num = hist.get('step', 0)
+        step_key = hist.get('step_key', '')
+        if step_num > 0:
+            if step_num not in operations_by_step:
+                operations_by_step[step_num] = []
+            operations_by_step[step_num].append(hist)
+    
+    # Display each step's summary
+    for step_num in sorted(operations_by_step.keys()):
+        if step_num <= len(steps):
+            step_info = steps[step_num - 1]
+            step_ops = operations_by_step[step_num]
+            
+            # Count unique columns processed
+            processed_columns = set()
+            for op in step_ops:
+                cols = op.get('columns', [])
+                # Convert to Python list if it's a protobuf object
+                if not isinstance(cols, list):
+                    cols = list(cols)
+                if isinstance(cols, list):
+                    processed_columns.update(cols)
+            
+            with st.expander(f"{step_info['icon']} {step_info['name']} - {len(step_ops)} işlem, {len(processed_columns)} sütun", expanded=True):
+                for idx, op in enumerate(step_ops):
+                    method = op.get('method', 'Bilinmeyen')
+                    columns = op.get('columns', [])
+                    # Convert to Python list if it's a protobuf object
+                    if not isinstance(columns, list):
+                        columns = list(columns)
+                    timestamp = op.get('timestamp', '')
+                    from_llm = op.get('from_llm', False)
+                    
+                    columns_display = ', '.join(columns) if columns else 'Tüm sütunlar'
+                    llm_badge = "🤖 LLM" if from_llm else "👤 Manuel"
+                    
+                    # Format timestamp
+                    try:
+                        if timestamp:
+                            dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                            time_str = dt.strftime('%Y-%m-%d %H:%M:%S')
+                        else:
+                            time_str = 'Bilinmeyen'
+                    except:
+                        time_str = timestamp if timestamp else 'Bilinmeyen'
+                    
+                    st.markdown(f"""
+                    <div style='
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        padding: 15px;
+                        border-radius: 8px;
+                        margin: 5px 0;
+                        border-left: 4px solid #f0f0f0;
+                        color: white;
+                    '>
+                        <div style='display: flex; justify-content: space-between; align-items: center;'>
+                            <div>
+                                <strong>{method}</strong> - {columns_display}
+                            </div>
+                            <div style='font-size: 0.85em; color: rgba(255, 255, 255, 0.9);'>
+                                {llm_badge} | {time_str}
+                            </div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # 3. Veri Seti İstatistikleri Karşılaştırması
+    st.markdown("### 📊 Veri Seti İstatistikleri Karşılaştırması")
+    
+    col_left, col_right = st.columns(2)
+    
+    with col_left:
+        st.markdown("#### 📥 Orijinal Veri")
+        original_summary = get_data_summary(original_df)
+        original_missing = analyze_missing_values(original_df)
+        
+        st.markdown(f"""
+        <div style='
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 10px 0;
+            color: white;
+        '>
+            <p><strong>Shape:</strong> {original_df.shape[0]:,} satır × {original_df.shape[1]} sütun</p>
+            <p><strong>Sayısal Sütun:</strong> {len(original_df.select_dtypes(include=[np.number]).columns)}</p>
+            <p><strong>Kategorik Sütun:</strong> {len(original_df.select_dtypes(include=['object', 'category']).columns)}</p>
+            <p><strong>Eksik Değer:</strong> {original_missing.get('total_missing', 0):,} ({original_missing.get('missing_percentage', 0):.2f}%)</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col_right:
+        st.markdown("#### ✅ İşlenmiş Veri")
+        preprocessed_summary = get_data_summary(preprocessed_df)
+        preprocessed_missing = analyze_missing_values(preprocessed_df)
+        
+        st.markdown(f"""
+        <div style='
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 10px 0;
+            color: white;
+        '>
+            <p><strong>Shape:</strong> {preprocessed_df.shape[0]:,} satır × {preprocessed_df.shape[1]} sütun</p>
+            <p><strong>Sayısal Sütun:</strong> {len(preprocessed_df.select_dtypes(include=[np.number]).columns)}</p>
+            <p><strong>Kategorik Sütun:</strong> {len(preprocessed_df.select_dtypes(include=['object', 'category']).columns)}</p>
+            <p><strong>Eksik Değer:</strong> {preprocessed_missing.get('total_missing', 0):,} ({preprocessed_missing.get('missing_percentage', 0):.2f}%)</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Değişiklikler
+    st.markdown("#### 🔄 Değişiklikler")
+    original_cols = set(original_df.columns)
+    preprocessed_cols = set(preprocessed_df.columns)
+    added_cols = preprocessed_cols - original_cols
+    removed_cols = original_cols - preprocessed_cols
+    
+    change_col1, change_col2 = st.columns(2)
+    with change_col1:
+        if added_cols:
+            st.success(f"✅ {len(added_cols)} sütun eklendi: {', '.join(list(added_cols)[:5])}{'...' if len(added_cols) > 5 else ''}")
+        else:
+            st.info("ℹ️ Yeni sütun eklenmedi")
+    
+    with change_col2:
+        if removed_cols:
+            st.warning(f"⚠️ {len(removed_cols)} sütun silindi: {', '.join(list(removed_cols)[:5])}{'...' if len(removed_cols) > 5 else ''}")
+        else:
+            st.info("ℹ️ Sütun silinmedi")
+    
+    st.markdown("---")
+    
+    # 4. İşlem Geçmişi Tablosu
+    st.markdown("### 📜 İşlem Geçmişi")
+    
+    if history:
+        # Create DataFrame for history
+        history_data = []
+        for idx, op in enumerate(history):
+            step_num = op.get('step', 0)
+            step_name = steps[step_num - 1]['name'] if step_num > 0 and step_num <= len(steps) else 'Bilinmeyen'
+            method = op.get('method', 'Bilinmeyen')
+            columns = op.get('columns', [])
+            # Convert to Python list if it's a protobuf object
+            if not isinstance(columns, list):
+                columns = list(columns)
+            columns_str = ', '.join(columns) if columns else 'Tüm sütunlar'
+            timestamp = op.get('timestamp', '')
+            from_llm = '🤖 LLM' if op.get('from_llm', False) else '👤 Manuel'
+            
+            # Format timestamp
+            try:
+                if timestamp:
+                    dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                    time_str = dt.strftime('%Y-%m-%d %H:%M:%S')
+                else:
+                    time_str = 'Bilinmeyen'
+            except:
+                time_str = timestamp if timestamp else 'Bilinmeyen'
+            
+            history_data.append({
+                'Sıra': idx + 1,
+                'Step': step_name,
+                'Yöntem': method,
+                'Sütunlar': columns_str,
+                'Kaynak': from_llm,
+                'Zaman': time_str
+            })
+        
+        history_df = pd.DataFrame(history_data)
+        
+        # Filter options
+        filter_col1, filter_col2 = st.columns(2)
+        with filter_col1:
+            selected_steps = st.multiselect(
+                "Step'e göre filtrele",
+                options=sorted(set(history_df['Step'].unique())),
+                default=sorted(set(history_df['Step'].unique())),
+                key="filter_steps_summary"
+            )
+        
+        with filter_col2:
+            selected_sources = st.multiselect(
+                "Kaynağa göre filtrele",
+                options=['🤖 LLM', '👤 Manuel'],
+                default=['🤖 LLM', '👤 Manuel'],
+                key="filter_sources_summary"
+            )
+        
+        # Apply filters
+        filtered_df = history_df[
+            (history_df['Step'].isin(selected_steps)) &
+            (history_df['Kaynak'].isin(selected_sources))
+        ]
+        
+        st.dataframe(filtered_df, width='stretch', hide_index=True)
+    else:
+        st.info("ℹ️ Henüz işlem geçmişi bulunmuyor.")
+    
+    st.markdown("---")
+    
+    # 5. İndirme Seçenekleri
+    st.markdown("### 💾 İndirme Seçenekleri")
+    
+    download_col1, download_col2 = st.columns(2)
+    
+    with download_col1:
+        # CSV download for preprocessed data
+        csv_buffer = io.StringIO()
+        preprocessed_df.to_csv(csv_buffer, index=False, encoding='utf-8-sig')
+        csv_str = csv_buffer.getvalue()
+        
+        st.download_button(
+            label="📥 İşlenmiş Veriyi İndir (CSV)",
+            data=csv_str,
+            file_name=f"preprocessed_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            mime="text/csv",
+            width='stretch',
+            type="primary",
+            key="download_csv_button"
+        )
+    
+    with download_col2:
+        # TXT summary report
+        report_lines = []
+        report_lines.append("=" * 60)
+        report_lines.append("VERİ ÖN İŞLEME ÖZET RAPORU")
+        report_lines.append("=" * 60)
+        report_lines.append(f"\nOluşturulma Tarihi: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        report_lines.append("\n" + "=" * 60)
+        report_lines.append("\nGENEL ÖZET")
+        report_lines.append("-" * 60)
+        report_lines.append(f"Toplam İşlem: {len(history)}")
+        report_lines.append(f"Satır Değişimi: {len(preprocessed_df) - len(original_df):+,}")
+        report_lines.append(f"Sütun Değişimi: {len(preprocessed_df.columns) - len(original_df.columns):+,}")
+        report_lines.append("\n" + "=" * 60)
+        report_lines.append("\nORİJİNAL VERİ")
+        report_lines.append("-" * 60)
+        report_lines.append(f"Shape: {original_df.shape[0]:,} satır × {original_df.shape[1]} sütun")
+        report_lines.append(f"Sayısal Sütun: {len(original_df.select_dtypes(include=[np.number]).columns)}")
+        report_lines.append(f"Kategorik Sütun: {len(original_df.select_dtypes(include=['object', 'category']).columns)}")
+        report_lines.append(f"Eksik Değer: {original_missing.get('total_missing', 0):,} ({original_missing.get('missing_percentage', 0):.2f}%)")
+        report_lines.append("\n" + "=" * 60)
+        report_lines.append("\nİŞLENMİŞ VERİ")
+        report_lines.append("-" * 60)
+        report_lines.append(f"Shape: {preprocessed_df.shape[0]:,} satır × {preprocessed_df.shape[1]} sütun")
+        report_lines.append(f"Sayısal Sütun: {len(preprocessed_df.select_dtypes(include=[np.number]).columns)}")
+        report_lines.append(f"Kategorik Sütun: {len(preprocessed_df.select_dtypes(include=['object', 'category']).columns)}")
+        report_lines.append(f"Eksik Değer: {preprocessed_missing.get('total_missing', 0):,} ({preprocessed_missing.get('missing_percentage', 0):.2f}%)")
+        report_lines.append("\n" + "=" * 60)
+        report_lines.append("\nİŞLEM GEÇMİŞİ")
+        report_lines.append("-" * 60)
+        for idx, op in enumerate(history, 1):
+            step_num = op.get('step', 0)
+            step_name = steps[step_num - 1]['name'] if step_num > 0 and step_num <= len(steps) else 'Bilinmeyen'
+            method = op.get('method', 'Bilinmeyen')
+            columns = op.get('columns', [])
+            if not isinstance(columns, list):
+                columns = list(columns)
+            columns_str = ', '.join(columns) if columns else 'Tüm sütunlar'
+            from_llm = 'LLM' if op.get('from_llm', False) else 'Manuel'
+            timestamp = op.get('timestamp', '')
+            report_lines.append(f"\n{idx}. [{step_name}] {method}")
+            report_lines.append(f"   Sütunlar: {columns_str}")
+            report_lines.append(f"   Kaynak: {from_llm} | Zaman: {timestamp}")
+        
+        report_text = '\n'.join(report_lines)
+        
+        st.download_button(
+            label="📥 Özet Raporu İndir (TXT)",
+            data=report_text,
+            file_name=f"preprocessing_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+            mime="text/plain",
+            width='stretch'
+        )
+    
+    # CSS to make both download buttons red - placed AFTER buttons are rendered
+    st.markdown("""
+    <style>
+        /* Target both download buttons - CSV (primary) and TXT (secondary) */
+        /* First column - CSV button (primary) */
+        div[data-testid="stColumn"]:first-of-type button[data-testid="stBaseButton-primary"],
+        div[data-testid="stColumn"]:first-of-type div[data-testid="stDownloadButton"] button {
+            background-color: #dc3545 !important;
+            color: white !important;
+            border-color: #dc3545 !important;
+        }
+        div[data-testid="stColumn"]:first-of-type button[data-testid="stBaseButton-primary"]:hover,
+        div[data-testid="stColumn"]:first-of-type div[data-testid="stDownloadButton"] button:hover {
+            background-color: #c82333 !important;
+            border-color: #c82333 !important;
+        }
+        
+        /* Second column - TXT button (secondary) */
+        div[data-testid="stColumn"]:last-of-type button[data-testid="stBaseButton-secondary"],
+        div[data-testid="stColumn"]:last-of-type div[data-testid="stDownloadButton"] button {
+            background-color: #dc3545 !important;
+            color: white !important;
+            border-color: #dc3545 !important;
+        }
+        div[data-testid="stColumn"]:last-of-type button[data-testid="stBaseButton-secondary"]:hover,
+        div[data-testid="stColumn"]:last-of-type div[data-testid="stDownloadButton"] button:hover {
+            background-color: #c82333 !important;
+            border-color: #c82333 !important;
+        }
+        
+        /* Alternative: Target all download buttons in download columns */
+        div[data-testid="stDownloadButton"] button {
+            background-color: #dc3545 !important;
+            color: white !important;
+            border-color: #dc3545 !important;
+        }
+        div[data-testid="stDownloadButton"] button:hover {
+            background-color: #c82333 !important;
+            border-color: #c82333 !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Navigation buttons
+    col_nav1, col_nav2, col_nav3, col_nav4 = st.columns([3, 1, 1, 1])
+    with col_nav2:
+        if current_step > 1:
+            if st.button("← Geri", key="prev_step_summary", width='stretch'):
+                st.session_state.preprocessing_step -= 1
+                st.rerun()
+    with col_nav3:
+        # Atla butonu - son adımda gösterilmez
+        pass
+    with col_nav4:
+        # İleri butonu - son adımda gösterilmez veya farklı bir aksiyon olabilir
+        if st.button("✅ Tamamla", key="complete_summary", width='stretch', type="primary"):
+            # Mesajları alt alta, tam genişlikte göster
+            st.success("✅ Veri ön işleme tamamlandı!")
+            st.info("💡 İşlenmiş veriyi indirebilir veya model kurma adımına geçebilirsiniz.")
 
 
 def render_outlier_step(df):
@@ -5157,7 +5643,7 @@ def render_outlier_step(df):
     # Action buttons - Uygula butonu tüm satırı kaplar
     # Uygula butonu sadece yöntem seçildiğinde gösterilir (adım 1 mantığı)
     if selected_columns and method:
-        if st.button("✅ Uygula", key="apply_outlier", type="primary", use_container_width=True):
+        if st.button("✅ Uygula", key="apply_outlier", type="primary", width='stretch'):
                 try:
                     df_processed = current_df.copy()
                     
@@ -5372,40 +5858,7 @@ elif current_step == 4:
 elif current_step == 5:
     render_scaling_step(df)
 elif current_step == 6:
-    st.info("Summary step - Implementation in progress...")
-    
-    # Show applied operations for this step - ALWAYS SHOW
-    st.markdown("### 📋 Uygulanan İşlemler")
-    step_history = [h for h in st.session_state.preprocessing_history if h.get('step') == current_step]
-    if step_history:
-        for idx, hist in enumerate(step_history):
-            method_op = hist.get('method', '')
-            columns_op = hist.get('columns', [])
-            st.info(f"✅ {method_op} işlemi uygulandı")
-    else:
-        st.info("ℹ️ Henüz bu adımda işlem uygulanmadı.")
-    
-    # Add spacing before navigation buttons
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # Action buttons - right aligned at bottom
-    col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
-    with col2:
-        if current_step > 1:
-            if st.button("← Geri", key="prev_step_summary", width='stretch'):
-                st.session_state.preprocessing_step -= 1
-                st.rerun()
-    with col3:
-        # Atla butonu - son adımda (Summary) gösterilmez
-        if current_step < len(steps):
-            if st.button("Atla", key="skip_step_summary", width='stretch'):
-                st.session_state.preprocessing_step += 1
-                st.rerun()
-    with col4:
-        has_operation = check_step_has_operation(current_step)
-        if st.button("İleri →", key="next_step_summary", disabled=not has_operation, width='stretch'):
-            st.session_state.preprocessing_step += 1
-            st.rerun()
+    render_summary_step(df)
 
 # Navigation buttons are now in each step (Geri, Atla, İleri)
 

@@ -2,7 +2,7 @@
 env/
 venv/
 .env
-
+.streamlit/
 .cursor/
 
 # Proje Dokümanları

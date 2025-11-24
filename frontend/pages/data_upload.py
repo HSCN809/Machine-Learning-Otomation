@@ -35,11 +35,31 @@ st.set_page_config(
     layout="wide"
 )
 
-# Sadece sol üstteki sayfa navigasyon dropdown'unu gizle (app/data upload)
+# Streamlit varsayılan sayfa navigasyon menüsünü gizle
 st.markdown("""
 <style>
-    /* Sol üstteki sayfa navigasyon dropdown'unu gizle */
+    /* Streamlit varsayılan sayfa navigasyon menüsünü gizle */
     [data-testid="stSidebarNav"] {
+        display: none !important;
+    }
+    
+    /* Sayfa navigasyon dropdown'unu da gizle */
+    [data-testid="stSidebarNav"] ul {
+        display: none !important;
+    }
+    
+    /* Sidebar'daki sayfa listesini gizle */
+    section[data-testid="stSidebar"] > div:nth-child(2) > div > div > div > div > div > div > nav {
+        display: none !important;
+    }
+    
+    /* Tüm sidebar navigasyon elementlerini gizle */
+    .css-1d391kg {
+        display: none !important;
+    }
+    
+    /* Streamlit'in sayfa navigasyon butonlarını gizle */
+    button[data-testid="baseButton-secondary"] {
         display: none !important;
     }
 </style>
@@ -79,6 +99,9 @@ with st.sidebar:
     
     if st.button("🔧 Veri Ön İşleme", width='stretch'):
         st.switch_page("pages/data_preprocessing.py")
+    
+    if st.button("🤖 Model Seçimi", width='stretch'):
+        st.switch_page("pages/model_selection.py")
     
     st.markdown("---")
     st.markdown("### ℹ️ Hakkında")

@@ -140,3 +140,5 @@ Proje Notları Yapılacaklar:
 7. Feature engineering Yeni özellik kısmı ele alınacak (önemli)
 8. Llm önerilerindeki kartlar imleçle sağa sola fırlat (sağa öneri uygula sol öneri uygulanmasın) (opsiyonel)
 9. Bütün modüllere düzgün debug sistemi ve log çıktıları ekle (tasarımı güzel dili sade ve basit olmalı) (önemli)
+10. Tam otomatik sistem oluştur (opsiyonel)
+
