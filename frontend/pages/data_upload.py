@@ -267,7 +267,20 @@ uploaded_file = st.file_uploader(
 )
 
 if uploaded_file is not None:
-    # Display file info
+    # ÖNCE FORMAT KONTROLÜ - Dosya seçilir seçilmez kontrol et
+    is_valid_format, format_error = validate_file_format(uploaded_file)
+    if not is_valid_format:
+        st.error(f"❌ {format_error}")
+        st.warning("⚠️ Sadece CSV, XLSX ve XLS dosyaları yüklenebilir. Lütfen desteklenen formatta bir dosya seçin.")
+        st.stop()
+    
+    # DOSYA BOYUTU KONTROLÜ
+    is_valid_size, size_error = validate_file_size(uploaded_file)
+    if not is_valid_size:
+        st.error(f"❌ {size_error}")
+        st.stop()
+    
+    # Format ve boyut kontrolünden geçtiyse dosya bilgilerini göster
     file_size_mb = get_file_size_mb(uploaded_file.name) if hasattr(uploaded_file, 'name') else uploaded_file.size / (1024 * 1024)
     
     col1, col2, col3 = st.columns(3)
@@ -278,18 +291,6 @@ if uploaded_file is not None:
     with col3:
         file_ext = Path(uploaded_file.name).suffix
         st.metric("Format", file_ext.upper())
-    
-    # Validate file format
-    is_valid_format, format_error = validate_file_format(uploaded_file)
-    if not is_valid_format:
-        st.error(format_error)
-        st.stop()
-    
-    # Validate file size
-    is_valid_size, size_error = validate_file_size(uploaded_file)
-    if not is_valid_size:
-        st.error(size_error)
-        st.stop()
     
     # Load button
     if st.button("📥 Veriyi Yükle", type="primary", width='stretch'):
@@ -455,50 +456,6 @@ if st.session_state.uploaded_data is not None:
     else:
         st.success("✅ Veri kalitesi iyi görünüyor! Tespit edilen sorun yok.")
     
-    st.markdown("---")
-    st.header("📊 Veri Önizleme")
-    
-    # Data preview
-    st.subheader("İlk 10 Satır")
-    st.dataframe(df.head(10), width='stretch')
-    
-    # Data types (from backend)
-    st.subheader("Veri Tipleri")
-    dtype_df = get_data_types_summary(df)
-    st.dataframe(dtype_df, width='stretch')
-    
-    # Basic statistics for numeric columns (from backend)
-    numeric_stats = get_numeric_statistics(df)
-    if not numeric_stats.empty:
-        st.subheader("Sayısal Sütunlar - Temel İstatistikler")
-        st.dataframe(numeric_stats, width='stretch')
-    
-    # Basic statistics for categorical columns (from backend)
-    categorical_stats = get_categorical_statistics(df)
-    if not categorical_stats.empty:
-        st.subheader("Kategorik Sütunlar - Temel İstatistikler")
-        st.dataframe(categorical_stats, width='stretch')
-        
-        # Value distributions for each categorical column
-        st.subheader("Kategorik Sütunlar - Değer Dağılımları")
-        categorical_cols = df.select_dtypes(include=['object', 'category']).columns
-        for col in categorical_cols:
-            with st.expander(f"📊 {col} - Değer Dağılımı"):
-                # Get value distribution from backend
-                value_dist = get_categorical_value_distribution(df, col, top_n=10)
-                if not value_dist.empty:
-                    st.dataframe(value_dist, width='stretch')
-                    
-                    # Get cardinality info from backend
-                    cardinality_info = get_column_cardinality_info(df, col)
-                    if cardinality_info['warning']:
-                        if cardinality_info['is_potential_id']:
-                            st.error(cardinality_info['warning'])
-                        else:
-                            st.warning(cardinality_info['warning'])
-                    
-                    st.caption(f"Toplam benzersiz değer: {cardinality_info['unique_count']} / {cardinality_info['total_count']} ({cardinality_info['cardinality_ratio']*100:.1f}%)")
-    
     # Clear data button
     st.markdown("---")
     if st.button("🗑️ Veriyi Temizle", width='stretch'):
@@ -515,7 +472,7 @@ else:
     - **Excel** (.xlsx, .xls)
     
     ### Dosya Gereksinimleri:
-    - Maksimum dosya boyutu: **100 MB**
+    - Maksimum dosya boyutu: **200 MB**
     - Minimum 1 sütun ve 1 satır içermelidir
     - Yapısal (tabular) veri formatında olmalıdır
     """)

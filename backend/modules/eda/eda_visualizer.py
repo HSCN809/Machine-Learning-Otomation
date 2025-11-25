@@ -7,12 +7,38 @@ import warnings
 warnings.filterwarnings('ignore')
 
 
+def sample_dataframe_for_visualization(df: pd.DataFrame, max_rows: int = 10000) -> pd.DataFrame:
+    """
+    Sample dataframe for visualization if it's too large.
+    
+    Args:
+        df: DataFrame to sample
+        max_rows: Maximum number of rows to keep
+        
+    Returns:
+        Sampled DataFrame
+    """
+    if len(df) <= max_rows:
+        return df
+    
+    # Use stratified sampling if possible, otherwise random sampling
+    try:
+        # Try to maintain distribution by sampling proportionally
+        sample_size = min(max_rows, len(df))
+        sampled_df = df.sample(n=sample_size, random_state=42)
+        return sampled_df
+    except:
+        # Fallback to simple random sampling
+        return df.sample(n=min(max_rows, len(df)), random_state=42)
+
+
 def create_histogram(
     df: pd.DataFrame,
     column: str,
     library: str = 'plotly',
     bins: int = 30,
-    title: Optional[str] = None
+    title: Optional[str] = None,
+    max_rows: int = 10000
 ) -> Any:
     """
     Create histogram for a numeric column.
@@ -23,6 +49,7 @@ def create_histogram(
         library: Visualization library ('matplotlib', 'plotly', 'seaborn', 'streamlit')
         bins: Number of bins
         title: Chart title
+        max_rows: Maximum rows to use for visualization (sampling for large datasets)
         
     Returns:
         Visualization object (varies by library)
@@ -30,7 +57,10 @@ def create_histogram(
     if column not in df.columns:
         return None
     
-    col_data = df[column].dropna()
+    # Sample data if too large
+    df_sampled = sample_dataframe_for_visualization(df, max_rows)
+    
+    col_data = df_sampled[column].dropna()
     
     if len(col_data) == 0:
         return None
@@ -42,7 +72,7 @@ def create_histogram(
         try:
             import plotly.express as px
             fig = px.histogram(
-                df,
+                df_sampled,
                 x=column,
                 nbins=bins,
                 title=title,
@@ -186,27 +216,63 @@ def create_correlation_matrix(
     Returns:
         Visualization object
     """
-    numeric_cols = df.select_dtypes(include=[np.number]).columns
+    # Select numeric columns using pandas dtype detection
+    numeric_cols = df.select_dtypes(include=['number']).columns
     
     if len(numeric_cols) < 2:
         return None
     
-    corr_matrix = df[numeric_cols].corr(method=method)
+    # Sabit sütunları filtrele (tüm değerleri aynı olan sütunlar)
+    valid_numeric_cols = []
+    for col in numeric_cols:
+        col_data = df[col].dropna()
+        if len(col_data) > 0:
+            # Eğer sütunun tüm değerleri aynıysa (sabit sütun), atla
+            if col_data.nunique() > 1:
+                valid_numeric_cols.append(col)
+    
+    if len(valid_numeric_cols) < 2:
+        return None
+    
+    corr_matrix = df[valid_numeric_cols].corr(method=method)
     
     if title is None:
         title = f'Korelasyon Matrisi ({method})'
     
     if library == 'plotly':
         try:
-            import plotly.express as px
-            fig = px.imshow(
-                corr_matrix,
+            import plotly.graph_objects as go
+            import numpy
+            
+            # Text annotations için değerleri hazırla (numpy array olarak)
+            text_values = numpy.empty_like(corr_matrix.values, dtype=object)
+            for i in range(len(corr_matrix.columns)):
+                for j in range(len(corr_matrix.columns)):
+                    text_values[i, j] = f'{corr_matrix.iloc[i, j]:.2f}'
+            
+            # go.Heatmap ile text annotations ekle
+            fig = go.Figure(data=go.Heatmap(
+                z=corr_matrix.values,
+                x=corr_matrix.columns.tolist(),
+                y=corr_matrix.columns.tolist(),
+                colorscale='RdBu',
+                text=text_values,
+                texttemplate='%{text}',
+                textfont={"size": 10},
+                colorbar=dict(title="Korelasyon"),
+                zmid=0,
+                zmin=-1,
+                zmax=1,
+                hovertemplate='%{y} vs %{x}<br>Korelasyon: %{z:.3f}<extra></extra>'
+            ))
+            
+            fig.update_layout(
                 title=title,
-                color_continuous_scale='RdBu',
-                aspect='auto',
-                labels=dict(x="Sütun", y="Sütun", color="Korelasyon")
+                xaxis_title="Sütun",
+                yaxis_title="Sütun",
+                height=600,
+                template='plotly_white'
             )
-            fig.update_layout(height=600, template='plotly_white')
             return fig
         except ImportError:
             return None
@@ -222,11 +288,14 @@ def create_correlation_matrix(
             ax.set_yticklabels(corr_matrix.columns)
             ax.set_title(title, fontsize=14, fontweight='bold', pad=20)
             
-            # Add text annotations
+            # Add text annotations (her kutucuğa değer yazdır)
             for i in range(len(corr_matrix.columns)):
                 for j in range(len(corr_matrix.columns)):
-                    text = ax.text(j, i, f'{corr_matrix.iloc[i, j]:.2f}',
-                                 ha="center", va="center", color="black", fontsize=8)
+                    corr_value = corr_matrix.iloc[i, j]
+                    # Text rengini korelasyon değerine göre ayarla (koyu arka plan için beyaz, açık için siyah)
+                    text_color = 'white' if abs(corr_value) > 0.5 else 'black'
+                    text = ax.text(j, i, f'{corr_value:.2f}',
+                                 ha="center", va="center", color=text_color, fontsize=8, fontweight='bold')
             
             plt.colorbar(im, ax=ax)
             plt.tight_layout()
@@ -276,16 +345,16 @@ def create_missing_heatmap(
         title: Chart title
         
     Returns:
-        Visualization object
+        Visualization object or None if no missing values
     """
     if title is None:
         title = 'Eksik Değerler Haritası'
     
-    missing_matrix = df.isnull().astype(int)
+    # Eksik değer kontrolü - eğer hiç eksik değer yoksa None döndür
+    if df.isnull().sum().sum() == 0:
+        return None
     
-    # Always create heatmap, even if no missing values (will show all zeros)
-    # if missing_matrix.sum().sum() == 0:
-    #     return None
+    missing_matrix = df.isnull().astype(int)
     
     if library == 'plotly':
         try:
@@ -350,7 +419,8 @@ def create_scatter_plot(
     y_column: str,
     library: str = 'plotly',
     color_column: Optional[str] = None,
-    title: Optional[str] = None
+    title: Optional[str] = None,
+    max_rows: int = 10000
 ) -> Any:
     """
     Create scatter plot for two numeric columns.
@@ -362,6 +432,7 @@ def create_scatter_plot(
         library: Visualization library
         color_column: Optional column for color coding
         title: Chart title
+        max_rows: Maximum rows to use for visualization (sampling for large datasets)
         
     Returns:
         Visualization object
@@ -369,15 +440,18 @@ def create_scatter_plot(
     if x_column not in df.columns or y_column not in df.columns:
         return None
     
+    # Sample data if too large
+    df_sampled = sample_dataframe_for_visualization(df, max_rows)
+    
     if title is None:
         title = f'{x_column} vs {y_column}'
     
     if library == 'plotly':
         try:
             import plotly.express as px
-            if color_column and color_column in df.columns:
+            if color_column and color_column in df_sampled.columns:
                 fig = px.scatter(
-                    df,
+                    df_sampled,
                     x=x_column,
                     y=y_column,
                     color=color_column,
@@ -386,7 +460,7 @@ def create_scatter_plot(
                 )
             else:
                 fig = px.scatter(
-                    df,
+                    df_sampled,
                     x=x_column,
                     y=y_column,
                     title=title,
@@ -401,11 +475,11 @@ def create_scatter_plot(
         try:
             import matplotlib.pyplot as plt
             fig, ax = plt.subplots(figsize=(10, 6))
-            if color_column and color_column in df.columns:
-                scatter = ax.scatter(df[x_column], df[y_column], c=df[color_column], cmap='viridis', alpha=0.6)
+            if color_column and color_column in df_sampled.columns:
+                scatter = ax.scatter(df_sampled[x_column], df_sampled[y_column], c=df_sampled[color_column], cmap='viridis', alpha=0.6)
                 plt.colorbar(scatter, ax=ax)
             else:
-                ax.scatter(df[x_column], df[y_column], alpha=0.6)
+                ax.scatter(df_sampled[x_column], df_sampled[y_column], alpha=0.6)
             ax.set_xlabel(x_column, fontsize=12)
             ax.set_ylabel(y_column, fontsize=12)
             ax.set_title(title, fontsize=14, fontweight='bold')
@@ -420,10 +494,10 @@ def create_scatter_plot(
             import seaborn as sns
             import matplotlib.pyplot as plt
             fig, ax = plt.subplots(figsize=(10, 6))
-            if color_column and color_column in df.columns:
-                sns.scatterplot(data=df, x=x_column, y=y_column, hue=color_column, ax=ax)
+            if color_column and color_column in df_sampled.columns:
+                sns.scatterplot(data=df_sampled, x=x_column, y=y_column, hue=color_column, ax=ax)
             else:
-                sns.scatterplot(data=df, x=x_column, y=y_column, ax=ax)
+                sns.scatterplot(data=df_sampled, x=x_column, y=y_column, ax=ax)
             ax.set_title(title, fontsize=14, fontweight='bold')
             plt.tight_layout()
             return fig
@@ -806,7 +880,7 @@ def create_pair_plot(
     title: Optional[str] = None
 ) -> Any:
     """Create pair plot for multiple numeric columns."""
-    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
     
     if columns:
         numeric_cols = [c for c in columns if c in numeric_cols]
@@ -975,6 +1049,239 @@ def create_ridge_plot(
             ax.set_title(title, fontsize=14, fontweight='bold')
             ax.legend()
             plt.tight_layout()
+            return fig
+        except ImportError:
+            return None
+        except Exception:
+            return None
+    
+    return None
+
+
+def create_heatmap(
+    df: pd.DataFrame,
+    x_column: Optional[str] = None,
+    y_column: Optional[str] = None,
+    value_column: Optional[str] = None,
+    library: str = 'plotly',
+    title: Optional[str] = None
+) -> Any:
+    """Create general heatmap (not just correlation)."""
+    if title is None:
+        title = 'Heatmap'
+    
+    if library == 'plotly':
+        try:
+            import plotly.express as px
+            if x_column and y_column and value_column:
+                # Pivot table for heatmap
+                pivot_df = df.pivot_table(values=value_column, index=y_column, columns=x_column, aggfunc='mean')
+                fig = px.imshow(
+                    pivot_df,
+                    title=title,
+                    color_continuous_scale='Viridis',
+                    aspect='auto',
+                    labels=dict(x=x_column, y=y_column, color=value_column)
+                )
+            else:
+                # Use correlation matrix as fallback
+                numeric_cols = df.select_dtypes(include=['number']).columns
+                if len(numeric_cols) >= 2:
+                    corr_matrix = df[numeric_cols].corr()
+                    fig = px.imshow(
+                        corr_matrix,
+                        title=title,
+                        color_continuous_scale='RdBu',
+                        aspect='auto'
+                    )
+                else:
+                    return None
+            fig.update_layout(height=600, template='plotly_white')
+            return fig
+        except ImportError:
+            return None
+        except Exception:
+            return None
+    
+    return None
+
+
+def create_sunburst(
+    df: pd.DataFrame,
+    path_columns: List[str],
+    value_column: Optional[str] = None,
+    library: str = 'plotly',
+    title: Optional[str] = None
+) -> Any:
+    """Create sunburst chart for hierarchical data."""
+    if not path_columns or len(path_columns) < 1:
+        return None
+    
+    if title is None:
+        title = 'Sunburst Chart'
+    
+    if library == 'plotly':
+        try:
+            import plotly.express as px
+            if value_column and value_column in df.columns:
+                fig = px.sunburst(df, path=path_columns, values=value_column, title=title)
+            else:
+                # Count values
+                df_count = df.groupby(path_columns).size().reset_index(name='count')
+                fig = px.sunburst(df_count, path=path_columns, values='count', title=title)
+            fig.update_layout(height=600, template='plotly_white')
+            return fig
+        except ImportError:
+            return None
+        except Exception:
+            return None
+    
+    return None
+
+
+def create_parallel_coordinates(
+    df: pd.DataFrame,
+    columns: Optional[List[str]] = None,
+    color_column: Optional[str] = None,
+    library: str = 'plotly',
+    title: Optional[str] = None
+) -> Any:
+    """Create parallel coordinates plot."""
+    numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
+    
+    if columns:
+        numeric_cols = [c for c in columns if c in numeric_cols]
+    
+    if len(numeric_cols) < 2:
+        return None
+    
+    # Limit to 10 columns for performance
+    numeric_cols = numeric_cols[:10]
+    
+    if title is None:
+        title = 'Parallel Coordinates'
+    
+    if library == 'plotly':
+        try:
+            import plotly.express as px
+            if color_column and color_column in df.columns:
+                fig = px.parallel_coordinates(
+                    df[numeric_cols + [color_column]],
+                    dimensions=numeric_cols,
+                    color=color_column,
+                    title=title
+                )
+            else:
+                fig = px.parallel_coordinates(
+                    df[numeric_cols],
+                    dimensions=numeric_cols,
+                    title=title
+                )
+            fig.update_layout(height=600, template='plotly_white')
+            return fig
+        except ImportError:
+            return None
+        except Exception:
+            return None
+    
+    return None
+
+
+def create_facet_grid(
+    df: pd.DataFrame,
+    x_column: str,
+    y_column: str,
+    facet_column: str,
+    library: str = 'plotly',
+    title: Optional[str] = None
+) -> Any:
+    """Create facet grid (multiple plots in grid)."""
+    if x_column not in df.columns or y_column not in df.columns or facet_column not in df.columns:
+        return None
+    
+    if title is None:
+        title = f'{y_column} vs {x_column} by {facet_column}'
+    
+    if library == 'plotly':
+        try:
+            import plotly.express as px
+            fig = px.scatter(
+                df,
+                x=x_column,
+                y=y_column,
+                facet_col=facet_column,
+                title=title
+            )
+            fig.update_layout(height=600, template='plotly_white')
+            return fig
+        except ImportError:
+            return None
+        except Exception:
+            return None
+    
+    elif library == 'seaborn':
+        try:
+            import seaborn as sns
+            import matplotlib.pyplot as plt
+            g = sns.FacetGrid(df, col=facet_column)
+            g.map(plt.scatter, x_column, y_column)
+            g.fig.suptitle(title, fontsize=14, fontweight='bold')
+            plt.tight_layout()
+            return g.fig
+        except ImportError:
+            return None
+        except Exception:
+            return None
+    
+    return None
+
+
+def create_radar_chart(
+    df: pd.DataFrame,
+    categories: List[str],
+    values_column: Optional[str] = None,
+    library: str = 'plotly',
+    title: Optional[str] = None
+) -> Any:
+    """Create radar chart (spider chart)."""
+    if not categories or len(categories) < 3:
+        return None
+    
+    if title is None:
+        title = 'Radar Chart'
+    
+    if library == 'plotly':
+        try:
+            import plotly.graph_objects as go
+            
+            # Prepare data
+            if values_column and values_column in df.columns:
+                values = df[values_column].values
+            else:
+                # Use first numeric column or mean of categories
+                numeric_cols = df.select_dtypes(include=['number']).columns
+                if len(numeric_cols) > 0:
+                    values = df[numeric_cols[0]].values
+                else:
+                    return None
+            
+            fig = go.Figure()
+            fig.add_trace(go.Scatterpolar(
+                r=values,
+                theta=categories,
+                fill='toself',
+                name='Values'
+            ))
+            fig.update_layout(
+                polar=dict(
+                    radialaxis=dict(
+                        visible=True
+                    )),
+                showlegend=True,
+                title=title,
+                height=500,
+                template='plotly_white'
+            )
             return fig
         except ImportError:
             return None

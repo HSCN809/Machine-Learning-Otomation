@@ -141,4 +141,7 @@ Proje Notları Yapılacaklar:
 8. Llm önerilerindeki kartlar imleçle sağa sola fırlat (sağa öneri uygula sol öneri uygulanmasın) (opsiyonel)
 9. Bütün modüllere düzgün debug sistemi ve log çıktıları ekle (tasarımı güzel dili sade ve basit olmalı) (önemli)
 10. Tam otomatik sistem oluştur (opsiyonel)
-
+11. Veri Seti silindiği vakit model seçimindeki işlemler geri alınacak. 
+12. On-premise sistemler 
+13. Frontend gelişecek
+14. MlFLow eklenecek

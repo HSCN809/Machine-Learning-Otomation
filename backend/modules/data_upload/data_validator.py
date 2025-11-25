@@ -17,7 +17,7 @@ from backend.modules.config.settings import (
 
 def validate_file_format(file, allowed_formats: Optional[List[str]] = None) -> Tuple[bool, Optional[str]]:
     """
-    Validate file format.
+    Validate file format. Sadece CSV, XLSX ve XLS dosyalarına izin verilir.
     
     Args:
         file: File object (Streamlit UploadedFile or file path)
@@ -37,8 +37,10 @@ def validate_file_format(file, allowed_formats: Optional[List[str]] = None) -> T
     
     file_extension = Path(file_name).suffix.lower()
     
+    # Sıkı format kontrolü - sadece izin verilen formatlar
     if file_extension not in allowed_formats:
-        return False, f"Desteklenmeyen dosya formatı: {file_extension}. Desteklenen formatlar: {', '.join(allowed_formats)}"
+        allowed_formats_display = ', '.join([f.upper().replace('.', '') for f in allowed_formats])
+        return False, f"Desteklenmeyen dosya formatı: {file_extension.upper()}. Sadece {allowed_formats_display} dosyaları yüklenebilir."
     
     return True, None
 

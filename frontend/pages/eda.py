@@ -33,11 +33,54 @@ from backend.modules.eda.eda_analyzer import (
     detect_outliers,
     analyze_distributions
 )
-from backend.modules.eda.eda_llm_enhancer import suggest_visualizations
+# from backend.modules.eda.eda_llm_enhancer import suggest_visualizations  # REMOVED (temporarily disabled)
 from backend.modules.data_upload.data_validator import get_data_summary
+from backend.modules.data_upload.data_analyzer import (
+    get_numeric_statistics,
+    get_categorical_statistics,
+    get_categorical_value_distribution,
+    get_column_cardinality_info,
+    get_data_types_summary
+)
+import io
 
 # Logger setup
 logger = logging.getLogger(__name__)
+
+
+def export_visualization(visualization, viz_type: str, library: str = 'plotly', format: str = 'png'):
+    """
+    Export visualization to file format.
+    
+    Args:
+        visualization: Visualization object
+        viz_type: Type of visualization
+        library: Library used ('plotly', 'matplotlib', 'seaborn')
+        format: Export format ('png', 'pdf', 'html')
+        
+    Returns:
+        Bytes data for download
+    """
+    try:
+        if library == 'plotly':
+            if format == 'png':
+                return visualization.to_image(format='png')
+            elif format == 'pdf':
+                return visualization.to_image(format='pdf')
+            elif format == 'html':
+                return visualization.to_html().encode('utf-8')
+        elif library in ['matplotlib', 'seaborn']:
+            import matplotlib.pyplot as plt
+            buf = io.BytesIO()
+            if format == 'png':
+                visualization.savefig(buf, format='png', dpi=300, bbox_inches='tight')
+            elif format == 'pdf':
+                visualization.savefig(buf, format='pdf', bbox_inches='tight')
+            buf.seek(0)
+            return buf.read()
+    except Exception as e:
+        logger.error(f"Export error: {e}")
+        return None
 
 
 def apply_visualization_suggestion(df: pd.DataFrame, suggestion: dict, library: str = 'plotly'):
@@ -160,38 +203,22 @@ def apply_visualization_suggestion(df: pd.DataFrame, suggestion: dict, library: 
         # Correlation Matrix / Correlation Heatmap
         elif 'correlation' in viz_type_normalized or 'heatmap' in viz_type_normalized:
             numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-            logger.debug(f"🔍 DEBUG Correlation/Heatmap: numeric_cols={len(numeric_cols)}, is_missing={'missing' in viz_type_normalized}")
+            logger.debug(f"🔍 DEBUG Correlation/Heatmap: numeric_cols={len(numeric_cols)}")
             if len(numeric_cols) >= 2:
-                if 'missing' in viz_type_normalized or 'eksik' in viz_type_normalized.lower():
-                    try:
-                        visualization = create_missing_heatmap(df, library=library)
-                        if visualization:
-                            logger.debug(f"✅ Missing Values Heatmap oluşturuldu")
-                            viz_info = {
-                                'type': 'Missing Values Heatmap',
-                                'visualization': visualization,
-                                'library': library,
-                                'suggestion': suggestion
-                            }
-                        else:
-                            logger.debug(f"❌ Missing Values Heatmap None döndü")
-                    except Exception as e:
-                        logger.debug(f"❌ Missing Values Heatmap hatası: {str(e)}")
-                else:
-                    try:
-                        visualization = create_correlation_matrix(df, library=library)
-                        if visualization:
-                            logger.debug(f"✅ Correlation Matrix oluşturuldu")
-                            viz_info = {
-                                'type': 'Correlation Matrix',
-                                'visualization': visualization,
-                                'library': library,
-                                'suggestion': suggestion
-                            }
-                        else:
-                            logger.debug(f"❌ Correlation Matrix None döndü")
-                    except Exception as e:
-                        logger.debug(f"❌ Correlation Matrix hatası: {str(e)}")
+                try:
+                    visualization = create_correlation_matrix(df, library=library)
+                    if visualization:
+                        logger.debug(f"✅ Correlation Matrix oluşturuldu")
+                        viz_info = {
+                            'type': 'Correlation Matrix',
+                            'visualization': visualization,
+                            'library': library,
+                            'suggestion': suggestion
+                        }
+                    else:
+                        logger.debug(f"❌ Correlation Matrix None döndü")
+                except Exception as e:
+                    logger.debug(f"❌ Correlation Matrix hatası: {str(e)}")
             else:
                 logger.debug(f"❌ Correlation/Heatmap: Yeterli numeric sütun yok (en az 2 gerekli, {len(numeric_cols)} var)")
         
@@ -680,13 +707,6 @@ with st.sidebar:
         help="Görselleştirmeler için kullanılacak kütüphane"
     )
     
-    # LLM suggestions toggle
-    llm_enabled = st.toggle(
-        "🤖 LLM Önerileri",
-        value=True,
-        help="LLM ile görselleştirme önerileri"
-    )
-    
     st.markdown("---")
     st.markdown("### ℹ️ Hakkında")
     st.markdown("""
@@ -722,7 +742,6 @@ if df is None or df.empty:
 
 # Store settings in session state
 st.session_state.eda_viz_library = viz_library
-st.session_state.eda_llm_enabled = llm_enabled
 
 # Main content area
 st.success(f"✅ {len(df):,} satır × {len(df.columns)} sütun veri analiz ediliyor")
@@ -733,6 +752,7 @@ categorical_cols = df.select_dtypes(include=['object', 'category']).columns.toli
 
 # Get data summary for LLM
 data_summary = get_data_summary(df)
+
 
 # Determine analysis level based on dataset characteristics
 def determine_analysis_level(df, numeric_cols, categorical_cols, data_summary):
@@ -745,9 +765,9 @@ def determine_analysis_level(df, numeric_cols, categorical_cols, data_summary):
     num_categorical = len(categorical_cols)
     missing_pct = data_summary.get('missing_values', {}).get('missing_percentage', 0)
     
-    # Gelişmiş: Çok fazla veri, çok fazla sütun, karmaşık yapı
+    # Orta: Çok fazla veri, çok fazla sütun, karmaşık yapı
     if total_rows > 10000 or total_cols > 20 or (num_numeric > 10 and num_categorical > 5):
-        return 'Gelişmiş'
+        return 'Orta'
     # Orta: Orta seviye karmaşıklık
     elif total_rows > 1000 or total_cols > 10 or missing_pct > 10:
         return 'Orta'
@@ -758,264 +778,10 @@ def determine_analysis_level(df, numeric_cols, categorical_cols, data_summary):
 # Auto-determine analysis level (değişkenler tanımlandıktan sonra)
 analysis_level = determine_analysis_level(df, numeric_cols, categorical_cols, data_summary)
 
-# LLM Visualization Suggestions (if enabled)
-if llm_enabled:
-    with st.expander("🤖 LLM Görselleştirme Önerileri", expanded=False):
-        # Veri hash'i oluştur (veri değiştiğinde önerileri sıfırlamak için)
-        import hashlib
-        data_hash = hashlib.md5(str(df.shape).encode() + str(df.columns.tolist()).encode()).hexdigest()
-        
-        # Initialize suggestions in session state
-        if 'eda_suggestions' not in st.session_state:
-            st.session_state.eda_suggestions = []
-        if 'eda_suggestion_index' not in st.session_state:
-            st.session_state.eda_suggestion_index = 0
-        if 'eda_data_hash' not in st.session_state:
-            st.session_state.eda_data_hash = None
-        
-        # Veri değiştiyse önerileri sıfırla
-        if st.session_state.eda_data_hash != data_hash:
-            st.session_state.eda_suggestions = []
-            st.session_state.eda_suggestion_index = 0
-            st.session_state.eda_data_hash = data_hash
-        
-        # Button to get suggestions
-        if st.button("💡 Önerileri Al", key="get_viz_suggestions"):
-            # Yeni öneriler alındığında uygulanmış öneri ID'lerini temizle (grafik üretme hakkını yenile)
-            if 'applied_suggestion_ids' in st.session_state:
-                st.session_state.applied_suggestion_ids = []
-            
-            with st.spinner("🤖 LLM önerileri oluşturuluyor..."):
-                suggestions_result = suggest_visualizations(
-                    data_summary,
-                    numeric_cols,
-                    categorical_cols,
-                    analysis_level
-                )
-                
-                if suggestions_result.get('error'):
-                    st.error(f"❌ LLM önerisi alınamadı: {suggestions_result.get('error')}")
-                    st.session_state.eda_suggestions = []
-                else:
-                    suggestions = suggestions_result.get('suggestions', [])
-                    if suggestions:
-                        # Her öneriye analiz seviyesi ekle (eğer LLM'den gelmediyse)
-                        for suggestion in suggestions:
-                            if 'analysis_level' not in suggestion or not suggestion.get('analysis_level'):
-                                # LLM'den gelmediyse, görselleştirme tipine göre otomatik belirle
-                                viz_type = suggestion.get('visualization_type', '').lower()
-                                if any(x in viz_type for x in ['histogram', 'bar chart', 'pie chart', 'count plot']):
-                                    suggestion['analysis_level'] = 'Temel'
-                                elif any(x in viz_type for x in ['box plot', 'scatter plot', 'line plot', 'distribution']):
-                                    suggestion['analysis_level'] = 'Orta'
-                                elif any(x in viz_type for x in ['correlation', 'heatmap', 'pair plot', 'violin plot', 'density']):
-                                    suggestion['analysis_level'] = 'Gelişmiş'
-                                else:
-                                    suggestion['analysis_level'] = analysis_level  # Fallback
-                        
-                        # En az 8 öneri garantisi
-                        if len(suggestions) < 8:
-                            st.warning(f"⚠️ Sadece {len(suggestions)} öneri alındı. En az 8 öneri gereklidir. Lütfen tekrar deneyin.")
-                        
-                        st.session_state.eda_suggestions = suggestions
-                        st.session_state.eda_suggestion_index = 0
-                        st.session_state.eda_data_hash = data_hash  # Veri hash'ini kaydet
-                        st.success(f"✅ {len(suggestions)} öneri alındı (Analiz Seviyesi: {analysis_level})")
-                        st.rerun()
-                    else:
-                        st.info("ℹ️ Öneri bulunamadı.")
-                        st.session_state.eda_suggestions = []
-        
-        # Display suggestions in carousel format
-        if st.session_state.eda_suggestions:
-            suggestions = st.session_state.eda_suggestions
-            current_index = st.session_state.eda_suggestion_index
-            
-            st.markdown(f"<div style='text-align: center; margin: 10px 0;'><strong>{len(suggestions)} öneri sunuldu</strong> | <em>Öneri {current_index + 1}/{len(suggestions)}</em></div>", unsafe_allow_html=True)
-            
-            # Navigation buttons and current suggestion
-            col1, col2, col3 = st.columns([1, 3, 1])
-            
-            with col1:
-                if st.button("◀️ Önceki", key="prev_suggestion", disabled=(current_index == 0), width='stretch'):
-                    st.session_state.eda_suggestion_index = max(0, current_index - 1)
-                    st.rerun()
-            
-            with col2:
-                # Current suggestion - kart tasarımı
-                suggestion = suggestions[current_index]
-                viz_type = suggestion.get('visualization_type', 'Bilinmeyen')
-                column = suggestion.get('column', 'Genel')
-                reason = suggestion.get('reason', '')
-                
-                # HTML tag'lerini temizle
-                if reason:
-                    import html as html_module
-                    import re
-                    try:
-                        reason = html_module.unescape(reason)
-                    except:
-                        pass
-                    reason = re.sub(r'<[^>]+>', '', reason, flags=re.DOTALL | re.IGNORECASE)
-                    reason = ' '.join(reason.split()).strip()
-                
-                # Viz type ve column'u temizle
-                # LLM'den gelen ismi normalize et (sadece İngilizce gösterilecek)
-                viz_type_raw = str(viz_type).strip()
-                viz_type_clean = viz_type_raw.replace('_', ' ').title()
-                
-                column_clean = str(column) if column and column != 'Genel' and column else ''
-                
-                # Analiz seviyesi badge'i
-                analysis_level_badge = suggestion.get('analysis_level', 'Temel')
-                level_colors = {
-                    'Temel': '#4CAF50',  # Yeşil
-                    'Orta': '#FF9800',   # Turuncu
-                    'Gelişmiş': '#F44336'  # Kırmızı
-                }
-                level_color = level_colors.get(analysis_level_badge, '#4CAF50')
-                
-                # Reason'ı güvenli hale getir
-                import html as html_module
-                reason_safe = html_module.escape(reason) if reason else 'Açıklama bulunamadı.'
-                viz_type_safe = html_module.escape(viz_type_clean)
-                analysis_level_safe = html_module.escape(analysis_level_badge)
-                
-                # Sütun adına göre farklı kart tasarımları
-                if column_clean:
-                    # Sütun adı olan öneriler için kart tasarımı
-                    card_html = f"""
-                    <div style='
-                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                        padding: 25px;
-                        border-radius: 15px;
-                        margin: 10px 0;
-                        color: white;
-                        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-                        min-height: 180px;
-                        border-left: 5px solid #f0f0f0;
-                    '>
-                        <div style='display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;'>
-                            <h3 style='color: white; margin: 0; margin-right: 10px; font-size: 1.3em;'>
-                                📊 {viz_type_safe}
-                            </h3>
-                            <span style='
-                                background: {level_color};
-                                color: white;
-                                padding: 5px 12px;
-                                border-radius: 20px;
-                                font-size: 0.75em;
-                                font-weight: bold;
-                                text-transform: uppercase;
-                            '>
-                                {analysis_level_safe}
-                            </span>
-                        </div>
-                        <div style='
-                            background: rgba(255, 255, 255, 0.15);
-                            padding: 10px 15px;
-                            border-radius: 8px;
-                            margin-bottom: 15px;
-                            display: inline-block;
-                        '>
-                            <span style='color: #f0f0f0; font-size: 0.95em;'>
-                                <strong>📍 Sütun:</strong> {html_module.escape(column_clean)}
-                            </span>
-                        </div>
-                        <p style='
-                            color: white; 
-                            margin: 15px 0 0 0; 
-                            line-height: 1.7; 
-                            font-size: 1em;
-                            padding: 10px;
-                            background: rgba(255, 255, 255, 0.1);
-                            border-radius: 8px;
-                        '>
-                            {reason_safe}
-                        </p>
-                    </div>
-                    """
-                else:
-                    # Sütun adı olmayan öneriler için aynı renk kart tasarımı
-                    card_html = f"""
-                    <div style='
-                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                        padding: 25px;
-                        border-radius: 15px;
-                        margin: 10px 0;
-                        color: white;
-                        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-                        min-height: 150px;
-                        border-left: 5px solid #f0f0f0;
-                    '>
-                        <div style='display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;'>
-                            <h3 style='color: white; margin: 0; font-size: 1.4em; font-weight: bold;'>
-                                📊 {viz_type_safe}
-                            </h3>
-                            <span style='
-                                background: {level_color};
-                                color: white;
-                                padding: 5px 12px;
-                                border-radius: 20px;
-                                font-size: 0.75em;
-                                font-weight: bold;
-                                text-transform: uppercase;
-                            '>
-                                {analysis_level_safe}
-                            </span>
-                        </div>
-                        <p style='
-                            color: white; 
-                            margin: 0; 
-                            line-height: 1.8; 
-                            font-size: 1.05em;
-                            padding: 15px;
-                            background: rgba(255, 255, 255, 0.15);
-                            border-radius: 8px;
-                            font-weight: 500;
-                        '>
-                            {reason_safe}
-                        </p>
-                    </div>
-                    """
-                
-                st.markdown(card_html, unsafe_allow_html=True)
-                
-                # Uygula butonu (duplicate önleme)
-                apply_button_key = f"apply_suggestion_{current_index}"
-                
-                # Öneri ID'sini oluştur (duplicate kontrolü için)
-                viz_type_raw = str(suggestion.get('visualization_type', '')).lower().replace('_', ' ').strip()
-                column_raw = suggestion.get('column', '')
-                suggestion_id = f"{viz_type_raw}_{column_raw or 'general'}"
-                
-                # Eğer bu öneri zaten uygulandıysa, butonu devre dışı bırak
-                is_applied = 'applied_suggestion_ids' in st.session_state and suggestion_id in st.session_state.applied_suggestion_ids
-                
-                if is_applied:
-                    st.button("✅ Zaten Uygulandı", key=apply_button_key, width='stretch', disabled=True)
-                else:
-                    if st.button("✅ Uygula", key=apply_button_key, width='stretch', type="primary"):
-                        # Görselleştirmeyi oluştur
-                        apply_visualization_suggestion(df, suggestion, viz_library)
-            
-            with col3:
-                if st.button("Sonraki ▶️", key="next_suggestion", disabled=(current_index == len(suggestions) - 1), width='stretch'):
-                    st.session_state.eda_suggestion_index = min(len(suggestions) - 1, current_index + 1)
-                    st.rerun()
-            
-            # Dots indicator
-            dots_html = "<div style='text-align: center; margin-top: 15px;'>"
-            for i in range(len(suggestions)):
-                if i == current_index:
-                    dots_html += "🔵 "
-                else:
-                    dots_html += "⚪ "
-            dots_html += "</div>"
-            st.markdown(dots_html, unsafe_allow_html=True)
+# LLM Visualization Suggestions - REMOVED (temporarily disabled)
 
 # Create tabs for different analysis sections
-tab1, tab2, tab3, tab4 = st.tabs(["📊 Temel Görselleştirmeler", "📈 Sayısal Analizler", "📋 Kategorik Analizler", "🔗 İlişki Analizleri"])
+tab0, tab1, tab2, tab3, tab4 = st.tabs(["📊 Özet Dashboard", "📊 Temel Görselleştirmeler", "📈 Sayısal Analizler", "📋 Kategorik Analizler", "🔗 İlişki Analizleri"])
 
 # Session state'te görüntüleme modunu kontrol et
 if 'show_manual_viz_tab1' not in st.session_state:
@@ -1027,63 +793,166 @@ if 'show_manual_viz_tab3' not in st.session_state:
 if 'show_manual_viz_tab4' not in st.session_state:
     st.session_state.show_manual_viz_tab4 = False
 
+# Özet Dashboard Tab
+with tab0:
+    st.subheader("📊 Veri Özeti Dashboard")
+    
+    # Temel istatistikler
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("📊 Toplam Satır", f"{len(df):,}")
+    with col2:
+        st.metric("📋 Toplam Sütun", len(df.columns))
+    with col3:
+        st.metric("🔢 Sayısal Sütun", len(numeric_cols))
+    with col4:
+        st.metric("📝 Kategorik Sütun", len(categorical_cols))
+    
+    st.markdown("---")
+    
+    # Data preview section (moved from data_upload.py)
+    # First 10 rows
+    st.markdown("#### İlk 10 Satır")
+    st.dataframe(df.head(10), width='stretch')
+    
+    st.markdown("---")
+    
+    # Data types
+    st.markdown("#### Veri Tipleri")
+    dtype_df = get_data_types_summary(df)
+    st.dataframe(dtype_df, width='stretch')
+    
+    st.markdown("---")
+    
+    # Basic statistics for numeric columns
+    numeric_stats = get_numeric_statistics(df)
+    if not numeric_stats.empty:
+        st.markdown("#### Sayısal Sütunlar - Temel İstatistikler")
+        st.dataframe(numeric_stats, width='stretch')
+        st.markdown("---")
+    
+    # Basic statistics for categorical columns
+    categorical_stats = get_categorical_statistics(df)
+    if not categorical_stats.empty:
+        st.markdown("#### Kategorik Sütunlar - Temel İstatistikler")
+        st.dataframe(categorical_stats, width='stretch')
+        st.markdown("---")
+        
+        # Value distributions for each categorical column
+        st.markdown("#### Kategorik Sütunlar - Değer Dağılımları")
+        categorical_cols_list = df.select_dtypes(include=['object', 'category']).columns
+        for col in categorical_cols_list:
+            with st.expander(f"📊 {col} - Değer Dağılımı"):
+                # Get value distribution from backend
+                value_dist = get_categorical_value_distribution(df, col, top_n=10)
+                if not value_dist.empty:
+                    st.dataframe(value_dist, width='stretch')
+                    
+                    # Get cardinality info from backend
+                    cardinality_info = get_column_cardinality_info(df, col)
+                    if cardinality_info['warning']:
+                        if cardinality_info['is_potential_id']:
+                            st.error(cardinality_info['warning'])
+                        else:
+                            st.warning(cardinality_info['warning'])
+                    
+                    st.caption(f"Toplam benzersiz değer: {cardinality_info['unique_count']} / {cardinality_info['total_count']} ({cardinality_info['cardinality_ratio']*100:.1f}%)")
+
 with tab1:
     st.subheader("Temel Görselleştirmeler")
     
-    # LLM görselleştirmeleri var mı kontrol et
-    has_llm_viz = 'applied_visualizations' in st.session_state and st.session_state.applied_visualizations
-    has_relevant_llm = False
-    if has_llm_viz:
-        for viz_info in st.session_state.applied_visualizations:
-            if viz_info.get('type') in ['Missing Values Heatmap', 'Correlation Matrix']:
-                has_relevant_llm = True
-                break
+    # LLM görselleştirmeleri - REMOVED (temporarily disabled)
     
-    # Toggle butonu (LLM görselleştirmesi varsa göster)
-    if has_relevant_llm:
-        col_toggle1, _ = st.columns([1, 4])
-        with col_toggle1:
-            if st.button("🔄 Manuel Grafik Oluşturma", key="toggle_manual_tab1", width='stretch'):
-                st.session_state.show_manual_viz_tab1 = not st.session_state.show_manual_viz_tab1
-                st.rerun()
-    
-    # LLM görselleştirmeleri göster (manuel mod kapalıysa)
-    if not st.session_state.show_manual_viz_tab1 and has_relevant_llm:
-        applied_viz = st.session_state.applied_visualizations
+    # Manuel görselleştirmeler
+    if True:  # Always show manual visualizations
+        applied_viz = st.session_state.applied_visualizations.copy() if 'applied_visualizations' in st.session_state else []
         for idx, viz_info in enumerate(applied_viz):
             viz_type = viz_info.get('type', '')
             
-            if viz_type in ['Missing Values Heatmap', 'Correlation Matrix']:
-                st.markdown(f"### 🤖 LLM Önerisi: {viz_type}")
+            if viz_type == 'Correlation Matrix':
                 visualization = viz_info.get('visualization')
                 library = viz_info.get('library', viz_library)
                 
                 if visualization:
+                    # Görselleştirme başlığı ve silme butonu
+                    col_title, col_delete = st.columns([4, 1])
+                    with col_title:
+                        st.markdown(f"### 🤖 LLM Önerisi: {viz_type}")
+                    with col_delete:
+                        if st.button("🗑️ Sil", key=f"delete_viz_tab1_{idx}", help="Bu görselleştirmeyi sil"):
+                            # Görselleştirmeyi listeden çıkar
+                            if 'applied_visualizations' in st.session_state:
+                                st.session_state.applied_visualizations.pop(idx)
+                                # Applied suggestion IDs'den de çıkar
+                                suggestion_id = f"{viz_type.lower().replace(' ', '_')}_{viz_info.get('column', 'general')}"
+                                if 'applied_suggestion_ids' in st.session_state and suggestion_id in st.session_state.applied_suggestion_ids:
+                                    st.session_state.applied_suggestion_ids.remove(suggestion_id)
+                            st.rerun()
+                    
                     if library == 'plotly':
-                        st.plotly_chart(visualization, width='stretch', key=f"applied_viz_{idx}_{viz_type}")
+                        st.plotly_chart(visualization, config={'displayModeBar': True}, key=f"applied_viz_{idx}_{viz_type}")
                     elif library in ['matplotlib', 'seaborn']:
                         st.pyplot(visualization)
                     elif library == 'streamlit':
                         if hasattr(visualization, 'plot'):
-                            st.plotly_chart(visualization, width='stretch', key=f"applied_viz_{idx}_{viz_type}")
+                            st.plotly_chart(visualization, config={'displayModeBar': True}, key=f"applied_viz_{idx}_{viz_type}")
                         else:
                             st.dataframe(visualization)
-                st.markdown("---")
+                    
+                    # LLM Yorumu Al butonu - REMOVED (temporarily disabled)
+                    if False:  # LLM disabled
+                        interpretation_key = f"interpret_{idx}_{viz_type}"
+                        if st.button("🤖 LLM Yorumu Al", key=interpretation_key):
+                            from backend.modules.eda.eda_llm_enhancer import interpret_analysis
+                            with st.spinner("LLM yorumu oluşturuluyor..."):
+                                column_name = viz_info.get('column', 'Genel')
+                                interpretation_result = interpret_analysis(
+                                    viz_type,
+                                    column_name,
+                                    data_summary
+                                )
+                                
+                                if interpretation_result.get('error'):
+                                    st.error(f"❌ Yorum alınamadı: {interpretation_result.get('error')}")
+                                else:
+                                    interpretation = interpretation_result.get('interpretation', '')
+                                    key_findings = interpretation_result.get('key_findings', [])
+                                    recommendations = interpretation_result.get('recommendations', [])
+                                    
+                                    if interpretation:
+                                        st.markdown("#### 📝 LLM Yorumu")
+                                        st.info(interpretation)
+                                    
+                                    if key_findings:
+                                        st.markdown("#### 🔍 Önemli Bulgular")
+                                        for finding in key_findings:
+                                            st.markdown(f"- {finding}")
+                                    
+                                    if recommendations:
+                                        st.markdown("#### 💡 Öneriler")
+                                        for rec in recommendations:
+                                            st.markdown(f"- {rec}")
+                    
+                    st.markdown("---")
     
-    # Manuel görselleştirmeler (LLM modu kapalıysa veya LLM görselleştirmesi yoksa)
-    if st.session_state.show_manual_viz_tab1 or not has_relevant_llm:
-        # Missing values heatmap
+    # Manuel görselleştirmeler
+    if True:  # Always show manual visualizations
+        # Missing values heatmap - eksik değer kontrolü
         st.markdown("### 🔍 Eksik Değerler Haritası")
-        missing_viz = create_missing_heatmap(df, library=viz_library)
-        if missing_viz:
-            if viz_library == 'plotly':
-                st.plotly_chart(missing_viz, width='stretch', key="missing_heatmap_default")
-            elif viz_library in ['matplotlib', 'seaborn']:
-                st.pyplot(missing_viz)
-            elif viz_library == 'streamlit':
-                st.dataframe(missing_viz)
+        missing_count = df.isnull().sum().sum()
+        
+        if missing_count == 0:
+            # Eksik değer yoksa Türkçe mesaj göster
+            st.success("✅ Veri setinizde eksik değer bulunmamaktadır. Tüm veriler tam ve analize hazırdır.")
         else:
-            st.info("Eksik değer bulunamadı veya görselleştirme oluşturulamadı.")
+            # Eksik değer varsa Plotly heatmap göster
+            missing_viz = create_missing_heatmap(df, library='plotly')
+            if missing_viz is not None:
+                st.plotly_chart(missing_viz, config={'displayModeBar': True}, key="missing_heatmap_default")
+            else:
+                st.warning("⚠️ Eksik değerler haritası oluşturulamadı.")
+        
+        st.markdown("---")
         
         # Correlation matrix
         if len(numeric_cols) >= 2:
@@ -1091,7 +960,7 @@ with tab1:
             corr_viz = create_correlation_matrix(df, library=viz_library)
             if corr_viz:
                 if viz_library == 'plotly':
-                    st.plotly_chart(corr_viz, width='stretch', key="correlation_matrix_default")
+                    st.plotly_chart(corr_viz, config={'displayModeBar': True}, key="correlation_matrix_default")
                 elif viz_library in ['matplotlib', 'seaborn']:
                     st.pyplot(corr_viz)
                 elif viz_library == 'streamlit':
@@ -1102,49 +971,46 @@ with tab1:
 with tab2:
     st.subheader("Sayısal Sütun Analizleri")
     
-    # LLM görselleştirmeleri var mı kontrol et
-    has_llm_viz = 'applied_visualizations' in st.session_state and st.session_state.applied_visualizations
-    has_relevant_llm = False
-    if has_llm_viz:
-        for viz_info in st.session_state.applied_visualizations:
-            if viz_info.get('type') in ['Histogram', 'Box Plot', 'Bar Chart', 'Count Plot']:
-                has_relevant_llm = True
-                break
+    # LLM görselleştirmeleri - REMOVED (temporarily disabled)
     
-    # Toggle butonu (LLM görselleştirmesi varsa göster)
-    if has_relevant_llm:
-        col_toggle2, _ = st.columns([1, 4])
-        with col_toggle2:
-            if st.button("🔄 Manuel Grafik Oluşturma", key="toggle_manual_tab2", width='stretch'):
-                st.session_state.show_manual_viz_tab2 = not st.session_state.show_manual_viz_tab2
-                st.rerun()
-    
-    # LLM görselleştirmeleri göster (manuel mod kapalıysa)
-    if not st.session_state.show_manual_viz_tab2 and has_relevant_llm:
-        applied_viz = st.session_state.applied_visualizations
+    # Manuel görselleştirmeler
+    if True:  # Always show manual visualizations
+        applied_viz = st.session_state.applied_visualizations.copy() if 'applied_visualizations' in st.session_state else []
         for idx, viz_info in enumerate(applied_viz):
             viz_type = viz_info.get('type', '')
             
             if viz_type in ['Histogram', 'Box Plot', 'Bar Chart', 'Count Plot']:
                 column = viz_info.get('column', '')
-                st.markdown(f"### 🤖 LLM Önerisi: {viz_type} - {column}")
+                # Görselleştirme başlığı ve silme butonu
+                col_title, col_delete = st.columns([4, 1])
+                with col_title:
+                    st.markdown(f"### 🤖 LLM Önerisi: {viz_type} - {column}")
+                with col_delete:
+                    if st.button("🗑️ Sil", key=f"delete_viz_tab2_{idx}", help="Bu görselleştirmeyi sil"):
+                        if 'applied_visualizations' in st.session_state:
+                            st.session_state.applied_visualizations.pop(idx)
+                            suggestion_id = f"{viz_type.lower().replace(' ', '_')}_{column or 'general'}"
+                            if 'applied_suggestion_ids' in st.session_state and suggestion_id in st.session_state.applied_suggestion_ids:
+                                st.session_state.applied_suggestion_ids.remove(suggestion_id)
+                        st.rerun()
+                
                 visualization = viz_info.get('visualization')
                 library = viz_info.get('library', viz_library)
                 
                 if visualization:
                     if library == 'plotly':
-                        st.plotly_chart(visualization, width='stretch', key=f"applied_viz_{idx}_{viz_type}_{column}")
+                        st.plotly_chart(visualization, config={'displayModeBar': True}, key=f"applied_viz_{idx}_{viz_type}_{column}")
                     elif library in ['matplotlib', 'seaborn']:
                         st.pyplot(visualization)
                     elif library == 'streamlit':
                         if hasattr(visualization, 'plot'):
-                            st.plotly_chart(visualization, width='stretch', key=f"applied_viz_{idx}_{viz_type}_{column}")
+                            st.plotly_chart(visualization, config={'displayModeBar': True}, key=f"applied_viz_{idx}_{viz_type}_{column}")
                         else:
                             st.dataframe(visualization)
                 st.markdown("---")
     
     # Manuel görselleştirmeler (LLM modu kapalıysa veya LLM görselleştirmesi yoksa)
-    if st.session_state.show_manual_viz_tab2 or not has_relevant_llm:
+    if True:  # Always show manual visualizations
         if len(numeric_cols) == 0:
             st.info("ℹ️ Sayısal sütun bulunamadı.")
         else:
@@ -1162,7 +1028,7 @@ with tab2:
                     hist_viz = create_histogram(df, selected_numeric_col, library=viz_library)
                     if hist_viz:
                         if viz_library == 'plotly':
-                            st.plotly_chart(hist_viz, width='stretch', key=f"histogram_{selected_numeric_col}")
+                            st.plotly_chart(hist_viz, config={'displayModeBar': True}, key=f"histogram_{selected_numeric_col}")
                         elif viz_library in ['matplotlib', 'seaborn']:
                             st.pyplot(hist_viz)
                         elif viz_library == 'streamlit':
@@ -1173,7 +1039,7 @@ with tab2:
                     box_viz = create_box_plot(df, selected_numeric_col, library=viz_library)
                     if box_viz:
                         if viz_library == 'plotly':
-                            st.plotly_chart(box_viz, width='stretch', key=f"boxplot_{selected_numeric_col}")
+                            st.plotly_chart(box_viz, config={'displayModeBar': True}, key=f"boxplot_{selected_numeric_col}")
                         elif viz_library in ['matplotlib', 'seaborn']:
                             st.pyplot(box_viz)
                         elif viz_library == 'streamlit':
@@ -1237,7 +1103,7 @@ with tab3:
                         labels={'x': selected_cat_col, 'y': 'Sayı'}
                     )
                     fig.update_layout(height=400, template='plotly_white')
-                    st.plotly_chart(fig, width='stretch', key=f"categorical_bar_{selected_cat_col}")
+                    st.plotly_chart(fig, config={'displayModeBar': True}, key=f"categorical_bar_{selected_cat_col}")
                 except:
                     st.bar_chart(value_counts)
             elif viz_library == 'streamlit':
@@ -1291,49 +1157,10 @@ with tab3:
 with tab4:
     st.subheader("İlişki Analizleri")
     
-    # LLM görselleştirmeleri var mı kontrol et
-    has_llm_viz = 'applied_visualizations' in st.session_state and st.session_state.applied_visualizations
-    has_relevant_llm = False
-    if has_llm_viz:
-        for viz_info in st.session_state.applied_visualizations:
-            if viz_info.get('type') == 'Scatter Plot':
-                has_relevant_llm = True
-                break
+    # LLM görselleştirmeleri - REMOVED (temporarily disabled)
     
-    # Toggle butonu (LLM görselleştirmesi varsa göster)
-    if has_relevant_llm:
-        col_toggle4, _ = st.columns([1, 4])
-        with col_toggle4:
-            if st.button("🔄 Manuel Grafik Oluşturma", key="toggle_manual_tab4", width='stretch'):
-                st.session_state.show_manual_viz_tab4 = not st.session_state.show_manual_viz_tab4
-                st.rerun()
-    
-    # LLM görselleştirmeleri göster (manuel mod kapalıysa)
-    if not st.session_state.show_manual_viz_tab4 and has_relevant_llm:
-        applied_viz = st.session_state.applied_visualizations
-        for idx, viz_info in enumerate(applied_viz):
-            viz_type = viz_info.get('type', '')
-            
-            if viz_type == 'Scatter Plot':
-                columns = viz_info.get('columns', [])
-                st.markdown(f"### 🤖 LLM Önerisi: {viz_type} - {columns[0]} vs {columns[1] if len(columns) > 1 else ''}")
-                visualization = viz_info.get('visualization')
-                library = viz_info.get('library', viz_library)
-                
-                if visualization:
-                    if library == 'plotly':
-                        st.plotly_chart(visualization, width='stretch', key=f"applied_viz_{idx}_{viz_type}_{'_'.join(columns)}")
-                    elif library in ['matplotlib', 'seaborn']:
-                        st.pyplot(visualization)
-                    elif library == 'streamlit':
-                        if hasattr(visualization, 'plot'):
-                            st.plotly_chart(visualization, width='stretch', key=f"applied_viz_{idx}_{viz_type}_{'_'.join(columns)}")
-                        else:
-                            st.dataframe(visualization)
-                st.markdown("---")
-    
-    # Manuel görselleştirmeler (LLM modu kapalıysa veya LLM görselleştirmesi yoksa)
-    if st.session_state.show_manual_viz_tab4 or not has_relevant_llm:
+    # Manuel görselleştirmeler
+    if True:  # Always show manual visualizations
         if len(numeric_cols) < 2:
             st.info("ℹ️ İlişki analizi için en az 2 sayısal sütun gereklidir.")
         else:
@@ -1357,7 +1184,7 @@ with tab4:
                 scatter_viz = create_scatter_plot(df, x_col, y_col, library=viz_library, color_column=color_col)
                 if scatter_viz:
                     if viz_library == 'plotly':
-                        st.plotly_chart(scatter_viz, width='stretch', key=f"scatter_{x_col}_{y_col}")
+                        st.plotly_chart(scatter_viz, config={'displayModeBar': True}, key=f"scatter_{x_col}_{y_col}")
                     elif viz_library in ['matplotlib', 'seaborn']:
                         st.pyplot(scatter_viz)
                 

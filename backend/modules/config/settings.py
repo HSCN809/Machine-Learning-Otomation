@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 load_dotenv(override=True)
 
 # File upload settings
-MAX_FILE_SIZE_MB = 100
+MAX_FILE_SIZE_MB = 200
 SUPPORTED_FORMATS = ['.csv', '.xlsx', '.xls']
 
 # Temporary directory for uploaded files

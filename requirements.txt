@@ -9,3 +9,4 @@ python-dotenv>=1.0.0
 matplotlib>=3.7.0
 plotly>=5.17.0
 xgboost>=2.0.0
+shap>=0.45.0

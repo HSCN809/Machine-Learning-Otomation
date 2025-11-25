@@ -122,8 +122,8 @@ def get_function_declaration():
                                     },
                                     "analysis_level": {
                                         "type": "string",
-                                        "description": "Bu önerinin analiz seviyesi (Temel, Orta, Gelişmiş)",
-                                        "enum": ["Temel", "Orta", "Gelişmiş"]
+                                        "description": "Bu önerinin analiz seviyesi (Temel, Orta). Gelişmiş seviye önerileri VERME.",
+                                        "enum": ["Temel", "Orta"]
                                     }
                                 },
                                 "required": ["visualization_type", "reason", "analysis_level"]
@@ -150,7 +150,7 @@ def suggest_visualizations(
         data_summary: Data summary dictionary
         numeric_columns: List of numeric column names
         categorical_columns: List of categorical column names
-        analysis_level: Analysis level ('Temel', 'Orta', 'Gelişmiş')
+        analysis_level: Analysis level ('Temel', 'Orta')
         
     Returns:
         Dictionary with visualization suggestions
@@ -161,67 +161,41 @@ def suggest_visualizations(
             'error': 'LLM is not enabled or not available'
         }
     
+    logger.info(f"🔧 Using GEMINI_MODEL: {GEMINI_MODEL}")
+    logger.debug(f"Getting visualization suggestions, analysis_level: {analysis_level}")
+    
     try:
-        # Get function declaration (data_upload modülündeki gibi)
-        function_declaration = get_function_declaration()
-        
-        # Initialize model with function calling
-        try:
-            logger.info(f"🔧 Initializing model with function declaration...")
-            model = genai.GenerativeModel(
-                model_name=GEMINI_MODEL,
-                generation_config={
-                    "temperature": LLM_TEMPERATURE,
-                },
-                tools=[function_declaration]
-            )
-            logger.info("✅ Model initialized successfully with function declarations")
-        except Exception as init_error:
-            error_type = type(init_error).__name__
-            error_msg = str(init_error)
-            logger.error(f"❌ Model initialization failed!")
-            logger.error(f"   Error Type: {error_type}")
-            logger.error(f"   Error Message: {error_msg}")
-            logger.error(f"   Error Repr: {repr(init_error)}")
-            
-            # Check if it's a schema validation error
-            if "minItems" in error_msg or "Schema" in error_msg or "schema" in error_msg.lower():
-                logger.error(f"   🔍 DETECTED: Schema validation error!")
-                logger.error(f"   📋 Function declaration structure:")
-                try:
-                    logger.error(f"      {json.dumps(function_declaration, indent=6, ensure_ascii=False)}")
-                except:
-                    logger.error(f"      (Could not serialize)")
-            
-            import traceback
-            logger.error(f"   Traceback:")
-            for line in traceback.format_exc().split('\n'):
-                if line.strip():
-                    logger.error(f"      {line}")
-            
-            return {
-                'suggestions': [],
-                'error': f'Model initialization failed: {error_type}: {error_msg}'
-            }
-        
-        # Prepare prompt
+        # Prepare prompt - ensure analysis_level is not "Gelişmiş"
+        safe_analysis_level = analysis_level if analysis_level != 'Gelişmiş' else 'Orta'
         user_prompt = get_visualization_suggestion_prompt(
             data_summary,
             numeric_columns,
             categorical_columns,
-            analysis_level
+            safe_analysis_level
         )
         full_prompt = f"{EDA_SYSTEM_PROMPT}\n\n{user_prompt}"
         logger.debug(f"Prompt length: {len(full_prompt)} characters")
+        logger.info(f"📊 Requesting visualizations for {len(numeric_columns)} numeric and {len(categorical_columns)} categorical columns")
         
-        # Retry mechanism (1 retry = 2 total attempts)
+        # Initialize model with function calling (veri ön işleme modülündeki gibi)
+        logger.debug(f"Initializing model with name: {GEMINI_MODEL}")
+        function_declaration = get_function_declaration()
+        model = genai.GenerativeModel(
+            model_name=GEMINI_MODEL,
+            generation_config={
+                "temperature": LLM_TEMPERATURE,
+            },
+            tools=[function_declaration]
+        )
+        
+        # Make API call with retry (veri ön işleme modülündeki gibi)
         last_error = None
         for attempt in range(LLM_MAX_RETRIES + 1):
             try:
-                # Call API
-                logger.info(f"🔄 Calling LLM for visualization suggestions (level: {analysis_level}) - Attempt {attempt + 1}/{LLM_MAX_RETRIES + 1}")
+                logger.info(f"🔄 Calling LLM for visualization suggestions (level: {safe_analysis_level}) - Attempt {attempt + 1}/{LLM_MAX_RETRIES + 1}")
                 logger.debug(f"   Model: {GEMINI_MODEL}, Temperature: {LLM_TEMPERATURE}, Timeout: {LLM_TIMEOUT}s")
                 
+                # Make API call with function calling
                 response = model.generate_content(
                     full_prompt,
                     generation_config={
@@ -230,66 +204,64 @@ def suggest_visualizations(
                 )
                 logger.debug(f"✅ API call successful, response received")
                 
-                # Extract function call (data_upload modülündeki gibi)
+                # Check for function call in response (veri ön işleme modülündeki gibi)
                 function_call = None
                 if hasattr(response, 'candidates') and response.candidates:
                     candidate = response.candidates[0]
                     if hasattr(candidate, 'content') and candidate.content:
                         if hasattr(candidate.content, 'parts') and candidate.content.parts:
-                            for part in candidate.content.parts:
-                                if hasattr(part, 'function_call'):
+                            # PARTS'ı listeye dönüştür (RepeatedComposite sorunu için)
+                            parts_list = list(candidate.content.parts) if candidate.content.parts else []
+                            logger.debug(f"📋 Response parts count: {len(parts_list)}")
+                            for i, part in enumerate(parts_list):
+                                logger.debug(f"   Part {i}: type={type(part).__name__}, has_function_call={hasattr(part, 'function_call')}")
+                                if hasattr(part, 'function_call') and part.function_call:
                                     function_call = part.function_call
                                     logger.info("✅ Function call detected in response")
                                     break
                 
-                if function_call and function_call.name == "suggest_visualizations":
-                    args = function_call.args
-                    suggestions = args.get("suggestions", [])
-                    
-                    # RADIKAL TEMİZLEME: Backend'de HTML tag'lerini temizle
-                    for suggestion in suggestions:
-                        if 'reason' in suggestion and suggestion['reason']:
-                            suggestion['reason'] = clean_html_from_text(suggestion['reason'])
-                    
-                    logger.info(f"✅ Received {len(suggestions)} visualization suggestions")
-                    return {
-                        'suggestions': suggestions,
-                        'error': None
-                    }
-                else:
-                    # Debug: Log response details if no function call
-                    logger.warning(f"⚠️ No function call detected on attempt {attempt + 1}")
-                    try:
-                        # Try to get text response for debugging
-                        response_text = None
-                        if hasattr(response, 'text'):
-                            response_text = response.text[:500] if response.text else "No text"
-                        elif hasattr(response, 'candidates') and response.candidates:
-                            candidate = response.candidates[0]
-                            if hasattr(candidate, 'content') and candidate.content:
-                                if hasattr(candidate.content, 'parts') and candidate.content.parts:
-                                    for part in candidate.content.parts:
-                                        if hasattr(part, 'text') and part.text:
-                                            response_text = part.text[:500]
-                                            break
+                # If function call exists, extract structured data (veri ön işleme modülündeki gibi)
+                if function_call:
+                    if function_call.name == "suggest_visualizations":
+                        # Extract function arguments
+                        args = function_call.args
+                        raw_suggestions = args.get("suggestions", [])
                         
-                        if response_text:
-                            logger.warning(f"   📝 Response text (first 500 chars): {response_text}")
+                        logger.info(f"✅ Function call successful - {len(raw_suggestions)} suggestions received")
+                        
+                        # Process suggestions (filter, add missing columns, etc.)
+                        result = _process_suggestions(raw_suggestions, numeric_columns, categorical_columns)
+                        return result
+                    else:
+                        logger.warning(f"⚠️ Unknown function call: {function_call.name}")
+                        if attempt < LLM_MAX_RETRIES:
+                            wait_time = 3 * (attempt + 1)  # Exponential backoff: 3s, 6s, 9s
+                            logger.warning(f"   ⏳ Waiting {wait_time} seconds before retry...")
+                            time.sleep(wait_time)
+                            continue
                         else:
-                            logger.warning(f"   📝 No text response found")
-                            
-                        # Check finish_reason
-                        if hasattr(response, 'candidates') and response.candidates:
-                            candidate = response.candidates[0]
-                            finish_reason = getattr(candidate, 'finish_reason', None)
-                            logger.warning(f"   🔍 Finish reason: {finish_reason}")
-                            
-                    except Exception as debug_e:
-                        logger.warning(f"   ❌ Could not extract response details: {debug_e}")
+                            return {
+                                'suggestions': [],
+                                'error': f'Unknown function call: {function_call.name}'
+                            }
+                else:
+                    # Fallback: Try to extract text and parse JSON (veri ön işleme modülündeki gibi)
+                    logger.warning("⚠️ No function call detected, falling back to JSON parsing")
+                    try:
+                        response_text = _extract_text_from_response(response)
+                        parsed = _parse_json_response(response_text)
+                        if parsed and "suggestions" in parsed:
+                            logger.info(f"✅ JSON parsing successful - {len(parsed['suggestions'])} suggestions")
+                            raw_suggestions = parsed['suggestions']
+                            # Process suggestions same as function call path
+                            return _process_suggestions(raw_suggestions, numeric_columns, categorical_columns)
+                        else:
+                            logger.warning("⚠️ Could not parse JSON from response")
+                    except Exception as parse_error:
+                        logger.warning(f"⚠️ JSON parsing failed: {parse_error}")
                     
                     if attempt < LLM_MAX_RETRIES:
-                        logger.warning(f"   Retrying...")
-                        time.sleep(1)  # Short delay before retry
+                        time.sleep(1)  # Wait before retry (veri ön işleme modülündeki gibi)
                         continue
                     else:
                         logger.warning("⚠️ No function call detected after all attempts")
@@ -299,40 +271,17 @@ def suggest_visualizations(
                         }
             except Exception as e:
                 last_error = e
-                error_type = type(e).__name__
-                error_msg = str(e)
-                error_repr = repr(e)
-                
-                logger.error(f"❌ Attempt {attempt + 1} failed!")
-                logger.error(f"   Error Type: {error_type}")
-                logger.error(f"   Error Message: {error_msg}")
-                logger.error(f"   Error Repr: {error_repr}")
-                
-                # Detailed traceback
-                import traceback
-                tb_lines = traceback.format_exc().split('\n')
-                logger.error(f"   Traceback:")
-                for line in tb_lines:
-                    if line.strip():
-                        logger.error(f"      {line}")
-                
-                # Check for specific error types
-                if "minItems" in error_msg or "Schema" in error_msg:
-                    logger.error(f"   🔍 DETECTED: Schema validation error (minItems issue)")
-                    logger.error(f"   💡 This might be a Gemini API function declaration format issue")
-                    logger.error(f"   📋 Function declaration structure:")
-                    try:
-                        logger.error(f"      {json.dumps(function_declaration, indent=6, ensure_ascii=False)}")
-                    except:
-                        logger.error(f"      (Could not serialize function declaration)")
-                
+                logger.warning(f"⚠️ API call attempt {attempt + 1} failed: {e}")
                 if attempt < LLM_MAX_RETRIES:
-                    logger.warning(f"   ⏳ Retrying in 1 second...")
-                    time.sleep(1)  # Short delay before retry
-                    continue
+                    time.sleep(1)  # Wait before retry (veri ön işleme modülündeki gibi)
                 else:
-                    raise
-            
+                    logger.error(f"❌ All {LLM_MAX_RETRIES + 1} attempts failed")
+        
+        # If all retries failed
+        if last_error:
+            logger.error(f"❌ Failed to get visualization suggestions: {last_error}", exc_info=True)
+        return {"suggestions": []}
+        
     except Exception as e:
         error_type = type(e).__name__
         error_msg = str(e)
@@ -361,6 +310,138 @@ def suggest_visualizations(
             'suggestions': [],
             'error': f'{error_type}: {error_msg}'
         }
+
+
+def _process_suggestions(
+    raw_suggestions: List[Dict],
+    numeric_columns: List[str],
+    categorical_columns: List[str]
+) -> Dict:
+    """
+    Process raw suggestions: filter complex ones, clean HTML, and add missing column suggestions.
+    (veri ön işleme modülündeki yaklaşıma benzer)
+    """
+    logger.info("=" * 80)
+    logger.info(f"📥 LLM RAW RESPONSE: {len(raw_suggestions)} suggestions received from LLM")
+    
+    # RADIKAL TEMİZLEME: Backend'de HTML tag'lerini temizle ve complex suggestions'ı filtrele
+    filtered_suggestions = []
+    complex_count = 0
+    for suggestion in raw_suggestions:
+        if 'reason' in suggestion and suggestion['reason']:
+            suggestion['reason'] = clean_html_from_text(suggestion['reason'])
+        # Filter out complex suggestions (Gelişmiş level)
+        if suggestion.get('analysis_level', '').lower() == 'gelişmiş':
+            complex_count += 1
+        else:
+            filtered_suggestions.append(suggestion)
+    
+    if complex_count > 0:
+        logger.info(f"🚫 FILTERED OUT: {complex_count} complex (Gelişmiş) suggestions removed")
+    logger.info(f"✅ AFTER FILTERING: {len(filtered_suggestions)} valid suggestions remaining")
+    
+    # Her sütun için grafik kontrolü - eksik sütunlar için otomatik öneriler ekle
+    total_columns = len(numeric_columns) + len(categorical_columns)
+    suggested_columns = set()
+    for suggestion in filtered_suggestions:
+        col = suggestion.get('column', '')
+        if col and col in numeric_columns + categorical_columns:
+            suggested_columns.add(col)
+    
+    logger.info(f"📊 COLUMN COVERAGE: LLM covered {len(suggested_columns)}/{total_columns} columns")
+    
+    # Eksik sayısal sütunlar için otomatik Histogram önerisi ekle
+    missing_numeric = [col for col in numeric_columns if col not in suggested_columns]
+    auto_added_count = 0
+    if missing_numeric:
+        logger.info(f"➕ AUTO-ADDING: {len(missing_numeric)} Histogram suggestions for missing numeric columns")
+        logger.info(f"   Columns: {', '.join(missing_numeric[:10])}{'...' if len(missing_numeric) > 10 else ''}")
+        for col in missing_numeric:
+            filtered_suggestions.append({
+                'visualization_type': 'Histogram',
+                'column': col,
+                'reason': f'{col} sütununun dağılımını görselleştirmek için histogram önerilir.',
+                'analysis_level': 'Temel'
+            })
+            auto_added_count += 1
+    
+    # Eksik kategorik sütunlar için otomatik Bar Chart önerisi ekle
+    missing_categorical = [col for col in categorical_columns if col not in suggested_columns]
+    if missing_categorical:
+        logger.info(f"➕ AUTO-ADDING: {len(missing_categorical)} Bar Chart suggestions for missing categorical columns")
+        logger.info(f"   Columns: {', '.join(missing_categorical[:10])}{'...' if len(missing_categorical) > 10 else ''}")
+        for col in missing_categorical:
+            filtered_suggestions.append({
+                'visualization_type': 'Bar Chart',
+                'column': col,
+                'reason': f'{col} sütununun değer dağılımını görselleştirmek için bar chart önerilir.',
+                'analysis_level': 'Temel'
+            })
+            auto_added_count += 1
+    
+    logger.info("=" * 80)
+    logger.info(f"✅ FINAL RESULT: {len(filtered_suggestions)} total suggestions")
+    logger.info(f"   - {len(raw_suggestions)} from LLM")
+    logger.info(f"   - {auto_added_count} auto-added for missing columns")
+    logger.info(f"   - {complex_count} complex suggestions filtered out")
+    logger.info(f"📊 COMPLETE COVERAGE: All {total_columns} columns now have visualization suggestions")
+    logger.info("=" * 80)
+    
+    return {
+        'suggestions': filtered_suggestions,
+        'error': None
+    }
+
+
+def _extract_text_from_response(response) -> str:
+    """Extract text from Gemini API response. (veri ön işleme modülündeki gibi)"""
+    # Method 1: Try response.text (normal case)
+    try:
+        if hasattr(response, 'text'):
+            text = response.text
+            if text:
+                logger.debug("Extracted text using response.text")
+                return text.strip()
+    except Exception as e:
+        logger.debug(f"response.text failed: {e}")
+    
+    # Method 2: Try candidates[0].content.parts[0].text
+    try:
+        if hasattr(response, 'candidates') and response.candidates:
+            candidate = response.candidates[0]
+            if hasattr(candidate, 'content') and candidate.content:
+                if hasattr(candidate.content, 'parts') and candidate.content.parts:
+                    # PARTS'ı listeye dönüştür (RepeatedComposite sorunu için)
+                    parts_list = list(candidate.content.parts) if candidate.content.parts else []
+                    logger.debug(f"📋 Extracting text from {len(parts_list)} parts")
+                    for i, part in enumerate(parts_list):
+                        if hasattr(part, 'text') and part.text:
+                            logger.debug(f"Extracted text using candidates[0].content.parts[{i}].text")
+                            return part.text.strip()
+    except Exception as e:
+        logger.debug(f"candidates[0].content.parts failed: {e}")
+        logger.error(f"❌ Error details: {type(e).__name__}: {str(e)}")
+    
+    raise Exception("Could not extract text from response")
+
+
+def _parse_json_response(response_text: str) -> Optional[Dict]:
+    """Parse JSON from LLM response. (veri ön işleme modülündeki gibi)"""
+    # Try direct JSON parse
+    try:
+        return json.loads(response_text)
+    except json.JSONDecodeError:
+        pass
+    
+    # Try to find JSON object in response
+    json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', response_text, re.DOTALL)
+    if json_match:
+        try:
+            return json.loads(json_match.group())
+        except json.JSONDecodeError:
+            pass
+    
+    return None
 
 
 def interpret_analysis(
@@ -442,7 +523,9 @@ def interpret_analysis(
                     candidate = response.candidates[0]
                     if hasattr(candidate, 'content') and candidate.content:
                         if hasattr(candidate.content, 'parts') and candidate.content.parts:
-                            for part in candidate.content.parts:
+                            # PARTS'ı listeye dönüştür (RepeatedComposite sorunu için)
+                            parts_list = list(candidate.content.parts) if candidate.content.parts else []
+                            for part in parts_list:
                                 if hasattr(part, 'function_call'):
                                     function_call = part.function_call
                                     logger.info("✅ Function call detected in response")
@@ -468,8 +551,9 @@ def interpret_analysis(
                     }
                 else:
                     if attempt < LLM_MAX_RETRIES:
-                        logger.warning(f"⚠️ No function call detected on attempt {attempt + 1}, retrying...")
-                        time.sleep(1)  # Short delay before retry
+                        wait_time = 3 * (attempt + 1)  # Exponential backoff: 3s, 6s, 9s
+                        logger.warning(f"⚠️ No function call detected on attempt {attempt + 1}, retrying in {wait_time} seconds...")
+                        time.sleep(wait_time)
                         continue
                     else:
                         logger.warning("⚠️ No function call detected after all attempts")
@@ -489,8 +573,9 @@ def interpret_analysis(
                     logger.error(f"   🔍 DETECTED: Schema validation error")
                 
                 if attempt < LLM_MAX_RETRIES:
-                    logger.warning(f"   ⏳ Retrying...")
-                    time.sleep(1)
+                    wait_time = 3 * (attempt + 1)  # Exponential backoff: 3s, 6s, 9s
+                    logger.warning(f"   ⏳ Retrying in {wait_time} seconds...")
+                    time.sleep(wait_time)
                     continue
                 else:
                     raise
@@ -586,7 +671,9 @@ def suggest_next_steps_analysis(
                     candidate = response.candidates[0]
                     if hasattr(candidate, 'content') and candidate.content:
                         if hasattr(candidate.content, 'parts') and candidate.content.parts:
-                            for part in candidate.content.parts:
+                            # PARTS'ı listeye dönüştür (RepeatedComposite sorunu için)
+                            parts_list = list(candidate.content.parts) if candidate.content.parts else []
+                            for part in parts_list:
                                 if hasattr(part, 'function_call'):
                                     function_call = part.function_call
                                     logger.info("✅ Function call detected in response")
@@ -608,8 +695,9 @@ def suggest_next_steps_analysis(
                     }
                 else:
                     if attempt < LLM_MAX_RETRIES:
-                        logger.warning(f"⚠️ No function call detected on attempt {attempt + 1}, retrying...")
-                        time.sleep(1)  # Short delay before retry
+                        wait_time = 3 * (attempt + 1)  # Exponential backoff: 3s, 6s, 9s
+                        logger.warning(f"⚠️ No function call detected on attempt {attempt + 1}, retrying in {wait_time} seconds...")
+                        time.sleep(wait_time)
                         continue
                     else:
                         logger.warning("⚠️ No function call detected after all attempts")
@@ -629,8 +717,9 @@ def suggest_next_steps_analysis(
                     logger.error(f"   Traceback: {traceback.format_exc()}")
                 
                 if attempt < LLM_MAX_RETRIES:
-                    logger.warning(f"   ⏳ Retrying...")
-                    time.sleep(1)
+                    wait_time = 3 * (attempt + 1)  # Exponential backoff: 3s, 6s, 9s
+                    logger.warning(f"   ⏳ Retrying in {wait_time} seconds...")
+                    time.sleep(wait_time)
                     continue
                 else:
                     raise

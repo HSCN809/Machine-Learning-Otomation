@@ -24,28 +24,56 @@ def get_visualization_suggestion_prompt(
         data_summary: Data summary dictionary
         numeric_columns: List of numeric column names
         categorical_columns: List of categorical column names
-        analysis_level: Analysis level ('Temel', 'Orta', 'Gelişmiş')
+        analysis_level: Analysis level ('Temel', 'Orta')
         
     Returns:
         Formatted prompt string
     """
+    # Detaylı veri bilgisi
+    missing_info = data_summary.get('missing_values', {})
+    missing_pct = missing_info.get('missing_percentage', 0)
+    missing_cols = missing_info.get('columns_with_missing', 0)
+    
+    duplicate_rows = data_summary.get('duplicate_rows', 0)
+    duplicate_pct = (duplicate_rows / data_summary.get('shape', {}).get('rows', 1) * 100) if data_summary.get('shape', {}).get('rows', 0) > 0 else 0
+    
+    # Sütun listelerini hazırla
+    all_numeric = ', '.join(numeric_columns) if numeric_columns else 'Yok'
+    all_categorical = ', '.join(categorical_columns) if categorical_columns else 'Yok'
+    
     prompt = f"""VERİ SETİ BİLGİLERİ:
 - Satır: {data_summary.get('shape', {}).get('rows', 0):,}
 - Sütun: {data_summary.get('shape', {}).get('columns', 0)}
-- Sayısal: {len(numeric_columns)} ({', '.join(numeric_columns[:5])}{'...' if len(numeric_columns) > 5 else ''})
-- Kategorik: {len(categorical_columns)} ({', '.join(categorical_columns[:5])}{'...' if len(categorical_columns) > 5 else ''})
-- Eksik Değer: %{data_summary.get('missing_values', {}).get('missing_percentage', 0):.1f}
+- Sayısal Sütunlar ({len(numeric_columns)} adet): {all_numeric}
+- Kategorik Sütunlar ({len(categorical_columns)} adet): {all_categorical}
+- Eksik Değer: %{missing_pct:.1f} ({missing_cols} sütunda)
+- Tekrar Eden Satır: {duplicate_rows} (%{duplicate_pct:.1f})
 - Analiz Seviyesi: {analysis_level}
 
-GÖREV: Bu veri seti için EN AZ 8 görselleştirme önerisi sun. MUTLAKA suggest_visualizations fonksiyonunu kullan.
+VERİ KALİTESİ:
+- Eksik değer oranı: {'Yüksek' if missing_pct > 20 else ('Orta' if missing_pct > 5 else 'Düşük')}
+- Veri temizliği: {'İyi' if duplicate_pct < 5 and missing_pct < 5 else ('Orta' if duplicate_pct < 10 and missing_pct < 10 else 'Dikkat Gerekli')}
+
+GÖREV: Bu veri seti için HER SÜTUN İÇİN basic görselleştirme önerisi sun. MUTLAKA suggest_visualizations fonksiyonunu kullan.
+
+KRİTİK KURALLAR:
+1. HER SAYISAL SÜTUN İÇİN en az 1 öneri: Histogram veya Box Plot
+2. HER KATEGORİK SÜTUN İÇİN en az 1 öneri: Bar Chart veya Pie Chart
+3. Toplam öneri sayısı = (Sayısal sütun sayısı × 1) + (Kategorik sütun sayısı × 1) + (İlişkisel analizler için 1-2 ek öneri)
+4. Her öneride MUTLAKA column parametresini belirt (hangi sütun için olduğunu)
 
 KURALLAR:
-1. visualization_type: SADECE İngilizce (örn: "Histogram", "Box Plot", "Scatter Plot", "Correlation Matrix", "Grouped Bar Chart")
+1. visualization_type: SADECE İngilizce (örn: "Histogram", "Box Plot", "Scatter Plot", "Correlation Matrix", "Bar Chart", "Pie Chart")
 2. reason: SADECE düz Türkçe metin, HTML/Markdown YOK
-3. analysis_level: "Temel", "Orta" veya "Gelişmiş"
-4. column: İlgili sütun adı (varsa)
+3. analysis_level: "Temel" veya "Orta" (Gelişmiş seviye önerileri VERME)
+4. column: MUTLAKA ilgili sütun adını belirt (her öneri bir sütun için olmalı)
+5. Sayısal sütunlar için: Histogram (dağılım için), Box Plot (outlier için) öner
+6. Kategorik sütunlar için: Bar Chart (frekans için), Pie Chart (oran için) öner
+7. İlişkisel analizler için: Scatter Plot (2 sayısal sütun arası), Correlation Matrix (tüm sayısal sütunlar) öner
 
-ŞİMDİ suggest_visualizations FONKSİYONUNU ÇAĞIR.
+ÖRNEK: Eğer 5 sayısal ve 3 kategorik sütun varsa, en az 8 öneri ver (her sütun için 1).
+
+ŞİMDİ suggest_visualizations FONKSİYONUNU ÇAĞIR ve HER SÜTUN İÇİN ÖNERİ VER.
 """
     return prompt
 

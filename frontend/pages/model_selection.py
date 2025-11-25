@@ -1,6 +1,7 @@
 """Streamlit page for Model Selection - Step-by-step wizard approach."""
 
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
 from pathlib import Path
@@ -11,6 +12,9 @@ import re
 import plotly.graph_objects as go
 import plotly.express as px
 from sklearn.metrics import confusion_matrix, roc_curve, auc
+import json
+import pickle
+import io
 
 # Add project root to path for imports
 project_root = Path(__file__).resolve().parent.parent.parent
@@ -44,6 +48,13 @@ from backend.modules.model_selection.model_evaluation import (
     calculate_metrics,
     get_confusion_matrix,
     get_metric_explanations
+)
+
+from backend.modules.model_selection.model_interpretation import (
+    get_feature_importance,
+    calculate_shap_values,
+    get_permutation_importance,
+    analyze_feature_importance
 )
 
 from backend.modules.model_selection.model_comparison import (
@@ -805,8 +816,9 @@ if st.session_state.get('preprocessed_data') is not None:
 elif st.session_state.get('uploaded_data') is not None:
     df = st.session_state.get('uploaded_data').copy()
 else:
-    st.warning("⚠️ Veri yüklenmedi!")
-    st.info("💡 Lütfen önce 'Veri Yükleme' veya 'Veri Ön İşleme' sayfasından veri yükleyin.")
+    st.markdown("### ⚠️ Veri yüklenmedi!")
+    st.info("💡 Lütfen önce 'Veri Yükleme' sayfasından veri yükleyin.")
+    st.markdown("")  # Boş satır
     if st.button("📊 Veri Yükleme Sayfasına Git", type="primary"):
         st.switch_page("pages/data_upload.py")
     st.stop()
@@ -851,7 +863,8 @@ steps = [
     {"name": "Model Eğitimi", "icon": "🚀", "key": "model_training"},
     {"name": "Değerlendirme", "icon": "📊", "key": "model_evaluation"},
     {"name": "Karşılaştırma", "icon": "⚖️", "key": "model_comparison"},
-    {"name": "Yorumlama", "icon": "🔬", "key": "model_interpretation"}
+    {"name": "Yorumlama", "icon": "🔬", "key": "model_interpretation"},
+    {"name": "Model İndirme", "icon": "💾", "key": "model_download"}
 ]
 
 # Display progress bar
@@ -1389,7 +1402,7 @@ elif current_step == 3:
             col1, col2, col3 = st.columns([1, 7, 1], vertical_alignment="center")
             
             with col1:
-                if st.button("◀️", key="prev_model_card", disabled=(current_index == 0), use_container_width=True):
+                if st.button("◀️", key="prev_model_card", disabled=(current_index == 0), width='stretch'):
                     st.session_state[carousel_index_key] = max(0, current_index - 1)
                     st.rerun()
             
@@ -1488,7 +1501,7 @@ elif current_step == 3:
                 """, unsafe_allow_html=True)
             
             with col3:
-                if st.button("▶️", key="next_model_card", disabled=(current_index == len(models_with_details) - 1), use_container_width=True):
+                if st.button("▶️", key="next_model_card", disabled=(current_index == len(models_with_details) - 1), width='stretch'):
                     st.session_state[carousel_index_key] = min(len(models_with_details) - 1, current_index + 1)
                     st.rerun()
     else:
@@ -1538,10 +1551,32 @@ elif current_step == 4:
     
     # Test Set Oranı - Her zaman görünür
     st.markdown("### 📊 Test Set Oranı")
-    test_size = st.slider("Test Set Oranı", 0.1, 0.4, 0.2, 0.05)
+    
+    # İki sütunlu layout: Test Set Oranı ve Eğitimi Durdur butonu
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        test_size = st.slider("Test Set Oranı", 0.1, 0.4, 0.2, 0.05)
+    
+    with col2:
+        st.markdown("<br>", unsafe_allow_html=True)  # Dikey hizalama için boşluk
+        if st.button("⏹️ Eğitimi Durdur", type="secondary", use_container_width=True):
+            if 'training_stop_requested' not in st.session_state:
+                st.session_state.training_stop_requested = False
+            st.session_state.training_stop_requested = True
+            logger.warning("⚠️ Kullanıcı eğitimi durdurma isteği gönderdi")
+            st.warning("⏹️ Eğitim durduruluyor...")
+            st.rerun()
+    
+    # Eğitimi durdurma flag'ini sıfırla (yeni eğitim başladığında)
+    if 'training_stop_requested' not in st.session_state:
+        st.session_state.training_stop_requested = False
     
     # Modelleri Eğit butonu
-    if st.button("🎯 Modelleri Eğit", type="primary", use_container_width=True):
+    if st.button("🎯 Modelleri Eğit", type="primary", width='stretch'):
+        # Yeni eğitim başladığında durdurma flag'ini sıfırla
+        st.session_state.training_stop_requested = False
+        logger.info("🚀 Yeni model eğitimi başlatıldı - durdurma flag'i sıfırlandı")
         with st.spinner("Veri bölünüyor..."):
             X_train, X_test, y_train, y_test = split_data(X, y, test_size=test_size)
             st.session_state.X_train = X_train
@@ -1565,15 +1600,33 @@ elif current_step == 4:
         training_results = {}
         
         for idx, model_name in enumerate(st.session_state.selected_models):
+            # Eğitimi durdurma kontrolü
+            if st.session_state.get('training_stop_requested', False):
+                logger.warning(f"⏹️ Eğitim durduruldu: {model_name} eğitilmeden önce durduruldu")
+                st.warning(f"⏹️ Eğitim durduruldu. {idx}/{len(st.session_state.selected_models)} model eğitildi.")
+                progress_bar.progress((idx) / len(st.session_state.selected_models))
+                status_text.text("⏹️ Eğitim durduruldu")
+                st.session_state.training_stop_requested = False
+                break
+            
             status_text.text(f"Eğitiliyor: {model_name} ({idx+1}/{len(st.session_state.selected_models)})")
             progress_bar.progress((idx) / len(st.session_state.selected_models))
             
             # Log model training start with CV info
             cv_info = f"CV={st.session_state.cv_folds} fold" if st.session_state.use_cross_validation else "CV=PASİF"
-            logger.info(f"🚀 Model eğitimi başlıyor: {model_name} | {cv_info}")
+            logger.info(f"🚀 Model eğitimi başlıyor: {model_name} ({idx+1}/{len(st.session_state.selected_models)}) | {cv_info}")
             
             # Model training with automatic hyperparameter optimization
             try:
+                # Eğitimi durdurma kontrolü (eğitim öncesi)
+                if st.session_state.get('training_stop_requested', False):
+                    logger.warning(f"⏹️ Eğitim durduruldu: {model_name} eğitilmeden önce durduruldu")
+                    st.warning(f"⏹️ Eğitim durduruldu. {idx}/{len(st.session_state.selected_models)} model eğitildi.")
+                    progress_bar.progress((idx) / len(st.session_state.selected_models))
+                    status_text.text("⏹️ Eğitim durduruldu")
+                    st.session_state.training_stop_requested = False
+                    break
+                
                 status_text.text(f"🔧 {model_name} için GridSearch ile hiperparametre optimizasyonu yapılıyor...")
                 logger.info(f"🔧 {model_name} GridSearch ile hiperparametre optimizasyonu başlıyor | CV: {st.session_state.cv_folds} fold")
                 logger.info(f"📞 Frontend: train_model fonksiyonu çağrılıyor | Model: {model_name} | Veri: {len(X_train)} örnek, {len(X_train.columns)} özellik")
@@ -1586,6 +1639,15 @@ elif current_step == 4:
                     cv_folds=st.session_state.cv_folds
                 )
                 logger.info(f"📥 Frontend: train_model fonksiyonu tamamlandı | Model: {model_name} | Sonuç: {result.get('success', False)} | Optimization: {result.get('optimization_method', 'N/A')}")
+                
+                # Eğitimi durdurma kontrolü (eğitim sonrası)
+                if st.session_state.get('training_stop_requested', False):
+                    logger.warning(f"⏹️ Eğitim durduruldu: {model_name} eğitildikten sonra durduruldu")
+                    st.warning(f"⏹️ Eğitim durduruldu. {idx+1}/{len(st.session_state.selected_models)} model eğitildi.")
+                    progress_bar.progress((idx+1) / len(st.session_state.selected_models))
+                    status_text.text("⏹️ Eğitim durduruldu")
+                    st.session_state.training_stop_requested = False
+                    break
                 
                 if result['success']:
                     trained_models[model_name] = result['model']
@@ -1607,9 +1669,11 @@ elif current_step == 4:
                             opt_info += f" | En İyi CV Skoru: {best_cv_score:.4f}"
                         logger.info(f"✅ {model_name} GridSearch ile optimize edildi ve eğitildi | Süre: {result['training_time']:.2f}s | {cv_info}{opt_info}")
                         logger.info(f"🎯 {model_name} En iyi parametreler: {best_params}")
+                        logger.info(f"📊 {model_name} İlerleme: {idx+1}/{len(st.session_state.selected_models)} model tamamlandı")
                         st.success(f"✅ {model_name} optimize edildi ve eğitildi ({result['training_time']:.2f}s)")
                     else:
                         logger.info(f"✅ {model_name} eğitildi | Süre: {result['training_time']:.2f}s | {cv_info}")
+                        logger.info(f"📊 {model_name} İlerleme: {idx+1}/{len(st.session_state.selected_models)} model tamamlandı")
                         st.success(f"✅ {model_name} eğitildi ({result['training_time']:.2f}s)")
                 else:
                     logger.error(f"❌ {model_name} eğitilemedi: {result.get('error', 'Bilinmeyen hata')}")
@@ -1620,7 +1684,15 @@ elif current_step == 4:
                 st.error(f"❌ {model_name} eğitilemedi: {str(e)}")
         
         progress_bar.progress(1.0)
-        status_text.text("✅ Tüm modeller eğitildi!")
+        
+        # Eğitim durduruldu mu kontrol et
+        if st.session_state.get('training_stop_requested', False):
+            logger.warning(f"⏹️ Eğitim kullanıcı tarafından durduruldu | {len(trained_models)}/{len(st.session_state.selected_models)} model eğitildi")
+            status_text.text(f"⏹️ Eğitim durduruldu ({len(trained_models)}/{len(st.session_state.selected_models)} model eğitildi)")
+            st.session_state.training_stop_requested = False
+        else:
+            logger.info(f"✅ Tüm modeller başarıyla eğitildi | Toplam: {len(trained_models)} model")
+            status_text.text("✅ Tüm modeller eğitildi!")
         
         st.session_state.trained_models = trained_models
         st.session_state.training_results = training_results
@@ -1742,7 +1814,7 @@ elif current_step == 4:
         st.markdown("### ✅ Eğitilmiş Modeller")
     with header_col2:
         if hasattr(st.session_state, 'trained_models') and st.session_state.trained_models:
-            if st.button("↶ Tümünü Geri Al", key="undo_all_models", use_container_width=True, type="secondary"):
+            if st.button("↶ Tümünü Geri Al", key="undo_all_models", width='stretch', type="secondary"):
                 st.session_state.trained_models = {}
                 if hasattr(st.session_state, 'training_results'):
                     st.session_state.training_results = {}
@@ -1835,7 +1907,7 @@ elif current_step == 4:
                         if training_info.get('cv_folds'):
                             st.markdown(f"**CV Folds:** {training_info.get('cv_folds', st.session_state.cv_folds)}")
                 
-                if st.button("↶ Geri Al", key=f"undo_model_{model_name}", use_container_width=True):
+                if st.button("↶ Geri Al", key=f"undo_model_{model_name}", width='stretch'):
                     if model_name in st.session_state.trained_models:
                         del st.session_state.trained_models[model_name]
                     if hasattr(st.session_state, 'training_results') and model_name in st.session_state.training_results:
@@ -1910,15 +1982,97 @@ elif current_step == 5:
             metrics = results['metrics']
             
             if st.session_state.problem_type in ['binary_classification', 'multiclass_classification']:
-                col1, col2, col3, col4 = st.columns(4)
+                # Metrikleri mor kartlar içinde göster - 5 sütun (ROC AUC dahil)
+                col1, col2, col3, col4, col5 = st.columns(5)
+                
+                # Accuracy
                 with col1:
-                    st.metric("Accuracy", f"{metrics.get('accuracy', 0):.4f}")
+                    accuracy_val = metrics.get('accuracy', 0)
+                    st.markdown(f"""
+                    <div style='
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        padding: 12px;
+                        border-radius: 8px;
+                        color: white;
+                        text-align: center;
+                        margin-bottom: 10px;
+                    '>
+                        <div style='font-size: 0.75em; opacity: 0.9; margin-bottom: 5px;'>Accuracy</div>
+                        <div style='font-size: 1.1em; font-weight: bold;'>{accuracy_val:.4f}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                # Precision
                 with col2:
-                    st.metric("Precision", f"{metrics.get('precision', 0):.4f}")
+                    precision_val = metrics.get('precision', 0)
+                    st.markdown(f"""
+                    <div style='
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        padding: 12px;
+                        border-radius: 8px;
+                        color: white;
+                        text-align: center;
+                        margin-bottom: 10px;
+                    '>
+                        <div style='font-size: 0.75em; opacity: 0.9; margin-bottom: 5px;'>Precision</div>
+                        <div style='font-size: 1.1em; font-weight: bold;'>{precision_val:.4f}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                # Recall
                 with col3:
-                    st.metric("Recall", f"{metrics.get('recall', 0):.4f}")
+                    recall_val = metrics.get('recall', 0)
+                    st.markdown(f"""
+                    <div style='
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        padding: 12px;
+                        border-radius: 8px;
+                        color: white;
+                        text-align: center;
+                        margin-bottom: 10px;
+                    '>
+                        <div style='font-size: 0.75em; opacity: 0.9; margin-bottom: 5px;'>Recall</div>
+                        <div style='font-size: 1.1em; font-weight: bold;'>{recall_val:.4f}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                # F1 Score
                 with col4:
-                    st.metric("F1 Score", f"{metrics.get('f1_score', 0):.4f}")
+                    f1_val = metrics.get('f1_score', 0)
+                    st.markdown(f"""
+                    <div style='
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        padding: 12px;
+                        border-radius: 8px;
+                        color: white;
+                        text-align: center;
+                        margin-bottom: 10px;
+                    '>
+                        <div style='font-size: 0.75em; opacity: 0.9; margin-bottom: 5px;'>F1 Score</div>
+                        <div style='font-size: 1.1em; font-weight: bold;'>{f1_val:.4f}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                # ROC AUC (binary classification için)
+                with col5:
+                    if st.session_state.problem_type == 'binary_classification' and 'roc_auc' in metrics:
+                        roc_auc_val = metrics.get('roc_auc', 0)
+                        st.markdown(f"""
+                        <div style='
+                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                            padding: 12px;
+                            border-radius: 8px;
+                            color: white;
+                            text-align: center;
+                            margin-bottom: 10px;
+                        '>
+                            <div style='font-size: 0.75em; opacity: 0.9; margin-bottom: 5px;'>ROC AUC</div>
+                            <div style='font-size: 1.1em; font-weight: bold;'>{roc_auc_val:.4f}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        # Multiclass için boş bırak veya başka bir metrik göster
+                        st.empty()
                 
                 # Confusion Matrix
                 if 'confusion_matrix' in metrics:
@@ -1932,11 +2086,7 @@ elif current_step == 5:
                         text_auto=True,
                         aspect="auto"
                     )
-                    st.plotly_chart(fig, width='stretch')
-                
-                # ROC Curve for binary classification
-                if st.session_state.problem_type == 'binary_classification' and 'roc_auc' in metrics:
-                    st.metric("ROC AUC", f"{metrics.get('roc_auc', 0):.4f}")
+                    st.plotly_chart(fig, width='stretch', key=f"confusion_matrix_{model_name}")
             
             else:  # Regression
                 col1, col2, col3, col4 = st.columns(4)
@@ -1974,7 +2124,7 @@ elif current_step == 5:
                         xaxis_title="Gerçek Değerler",
                         yaxis_title="Tahmin Edilen Değerler"
                     )
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, width='stretch', key=f"pred_vs_actual_{model_name}")
     
     # Navigation buttons
     st.markdown("<br>", unsafe_allow_html=True)
@@ -1996,26 +2146,521 @@ elif current_step == 5:
 elif current_step == 6:
     st.header("⚖️ Adım 6: Model Karşılaştırma")
     
-    # TODO: Bu bölüm daha sonra düzenlenecek
-    st.info("🚧 **Bu bölüm şu anda geliştirilme aşamasındadır. Daha sonra düzenlenecektir.**")
+    if not hasattr(st.session_state, 'model_results') or not st.session_state.model_results:
+        st.warning("⚠️ Model sonuçları bulunamadı! Lütfen geri dönüp modelleri eğitin.")
+        model_results = {}
+    else:
+        model_results = st.session_state.model_results
     
-    st.markdown("""
-    <div style='
-        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-        padding: 30px;
-        border-radius: 10px;
-        border-left: 4px solid #667eea;
-        margin: 20px 0;
-    '>
-        <h3 style='color: #2d3748; margin-top: 0;'>📋 Planlanan Özellikler:</h3>
-        <ul style='color: #4a5568; line-height: 1.8;'>
-            <li>Model karşılaştırma tablosu</li>
-            <li>Metrik görselleştirmeleri</li>
-            <li>En iyi model seçimi</li>
-            <li>Performans analizi</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
+    if model_results:
+        # Best Model Display
+        if hasattr(st.session_state, 'best_model') and st.session_state.best_model:
+            best_model = st.session_state.best_model
+            best_metrics = model_results[best_model]['metrics']
+            
+            st.markdown(f"""
+            <div style='
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                padding: 20px;
+                border-radius: 10px;
+                margin: 20px 0;
+                color: white;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            '>
+                <h3 style='color: white; margin: 0;'>🏆 En İyi Model: <strong>{best_model}</strong></h3>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # Model Comparison Table
+        st.markdown("### 📊 Model Karşılaştırma Tablosu")
+        comparison_df = create_comparison_table(model_results, st.session_state.problem_type)
+        st.dataframe(comparison_df, width='stretch', hide_index=True)
+        
+        # Metric Visualizations with Carousel
+        st.markdown("### 📈 Metrik Görselleştirmeleri")
+        
+        # Initialize carousel index for metrics
+        metric_carousel_key = 'metric_carousel_index'
+        if metric_carousel_key not in st.session_state:
+            st.session_state[metric_carousel_key] = 0
+        
+        # Collect all metrics to plot
+        all_metrics_data = []
+        
+        if st.session_state.problem_type in ['binary_classification', 'multiclass_classification']:
+            # Classification Metrics
+            metrics_to_plot = ['accuracy', 'precision', 'recall', 'f1_score']
+            if any('roc_auc' in model_results[m]['metrics'] for m in model_results):
+                metrics_to_plot.append('roc_auc')
+            
+            # Prepare data for all metrics
+            for metric in metrics_to_plot:
+                metric_display_names = {
+                    'accuracy': 'Accuracy',
+                    'precision': 'Precision',
+                    'recall': 'Recall',
+                    'f1_score': 'F1 Score',
+                    'roc_auc': 'ROC AUC'
+                }
+                
+                metric_name = metric_display_names.get(metric, metric)
+                
+                # Collect data
+                model_names = []
+                metric_values = []
+                colors = []
+                
+                for model_name in comparison_df['Model'].values:
+                    if model_name in model_results:
+                        metrics = model_results[model_name]['metrics']
+                        if metric in metrics:
+                            model_names.append(model_name)
+                            value = metrics[metric]
+                            metric_values.append(value)
+                            
+                            # Color: best model gets gold, others get purple
+                            if hasattr(st.session_state, 'best_model') and model_name == st.session_state.best_model:
+                                colors.append('#FFD700')  # Gold
+                            else:
+                                colors.append('#667eea')  # Purple
+                
+                if model_names and metric_values:
+                    all_metrics_data.append({
+                        'metric': metric,
+                        'metric_name': metric_name,
+                        'model_names': model_names,
+                        'metric_values': metric_values,
+                        'colors': colors
+                    })
+        
+        else:
+            # Regression Metrics
+            metrics_to_plot = ['r2_score', 'rmse', 'mae', 'adjusted_r2']
+            
+            for metric in metrics_to_plot:
+                metric_display_names = {
+                    'r2_score': 'R² Score',
+                    'adjusted_r2': 'Adjusted R²',
+                    'rmse': 'RMSE',
+                    'mae': 'MAE'
+                }
+                
+                metric_name = metric_display_names.get(metric, metric)
+                
+                # Collect data
+                model_names = []
+                metric_values = []
+                colors = []
+                
+                for model_name in comparison_df['Model'].values:
+                    if model_name in model_results:
+                        metrics = model_results[model_name]['metrics']
+                        if metric in metrics:
+                            model_names.append(model_name)
+                            value = metrics[metric]
+                            metric_values.append(value)
+                            
+                            # Color: best model gets gold
+                            if hasattr(st.session_state, 'best_model') and model_name == st.session_state.best_model:
+                                colors.append('#FFD700')
+                            else:
+                                colors.append('#667eea')
+                
+                if model_names and metric_values:
+                    all_metrics_data.append({
+                        'metric': metric,
+                        'metric_name': metric_name,
+                        'model_names': model_names,
+                        'metric_values': metric_values,
+                        'colors': colors,
+                        'is_lower_better': metric in ['rmse', 'mae']
+                    })
+        
+        # Add training time to metrics
+        training_times = []
+        model_names_time = []
+        colors_time = []
+        
+        for model_name in comparison_df['Model'].values:
+            if model_name in model_results:
+                training_info = model_results[model_name].get('training_info', {})
+                time_val = training_info.get('training_time', 0)
+                if time_val > 0:
+                    training_times.append(time_val)
+                    model_names_time.append(model_name)
+                    
+                    if hasattr(st.session_state, 'best_model') and model_name == st.session_state.best_model:
+                        colors_time.append('#FFD700')
+                    else:
+                        colors_time.append('#667eea')
+        
+        if training_times:
+            all_metrics_data.append({
+                'metric': 'training_time',
+                'metric_name': 'Eğitim Süresi',
+                'model_names': model_names_time,
+                'metric_values': training_times,
+                'colors': colors_time,
+                'is_time': True
+            })
+        
+        # Display metrics in carousel with navigation buttons
+        if all_metrics_data:
+            # Get current index from session state
+            current_metric_index = st.session_state[metric_carousel_key]
+            current_metric_index = min(current_metric_index, len(all_metrics_data) - 1)
+            
+            # Get updated index after button clicks
+            current_metric_index = st.session_state[metric_carousel_key]
+            current_metric_index = min(current_metric_index, len(all_metrics_data) - 1)
+            
+            # Display current metric chart
+            with st.container():
+                # Get metric descriptions (shared for all charts)
+                metric_descriptions = {
+                    'Accuracy': {
+                        'title': 'Accuracy (Doğruluk)',
+                        'description': 'Modelin tüm tahminlerinin doğru olma oranıdır. 0 ile 1 arasında değer alır. 1\'e yakın değerler daha iyi performansı gösterir. Ancak dengesiz veri setlerinde yanıltıcı olabilir.',
+                        'formula': 'Accuracy = (TP + TN) / (TP + TN + FP + FN)',
+                        'interpretation': 'Yüksek accuracy, modelin genel olarak doğru tahminler yaptığını gösterir.'
+                    },
+                    'Precision': {
+                        'title': 'Precision (Kesinlik)',
+                        'description': 'Modelin pozitif olarak tahmin ettiği örneklerin gerçekten pozitif olma oranıdır. False positive\'leri minimize etmek için önemlidir.',
+                        'formula': 'Precision = TP / (TP + FP)',
+                        'interpretation': 'Yüksek precision, modelin pozitif tahminlerinin çoğunun doğru olduğunu gösterir. Spam tespiti gibi durumlarda kritiktir.'
+                    },
+                    'Recall': {
+                        'title': 'Recall (Duyarlılık)',
+                        'description': 'Gerçek pozitif örneklerin ne kadarının doğru şekilde tespit edildiğini gösterir. False negative\'leri minimize etmek için önemlidir.',
+                        'formula': 'Recall = TP / (TP + FN)',
+                        'interpretation': 'Yüksek recall, modelin gerçek pozitifleri kaçırmadığını gösterir. Hastalık teşhisi gibi durumlarda kritiktir.'
+                    },
+                    'F1 Score': {
+                        'title': 'F1 Score',
+                        'description': 'Precision ve Recall metriklerinin harmonik ortalamasıdır. İki metrik arasında denge kurmak için kullanılır.',
+                        'formula': 'F1 = 2 × (Precision × Recall) / (Precision + Recall)',
+                        'interpretation': 'F1 score, hem precision hem de recall\'ı dengeli bir şekilde değerlendirir. 0 ile 1 arasında değer alır, 1\'e yakın değerler daha iyidir.'
+                    },
+                    'ROC AUC': {
+                        'title': 'ROC AUC (Receiver Operating Characteristic - Area Under Curve)',
+                        'description': 'Modelin sınıfları ayırt etme yeteneğini ölçer. Eşik değerinden bağımsız olarak model performansını değerlendirir.',
+                        'formula': 'ROC AUC = Eğri altındaki alan',
+                        'interpretation': '0.5 ile 1 arasında değer alır. 0.5 rastgele tahmin, 1 mükemmel ayırt etme anlamına gelir. 0.7+ iyi, 0.8+ çok iyi, 0.9+ mükemmel kabul edilir.'
+                    },
+                    'R² Score': {
+                        'title': 'R² Score (R-Kare / Belirleme Katsayısı)',
+                        'description': 'Modelin bağımsız değişkenlerin bağımlı değişkeni ne kadar açıkladığını gösterir. 0 ile 1 arasında değer alır.',
+                        'formula': 'R² = 1 - (SS_res / SS_tot)',
+                        'interpretation': '1\'e yakın değerler modelin veriyi iyi açıkladığını gösterir. Negatif değerler modelin basit ortalamadan daha kötü olduğunu gösterir.'
+                    },
+                    'Adjusted R²': {
+                        'title': 'Adjusted R² (Düzeltilmiş R-Kare)',
+                        'description': 'R²\'nin özellik sayısına göre düzeltilmiş halidir. Model karmaşıklığını hesaba katarak daha adil bir değerlendirme sağlar.',
+                        'formula': 'Adjusted R² = 1 - [(1-R²)(n-1)/(n-k-1)]',
+                        'interpretation': 'Özellik sayısı arttıkça R² artabilir, ancak Adjusted R² bunu düzeltir. Model seçiminde R²\'den daha güvenilirdir.'
+                    },
+                    'RMSE': {
+                        'title': 'RMSE (Root Mean Squared Error)',
+                        'description': 'Tahmin hatalarının karekök ortalamasıdır. Büyük hatalara daha fazla ağırlık verir.',
+                        'formula': 'RMSE = √(Σ(yi - ŷi)² / n)',
+                        'interpretation': 'Düşük değerler daha iyi performansı gösterir. Aynı birimde olduğu için yorumlanması kolaydır. Aykırı değerlerden etkilenir.'
+                    },
+                    'MAE': {
+                        'title': 'MAE (Mean Absolute Error)',
+                        'description': 'Tahmin hatalarının mutlak değerlerinin ortalamasıdır. Tüm hatalara eşit ağırlık verir.',
+                        'formula': 'MAE = Σ|yi - ŷi| / n',
+                        'interpretation': 'Düşük değerler daha iyi performansı gösterir. RMSE\'den daha az aykırı değerlerden etkilenir. Ortalama hata miktarını gösterir.'
+                    },
+                    'Eğitim Süresi': {
+                        'title': 'Eğitim Süresi',
+                        'description': 'Modelin eğitilmesi için geçen süreyi gösterir. Daha hızlı eğitilen modeller genellikle daha pratik kullanım sağlar.',
+                        'formula': 'Eğitim Süresi = Model eğitiminin tamamlanma süresi',
+                        'interpretation': 'Düşük süreler tercih edilir, ancak performansla birlikte değerlendirilmelidir. Büyük veri setlerinde önemli bir faktördür.'
+                    }
+                }
+                
+                # Prepare chart data for current metric (sadece mevcut index)
+                metric_data = all_metrics_data[current_metric_index]
+                
+                metric_key = metric_data['metric_name']
+                metric_info = metric_descriptions.get(metric_key, {
+                    'title': metric_key,
+                    'description': 'Bu metrik hakkında detaylı bilgi mevcut değil.',
+                    'formula': '',
+                    'interpretation': ''
+                })
+                
+                # Create bar chart
+                if metric_data.get('is_time'):
+                    # Training time chart
+                    fig = go.Figure(data=[
+                        go.Bar(
+                            x=metric_data['model_names'],
+                            y=metric_data['metric_values'],
+                            marker_color=metric_data['colors'],
+                            text=[f'{t:.2f}s' for t in metric_data['metric_values']],
+                            textposition='outside',
+                            name=metric_data['metric_name'],
+                            marker=dict(
+                                line=dict(color='rgba(0,0,0,0.1)', width=1)
+                            )
+                        )
+                    ])
+                    
+                    fig.update_layout(
+                        title=dict(
+                            text=f'<b>{metric_data["metric_name"]}</b>',
+                            x=0.5,
+                            xanchor='center',
+                            font=dict(size=22, color='#2d3748', family='Arial, sans-serif')
+                        ),
+                        xaxis=dict(
+                            title=dict(
+                                text='Model',
+                                font=dict(size=14, color='#4a5568', family='Arial, sans-serif'),
+                                standoff=0
+                            ),
+                            tickfont=dict(size=11, color='#718096'),
+                            tickangle=-45,
+                            gridcolor='rgba(0,0,0,0.05)',
+                            showgrid=True,
+                            side='bottom'
+                        ),
+                        yaxis=dict(
+                            title=dict(
+                                text='Süre (saniye)',
+                                font=dict(size=14, color='#4a5568', family='Arial, sans-serif')
+                            ),
+                            tickfont=dict(size=12, color='#718096'),
+                            gridcolor='rgba(0,0,0,0.05)',
+                            showgrid=True
+                        ),
+                        height=None,
+                        showlegend=False,
+                        plot_bgcolor='#ffffff',
+                        paper_bgcolor='white',
+                        margin=dict(l=25, r=15, t=15, b=50, pad=0, autoexpand=False),
+                        autosize=True,
+                        hovermode='x unified'
+                    )
+                    
+                    fig.update_xaxes(automargin=False, title_standoff=5, side='bottom')
+                    fig.update_yaxes(automargin=False, title_standoff=5)
+                    
+                    fig.update_traces(
+                        textfont=dict(size=11, color='#2d3748', family='Arial, sans-serif')
+                    )
+                else:
+                        # Metric chart
+                        is_lower_better = metric_data.get('is_lower_better', False)
+                        title_suffix = ' (Düşük = İyi)' if is_lower_better else ''
+                        
+                        fig = go.Figure(data=[
+                            go.Bar(
+                                x=metric_data['model_names'],
+                                y=metric_data['metric_values'],
+                                marker_color=metric_data['colors'],
+                            text=[f'{v:.4f}' for v in metric_data['metric_values']],
+                                textposition='outside',
+                                name=metric_data['metric_name'],
+                                marker=dict(
+                                    line=dict(color='rgba(0,0,0,0.1)', width=1)
+                                )
+                            )
+                        ])
+                        
+                        y_range = None
+                        if not is_lower_better and metric_data['metric'] in ['accuracy', 'precision', 'recall', 'f1_score', 'roc_auc', 'r2_score', 'adjusted_r2']:
+                            y_range = [0, 1.1]
+                        
+                        fig.update_layout(
+                        title=dict(
+                            text=f'<b>{metric_data["metric_name"]}{title_suffix}</b>',
+                            x=0.5,
+                            xanchor='center',
+                            font=dict(size=18, color='#2d3748', family='Arial, sans-serif')
+                        ),
+                        xaxis=dict(
+                            title=dict(
+                                text='Model',
+                                font=dict(size=14, color='#4a5568', family='Arial, sans-serif'),
+                                standoff=0
+                            ),
+                            tickfont=dict(size=11, color='#718096'),
+                            tickangle=-45,
+                            gridcolor='rgba(0,0,0,0.05)',
+                            showgrid=True,
+                            side='bottom'
+                        ),
+                        yaxis=dict(
+                            title=dict(
+                                text=metric_data['metric_name'],
+                                font=dict(size=14, color='#4a5568', family='Arial, sans-serif')
+                            ),
+                            tickfont=dict(size=12, color='#718096'),
+                            range=y_range,
+                            gridcolor='rgba(0,0,0,0.05)',
+                            showgrid=True
+                        ),
+                            height=None,
+                            showlegend=False,
+                            plot_bgcolor='#ffffff',
+                            paper_bgcolor='white',
+                            margin=dict(l=25, r=15, t=15, b=50, pad=0, autoexpand=False),
+                            autosize=True,
+                            hovermode='x unified'
+                        )
+                        
+                        fig.update_xaxes(automargin=False, title_standoff=5, side='bottom')
+                        fig.update_yaxes(automargin=False, title_standoff=5)
+                        
+                        fig.update_traces(
+                            textfont=dict(size=11, color='#2d3748', family='Arial, sans-serif')
+                        )
+                    
+                # Convert plotly figure to JSON for rendering in iframe
+                import json as json_lib
+                chart_dict = fig.to_dict()
+                # Escape JSON for embedding in JavaScript
+                chart_json_str = json_lib.dumps(chart_dict).replace('</script>', '<\\/script>').replace('</SCRIPT>', '<\\/SCRIPT>')
+                chart_id = f"chart_{current_metric_index}"
+                
+                # Create chart HTML with Plotly
+                chart_html = f"""
+                <div id="{chart_id}" style="width: 100%; height: 600px;"></div>
+                <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+                <script>
+                    (function() {{
+                        function renderChart() {{
+                            if (typeof Plotly === 'undefined') {{
+                                setTimeout(renderChart, 100);
+                                return;
+                            }}
+                            
+                            const chartDiv = document.getElementById('{chart_id}');
+                            if (!chartDiv) {{
+                                setTimeout(renderChart, 100);
+                                return;
+                            }}
+                            
+                            try {{
+                                const chartDataJson = `{chart_json_str}`;
+                                const chartData = JSON.parse(chartDataJson);
+                                chartData.layout.margin = {{l: 50, r: 25, t: 55, b: 110, pad: 0, autoexpand: false}};
+                                delete chartData.layout.height;
+                                chartData.layout.autosize = true;
+                                if (chartData.layout.xaxis && chartData.layout.xaxis.title) {{
+                                    chartData.layout.xaxis.title.standoff = 5;
+                                }}
+                                if (chartData.layout.yaxis && chartData.layout.yaxis.title) {{
+                                    chartData.layout.yaxis.title.standoff = 5;
+                                }}
+                                
+                                Plotly.newPlot(chartDiv, chartData.data, chartData.layout, {{
+                                    displayModeBar: false,
+                                    responsive: true,
+                                    autosizable: true
+                                }});
+                                
+                                setTimeout(() => {{
+                                    Plotly.Plots.resize(chartDiv);
+                                }}, 100);
+                                
+                                window.addEventListener('resize', () => {{
+                                    Plotly.Plots.resize(chartDiv);
+                                }});
+                            }} catch (e) {{
+                                console.error('Chart rendering error:', e);
+                            }}
+                        }}
+                        
+                        if (document.readyState === 'loading') {{
+                            document.addEventListener('DOMContentLoaded', renderChart);
+                        }} else {{
+                            renderChart();
+                        }}
+                    }})();
+                </script>
+                """
+                
+                # Navigation buttons and chart in columns
+                col1, col2, col3 = st.columns([0.8, 5, 0.8], vertical_alignment="center")
+                
+                with col1:
+                    st.markdown("<div style='display: flex; justify-content: center; align-items: center; height: 100%;'>", unsafe_allow_html=True)
+                    if st.button("◀️", key="prev_metric", disabled=(current_metric_index == 0), width='stretch'):
+                        if current_metric_index > 0:
+                            st.session_state[metric_carousel_key] = current_metric_index - 1
+                            st.rerun()
+                    st.markdown("</div>", unsafe_allow_html=True)
+                
+                with col2:
+                    # Mor kart içinde başlık ve açıklama
+                    card_html_content = f"""
+                    <div style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.95) 0%, rgba(118, 75, 162, 0.95) 100%); border-radius: 15px; padding: 15px; margin-bottom: 0; box-shadow: 0 8px 25px rgba(0,0,0,0.2); color: white;">
+                        <div style="text-align: center; margin-bottom: 10px;">
+                            <strong style="font-size: 1.5em; display: block; margin: 0; text-shadow: 0 2px 10px rgba(0,0,0,0.2);">{metric_info['title']} Karşılaştırması</strong>
+                            <div style="font-size: 1em; opacity: 0.95; margin-top: 6px; font-weight: 500;">📊 Grafik {current_metric_index + 1}/{len(all_metrics_data)}</div>
+                        </div>
+                        <div style="background: rgba(255, 255, 255, 0.2); backdrop-filter: blur(10px); padding: 10px 14px; border-radius: 10px; border-left: 4px solid rgba(255, 255, 255, 0.8); box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+                            <div style="font-size: 0.95em; line-height: 1.5; margin: 0; font-weight: 400;"><strong style="font-size: 1em;">📖 Açıklama:</strong> {metric_info['description']}</div>
+                        </div>
+                    </div>
+                    """
+                    components.html(card_html_content, height=200)
+                    components.html(chart_html, height=600)
+                
+                    # Display metric info card with expandable details
+                with st.expander(f"📊 {metric_info['title']} - Detaylı Bilgi", expanded=False):
+                    st.markdown(f"""
+                    <div style='
+                        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+                        padding: 15px;
+                        border-radius: 8px;
+                        margin: 10px 0;
+                        border-left: 4px solid #667eea;
+                    '>
+                        <h4 style='color: #2d3748; margin-top: 0;'>📖 Açıklama</h4>
+                        <p style='color: #4a5568; line-height: 1.6;'>{metric_info['description']}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    if metric_info['formula']:
+                        st.markdown(f"""
+                        <div style='
+                            background: #fff;
+                            padding: 12px;
+                            border-radius: 6px;
+                            margin: 10px 0;
+                            border: 1px solid #dee2e6;
+                        '>
+                            <strong style='color: #2d3748;'>📐 Formül:</strong>
+                            <code style='color: #667eea; font-size: 0.9em; display: block; margin-top: 5px;'>{metric_info['formula']}</code>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    if metric_info['interpretation']:
+                        st.markdown(f"""
+                        <div style='
+                            background: linear-gradient(135deg, #e7f3ff 0%, #d0e7ff 100%);
+                            padding: 12px;
+                            border-radius: 6px;
+                            margin: 10px 0;
+                            border-left: 4px solid #0066cc;
+                        '>
+                            <strong style='color: #004085;'>💡 Yorumlama:</strong>
+                            <p style='color: #004085; margin: 5px 0 0 0; line-height: 1.6;'>{metric_info['interpretation']}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                
+                with col3:
+                    st.markdown("<div style='display: flex; justify-content: center; align-items: center; height: 100%;'>", unsafe_allow_html=True)
+                    if st.button("▶️", key="next_metric", disabled=(current_metric_index == len(all_metrics_data) - 1), width='stretch'):
+                        if current_metric_index < len(all_metrics_data) - 1:
+                            st.session_state[metric_carousel_key] = current_metric_index + 1
+                            st.rerun()
+                st.markdown("</div>", unsafe_allow_html=True)
     
     # Navigation buttons
     st.markdown("<br>", unsafe_allow_html=True)
@@ -2037,27 +2682,827 @@ elif current_step == 6:
 elif current_step == 7:
     st.header("🔬 Adım 7: Model Yorumlama")
     
-    # TODO: Bu bölüm daha sonra düzenlenecek
-    st.info("🚧 **Bu bölüm şu anda geliştirilme aşamasındadır. Daha sonra düzenlenecektir.**")
-    
-    st.markdown("""
-    <div style='
-        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-        padding: 30px;
-        border-radius: 10px;
-        border-left: 4px solid #667eea;
-        margin: 20px 0;
-    '>
-        <h3 style='color: #2d3748; margin-top: 0;'>📋 Planlanan Özellikler:</h3>
-        <ul style='color: #4a5568; line-height: 1.8;'>
-            <li>Feature importance analizi</li>
-            <li>Model yorumlama araçları</li>
-            <li>SHAP değerleri</li>
-            <li>Permutation importance</li>
-            <li>Model özeti ve sonuçlar</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
+    # Check if models are trained
+    if 'trained_models' not in st.session_state or not st.session_state.trained_models:
+        st.warning("⚠️ Henüz eğitilmiş model bulunmuyor. Lütfen önce modelleri eğitin.")
+        if st.button("← Model Eğitimine Dön", width='stretch'):
+            st.session_state.model_selection_step = 4
+            st.rerun()
+    else:
+        trained_models = st.session_state.trained_models
+        model_results = st.session_state.get('model_results', {})
+        
+        # Model selection
+        st.markdown("### 📌 Model Seçimi")
+        model_names = list(trained_models.keys())
+        
+        if not model_names:
+            st.error("❌ Eğitilmiş model bulunamadı.")
+        else:
+            selected_model_name = st.selectbox(
+                "Yorumlamak istediğiniz modeli seçin:",
+                model_names,
+                key="interpretation_model_selector"
+            )
+            
+            if selected_model_name in trained_models:
+                # Check if model_info is a dict or direct model object
+                model_info = trained_models[selected_model_name]
+                if isinstance(model_info, dict):
+                    model = model_info.get('model')
+                    training_info = model_info.get('training_info', {})
+                else:
+                    # Direct model object
+                    model = model_info
+                    training_info = {}
+                
+                # Get training data
+                if 'X_train' in st.session_state and 'y_train' in st.session_state:
+                    X_train = st.session_state.X_train
+                    y_train = st.session_state.y_train
+                    feature_names = list(X_train.columns)
+                    
+                    # Model Summary Card
+                    st.markdown("### 📊 Model Özeti")
+                    summary_col1, summary_col2, summary_col3 = st.columns(3)
+                    
+                    with summary_col1:
+                        st.markdown(f"""
+                        <div style='
+                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                            padding: 15px;
+                            border-radius: 8px;
+                            color: white;
+                            text-align: center;
+                        '>
+                            <strong>Model Tipi</strong><br>
+                            <span style='font-size: 1.1em;'>{type(model).__name__}</span>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    with summary_col2:
+                        st.markdown(f"""
+                        <div style='
+                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                            padding: 15px;
+                            border-radius: 8px;
+                            color: white;
+                            text-align: center;
+                        '>
+                            <strong>Özellik Sayısı</strong><br>
+                            <span style='font-size: 1.1em;'>{len(feature_names)}</span>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    with summary_col3:
+                        if selected_model_name in model_results:
+                            metrics = model_results[selected_model_name].get('metrics', {})
+                            primary_metric = 'accuracy' if st.session_state.problem_type in ['binary_classification', 'multiclass_classification'] else 'r2_score'
+                            metric_value = metrics.get(primary_metric, 'N/A')
+                            metric_display = f"{metric_value:.4f}" if isinstance(metric_value, (int, float)) else str(metric_value)
+                            
+                            st.markdown(f"""
+                            <div style='
+                                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                padding: 15px;
+                                border-radius: 8px;
+                                color: white;
+                                text-align: center;
+                            '>
+                                <strong>Performans</strong><br>
+                                <span style='font-size: 1.1em;'>{metric_display}</span>
+                            </div>
+                            """, unsafe_allow_html=True)
+                    
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    
+                    # Model Performance Summary
+                    if selected_model_name in model_results:
+                        metrics = model_results[selected_model_name].get('metrics', {})
+                        
+                        if metrics:
+                            st.markdown("#### 📈 Model Performans Özeti")
+                            if st.session_state.problem_type in ['binary_classification', 'multiclass_classification']:
+                                perf_col1, perf_col2, perf_col3, perf_col4 = st.columns(4)
+                                
+                                accuracy_val = metrics.get('accuracy', 'N/A')
+                                accuracy_display = f"{accuracy_val:.4f}" if isinstance(accuracy_val, (int, float)) else "N/A"
+                                with perf_col1:
+                                    st.markdown(f"""
+                                    <div style='
+                                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                        padding: 20px;
+                                        border-radius: 12px;
+                                        margin: 10px 0;
+                                        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                                        text-align: center;
+                                    '>
+                                        <div style='color: white; font-size: 0.9em; margin-bottom: 8px; opacity: 0.9;'>Accuracy</div>
+                                        <div style='color: white; font-size: 1.8em; font-weight: bold;'>{accuracy_display}</div>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                
+                                precision_val = metrics.get('precision', 'N/A')
+                                precision_display = f"{precision_val:.4f}" if isinstance(precision_val, (int, float)) else "N/A"
+                                with perf_col2:
+                                    st.markdown(f"""
+                                    <div style='
+                                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                        padding: 20px;
+                                        border-radius: 12px;
+                                        margin: 10px 0;
+                                        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                                        text-align: center;
+                                    '>
+                                        <div style='color: white; font-size: 0.9em; margin-bottom: 8px; opacity: 0.9;'>Precision</div>
+                                        <div style='color: white; font-size: 1.8em; font-weight: bold;'>{precision_display}</div>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                
+                                recall_val = metrics.get('recall', 'N/A')
+                                recall_display = f"{recall_val:.4f}" if isinstance(recall_val, (int, float)) else "N/A"
+                                with perf_col3:
+                                    st.markdown(f"""
+                                    <div style='
+                                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                        padding: 20px;
+                                        border-radius: 12px;
+                                        margin: 10px 0;
+                                        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                                        text-align: center;
+                                    '>
+                                        <div style='color: white; font-size: 0.9em; margin-bottom: 8px; opacity: 0.9;'>Recall</div>
+                                        <div style='color: white; font-size: 1.8em; font-weight: bold;'>{recall_display}</div>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                
+                                f1_val = metrics.get('f1_score', 'N/A')
+                                f1_display = f"{f1_val:.4f}" if isinstance(f1_val, (int, float)) else "N/A"
+                                with perf_col4:
+                                    st.markdown(f"""
+                                    <div style='
+                                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                        padding: 20px;
+                                        border-radius: 12px;
+                                        margin: 10px 0;
+                                        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                                        text-align: center;
+                                    '>
+                                        <div style='color: white; font-size: 0.9em; margin-bottom: 8px; opacity: 0.9;'>F1 Score</div>
+                                        <div style='color: white; font-size: 1.8em; font-weight: bold;'>{f1_display}</div>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                            else:
+                                perf_col1, perf_col2, perf_col3, perf_col4 = st.columns(4)
+                                
+                                r2_val = metrics.get('r2_score', 'N/A')
+                                r2_display = f"{r2_val:.4f}" if isinstance(r2_val, (int, float)) else "N/A"
+                                with perf_col1:
+                                    st.markdown(f"""
+                                    <div style='
+                                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                        padding: 20px;
+                                        border-radius: 12px;
+                                        margin: 10px 0;
+                                        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                                        text-align: center;
+                                    '>
+                                        <div style='color: white; font-size: 0.9em; margin-bottom: 8px; opacity: 0.9;'>R² Score</div>
+                                        <div style='color: white; font-size: 1.8em; font-weight: bold;'>{r2_display}</div>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                
+                                rmse_val = metrics.get('rmse', 'N/A')
+                                rmse_display = f"{rmse_val:.4f}" if isinstance(rmse_val, (int, float)) else "N/A"
+                                with perf_col2:
+                                    st.markdown(f"""
+                                    <div style='
+                                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                        padding: 20px;
+                                        border-radius: 12px;
+                                        margin: 10px 0;
+                                        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                                        text-align: center;
+                                    '>
+                                        <div style='color: white; font-size: 0.9em; margin-bottom: 8px; opacity: 0.9;'>RMSE</div>
+                                        <div style='color: white; font-size: 1.8em; font-weight: bold;'>{rmse_display}</div>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                
+                                mae_val = metrics.get('mae', 'N/A')
+                                mae_display = f"{mae_val:.4f}" if isinstance(mae_val, (int, float)) else "N/A"
+                                with perf_col3:
+                                    st.markdown(f"""
+                                    <div style='
+                                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                        padding: 20px;
+                                        border-radius: 12px;
+                                        margin: 10px 0;
+                                        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                                        text-align: center;
+                                    '>
+                                        <div style='color: white; font-size: 0.9em; margin-bottom: 8px; opacity: 0.9;'>MAE</div>
+                                        <div style='color: white; font-size: 1.8em; font-weight: bold;'>{mae_display}</div>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                
+                                adj_r2_val = metrics.get('adjusted_r2', 'N/A')
+                                adj_r2_display = f"{adj_r2_val:.4f}" if isinstance(adj_r2_val, (int, float)) else "N/A"
+                                with perf_col4:
+                                    st.markdown(f"""
+                                    <div style='
+                                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                        padding: 20px;
+                                        border-radius: 12px;
+                                        margin: 10px 0;
+                                        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                                        text-align: center;
+                                    '>
+                                        <div style='color: white; font-size: 0.9em; margin-bottom: 8px; opacity: 0.9;'>Adjusted R²</div>
+                                        <div style='color: white; font-size: 1.8em; font-weight: bold;'>{adj_r2_display}</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                    
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    
+                    # Feature Importance Analysis
+                    st.markdown("### 🔍 Model Yorumlanabilirliği ve Özellik Analizi")
+                    
+                    tab1, tab2, tab3 = st.tabs(["📊 Feature Importance", "🔄 Permutation Importance", "✨ SHAP Değerleri"])
+                    
+                    with tab1:
+                        st.markdown("#### 📊 Feature Importance")
+                        
+                        # Information card with expander
+                        with st.expander("📚 Model İçi Feature Importance - Detaylı Bilgi", expanded=False):
+                            st.markdown("""
+                            <div style='
+                                background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+                                padding: 15px;
+                                border-radius: 8px;
+                                margin: 10px 0;
+                                border-left: 4px solid #0ea5e9;
+                            '>
+                                <h4 style='color: #0369a1; margin-top: 0;'>📚 Model İçi Feature Importance Nedir?</h4>
+                                <p style='color: #0c4a6e; line-height: 1.6;'>
+                                    <strong>Model İçi Feature Importance</strong>, makine öğrenmesi modellerinin eğitimi sırasında her bir özelliğin (feature) modele ne kadar katkı sağladığını gösteren bir ölçümdür.
+                                </p>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                            st.markdown("""
+                            <div style='
+                                background: #fff;
+                                padding: 12px;
+                                border-radius: 6px;
+                                margin: 10px 0;
+                                border: 1px solid #dee2e6;
+                            '>
+                                <strong style='color: #2d3748;'>🎯 Nasıl Çalışır?</strong>
+                                <ul style='color: #4a5568; line-height: 1.6; margin: 5px 0 0 0; padding-left: 20px;'>
+                                    <li><strong>Ağaç Tabanlı Modeller:</strong> Her özelliğin karar ağacında kaç kez kullanıldığına ve ne kadar bilgi kazandırdığına göre önem skoru hesaplanır.</li>
+                                    <li><strong>Doğrusal Modeller:</strong> Her özelliğin katsayı (coefficient) değerinin mutlak değeri, o özelliğin önemini gösterir.</li>
+                                </ul>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                            st.markdown("""
+                            <div style='
+                                background: linear-gradient(135deg, #e7f3ff 0%, #d0e7ff 100%);
+                                padding: 12px;
+                                border-radius: 6px;
+                                margin: 10px 0;
+                                border-left: 4px solid #0066cc;
+                            '>
+                                <strong style='color: #004085;'>💡 Avantajları</strong>
+                                <ul style='color: #004085; line-height: 1.6; margin: 5px 0 0 0; padding-left: 20px;'>
+                                    <li>Hızlı ve kolay hesaplanır (model eğitildikten sonra otomatik olarak mevcuttur)</li>
+                                    <li>Hangi özelliklerin en önemli olduğunu hızlıca gösterir</li>
+                                    <li>Özellik seçimi ve model yorumlanabilirliği için kullanışlıdır</li>
+                                </ul>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                            st.markdown("""
+                            <div style='
+                                background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+                                padding: 15px;
+                                border-radius: 8px;
+                                margin: 10px 0;
+                                border-left: 4px solid #0ea5e9;
+                            '>
+                                <h4 style='color: #0369a1; margin-top: 0;'>🔢 Sayısal Değerler Ne Anlama Geliyor?</h4>
+                                <p style='color: #0c4a6e; line-height: 1.6; margin-bottom: 8px;'>
+                                    Feature importance değerlerinin yorumlanması <strong>model tipine göre değişir</strong>:
+                                </p>
+                                <h6 style='color: #0369a1; margin-top: 12px; margin-bottom: 6px; font-size: 0.95em;'>🌳 Ağaç Tabanlı Modeller (Random Forest, Decision Tree, vb.):</h6>
+                                <p style='color: #0c4a6e; line-height: 1.6; margin-bottom: 8px;'>
+                                    Genellikle <strong>normalize edilmiş</strong> değerlerdir (toplamı 1.0). Bu durumda:
+                                </p>
+                                <ul style='color: #0c4a6e; line-height: 1.6; margin-bottom: 12px; padding-left: 20px;'>
+                                    <li><strong>1.0 değeri:</strong> Bu özellik, modelin tüm önemini tek başına taşıyor (pratikte çok nadir)</li>
+                                    <li><strong>0.5 değeri:</strong> Modelin toplam öneminin %50'sini oluşturuyor</li>
+                                    <li><strong>0.1 değeri:</strong> Modelin toplam öneminin %10'unu oluşturuyor</li>
+                                    <li><strong>0.0 değeri:</strong> Modele hiç katkı sağlamıyor</li>
+                                </ul>
+                                <h6 style='color: #0369a1; margin-top: 12px; margin-bottom: 6px; font-size: 0.95em;'>📊 Doğrusal Modeller (Linear Regression, Logistic Regression):</h6>
+                                <p style='color: #0c4a6e; line-height: 1.6; margin-bottom: 8px;'>
+                                    Değerler <strong>normalize edilmemiş</strong> mutlak katsayı değerleridir. Bu durumda:
+                                </p>
+                                <ul style='color: #0c4a6e; line-height: 1.6; margin-bottom: 0; padding-left: 20px;'>
+                                    <li>Değerler 1'den büyük olabilir (örneğin 1.5, 2.3, 10.0 gibi)</li>
+                                    <li>Mutlak değerler önemlidir - daha büyük değer = daha önemli özellik</li>
+                                    <li>Karşılaştırma için oranlarına bakılır (örneğin 2.0 değeri, 1.0 değerinden 2 kat daha önemlidir)</li>
+                                </ul>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        
+                        # Button to calculate feature importance
+                        if st.button("📊 Feature Importance Hesapla", type="primary", key="calc_feature_importance"):
+                            st.session_state[f'feature_importance_calculated_{selected_model_name}'] = True
+                        
+                        # Check if we should show results
+                        show_results = st.session_state.get(f'feature_importance_calculated_{selected_model_name}', False)
+                        
+                        if show_results:
+                            try:
+                                feature_importance = get_feature_importance(model, feature_names)
+                            
+                                # Check if feature_importance is valid and not empty
+                                if feature_importance and len(feature_importance) > 0:
+                                    # Sort by importance
+                                    sorted_importance = sorted(
+                                        feature_importance.items(),
+                                        key=lambda x: abs(x[1]),
+                                        reverse=True
+                                    )
+                                    
+                                    # Get top features
+                                    top_n = st.slider("Gösterilecek özellik sayısı:", 5, min(50, len(feature_names)), 15, key="top_n_features")
+                                    top_features = sorted_importance[:top_n]
+                                    
+                                    # Ensure we have features to display
+                                    if top_features and len(top_features) > 0:
+                                        # Create bar chart
+                                        features = [f[0] for f in top_features]
+                                        importances = [abs(f[1]) for f in top_features]
+                                        
+                                        # Create horizontal bar chart
+                                        fig = go.Figure(data=[
+                                            go.Bar(
+                                                x=importances,
+                                                y=features,
+                                                orientation='h',
+                                                marker=dict(
+                                                    color=importances,
+                                                    colorscale='Viridis',
+                                                    showscale=True,
+                                                    colorbar=dict(
+                                                        title=dict(text="Importance", font=dict(color='black', size=12)),
+                                                        tickfont=dict(color='black')
+                                                    )
+                                                ),
+                                                text=[f'{imp:.4f}' for imp in importances],
+                                                textposition='outside',
+                                                textfont=dict(color='black', size=11),
+                                                hovertemplate='<b>%{y}</b><br>Importance: %{x:.4f}<extra></extra>'
+                                            )
+                                        ])
+                                        
+                                        fig.update_layout(
+                                            title=dict(
+                                                text='<b>Feature Importance (Top Features)</b>',
+                                                x=0.5,
+                                                xanchor='center',
+                                                font=dict(size=18, color='black')
+                                            ),
+                                            xaxis=dict(
+                                                title=dict(text='Importance', font=dict(size=14, color='black')),
+                                                tickfont=dict(color='black', size=12)
+                                            ),
+                                            yaxis=dict(
+                                                title=dict(text='Feature', font=dict(size=14, color='black')),
+                                                tickfont=dict(color='black', size=12)
+                                            ),
+                                            height=max(400, top_n * 25),
+                                            plot_bgcolor='white',
+                                            paper_bgcolor='white',
+                                            margin=dict(l=150, r=50, t=60, b=50),
+                                            showlegend=False,
+                                            font=dict(color='black')
+                                        )
+                                        
+                                        # Render the chart
+                                        st.plotly_chart(fig, width='stretch', key=f"feature_importance_{selected_model_name}")
+                                        
+                                        # Top features table
+                                        try:
+                                            analysis = analyze_feature_importance(feature_importance, top_n=top_n)
+                                            st.markdown("#### 🏆 En Önemli Özellikler")
+                                            top_df = pd.DataFrame(analysis['top_features'])
+                                            top_df.columns = ['Özellik', 'Importance']
+                                            top_df['Sıra'] = range(1, len(top_df) + 1)
+                                            top_df = top_df[['Sıra', 'Özellik', 'Importance']]
+                                            st.dataframe(top_df, width='stretch', hide_index=True)
+                                        except Exception as analysis_error:
+                                            st.warning(f"⚠️ Tablo oluşturulamadı: {str(analysis_error)}")
+                                    else:
+                                        st.warning("⚠️ Görüntülenecek özellik bulunamadı.")
+                                else:
+                                    st.warning("⚠️ Bu model için feature importance hesaplanamadı. Model henüz eğitilmemiş olabilir veya bu model tipi feature importance desteklemiyor olabilir.")
+                                
+                            except Exception as e:
+                                st.error(f"❌ Feature importance hesaplanırken hata oluştu: {str(e)}")
+                                import traceback
+                                st.code(traceback.format_exc())
+                    
+                    with tab2:
+                        st.markdown("#### Permutation Importance")
+                        
+                        # Information card with expander
+                        with st.expander("🔄 Permutation Importance - Detaylı Bilgi", expanded=False):
+                            st.markdown("""
+                            <div style='
+                                background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+                                padding: 15px;
+                                border-radius: 8px;
+                                margin: 10px 0;
+                                border-left: 4px solid #f59e0b;
+                            '>
+                                <h4 style='color: #92400e; margin-top: 0;'>🔄 Permutation Importance Nedir?</h4>
+                                <p style='color: #78350f; line-height: 1.6;'>
+                                    <strong>Permutation Importance</strong>, bir özelliğin değerlerini rastgele karıştırdığınızda model performansının ne kadar düştüğünü ölçen bir yöntemdir. Bu, özelliğin gerçek önemini daha objektif bir şekilde değerlendirmenizi sağlar.
+                                </p>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                            st.markdown("""
+                            <div style='
+                                background: #fff;
+                                padding: 12px;
+                                border-radius: 6px;
+                                margin: 10px 0;
+                                border: 1px solid #dee2e6;
+                            '>
+                                <strong style='color: #2d3748;'>🎯 Nasıl Çalışır?</strong>
+                                <ol style='color: #4a5568; line-height: 1.6; margin: 5px 0 0 0; padding-left: 20px;'>
+                                    <li>Model normal şekilde eğitilir ve temel performans skoru kaydedilir.</li>
+                                    <li>Bir özelliğin değerleri rastgele karıştırılır (permutasyon).</li>
+                                    <li>Model aynı veriyle tekrar test edilir ve yeni performans skoru hesaplanır.</li>
+                                    <li>Performans düşüşü, o özelliğin önemini gösterir. Ne kadar çok düşerse, o kadar önemlidir.</li>
+                                </ol>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                            st.markdown("""
+                            <div style='
+                                background: linear-gradient(135deg, #e7f3ff 0%, #d0e7ff 100%);
+                                padding: 12px;
+                                border-radius: 6px;
+                                margin: 10px 0;
+                                border-left: 4px solid #0066cc;
+                            '>
+                                <strong style='color: #004085;'>💡 Avantajları</strong>
+                                <ul style='color: #004085; line-height: 1.6; margin: 5px 0 0 0; padding-left: 20px;'>
+                                    <li><strong>Model Bağımsız:</strong> Herhangi bir model tipiyle çalışır (ağaç, doğrusal, sinir ağı vb.)</li>
+                                    <li><strong>Objektif:</strong> Modelin iç yapısına bağlı değildir, gerçek etkiyi ölçer</li>
+                                    <li><strong>Güvenilir:</strong> Özellikler arasındaki korelasyonu dikkate alır</li>
+                                    <li><strong>Yorumlanabilir:</strong> Negatif değerler, özelliğin modele zarar verdiğini gösterir</li>
+                                </ul>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                            st.markdown("""
+                            <div style='
+                                background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+                                padding: 15px;
+                                border-radius: 8px;
+                                margin: 10px 0;
+                                border-left: 4px solid #f59e0b;
+                            '>
+                                <h4 style='color: #92400e; margin-top: 0;'>🔢 Sayısal Değerler Ne Anlama Geliyor?</h4>
+                                <p style='color: #78350f; line-height: 1.6; margin-bottom: 8px;'>
+                                    Permutation importance değerleri, <strong>model performansındaki değişimi</strong> gösterir. Değerler, özelliğin karıştırılması durumunda performansın ne kadar düştüğünü (veya yükseldiğini) ölçer.
+                                </p>
+                                <ul style='color: #78350f; line-height: 1.6; margin-bottom: 0; padding-left: 20px;'>
+                                    <li><strong>Pozitif değerler (örn: 0.05, 0.10):</strong> Özellik önemlidir. Değer ne kadar büyükse, özellik o kadar önemlidir. Örneğin 0.10 değeri, özelliğin karıştırılması durumunda model performansının 0.10 (veya %10) düştüğünü gösterir.</li>
+                                    <li><strong>Yüksek pozitif değerler (örn: 0.20, 0.30):</strong> Özellik çok önemlidir. Model performansı bu özellik olmadan önemli ölçüde düşer.</li>
+                                    <li><strong>Düşük pozitif değerler (örn: 0.01, 0.02):</strong> Özellik az önemlidir veya önemsizdir.</li>
+                                    <li><strong>Negatif değerler (örn: -0.01, -0.05):</strong> Özellik modele zarar veriyor demektir. Bu özellik olmadan model daha iyi performans gösterir.</li>
+                                    <li><strong>Sıfır değeri (0.0):</strong> Özellik modele hiç katkı sağlamıyor demektir.</li>
+                                    <li><strong>Karşılaştırma:</strong> Örneğin, bir özellik 0.15 ve diğeri 0.05 değerine sahipse, ilk özellik ikincisinden <strong>3 kat daha önemlidir</strong>.</li>
+                                </ul>
+                                <p style='color: #78350f; line-height: 1.6; margin-top: 12px; margin-bottom: 0; font-style: italic;'>
+                                    <strong>Not:</strong> Permutation importance değerleri, kullanılan scoring metrikine (accuracy, r², vb.) bağlıdır. Classification için genellikle 0-1 arası, regression için daha geniş bir aralıkta olabilir.
+                                </p>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        
+                        # Check if we have cached results
+                        perm_importance = None
+                        if f'perm_importance_{selected_model_name}' in st.session_state:
+                            perm_importance = st.session_state[f'perm_importance_{selected_model_name}']
+                        
+                        # Button to calculate/recalculate
+                        if st.button("🔄 Permutation Importance Hesapla", type="primary", key="calc_perm_importance"):
+                            with st.spinner("Permutation importance hesaplanıyor... Bu işlem biraz zaman alabilir."):
+                                try:
+                                    scoring = 'accuracy' if st.session_state.problem_type in ['binary_classification', 'multiclass_classification'] else 'r2_score'
+                                    perm_importance = get_permutation_importance(
+                                        model, X_train, y_train,
+                                        scoring=scoring,
+                                        n_repeats=10
+                                    )
+                                    
+                                    if perm_importance:
+                                        # Store in session state
+                                        st.session_state[f'perm_importance_{selected_model_name}'] = perm_importance
+                                        st.success("✅ Permutation importance başarıyla hesaplandı!")
+                                    else:
+                                        st.error("❌ Permutation importance hesaplanamadı.")
+                                        
+                                except Exception as e:
+                                    st.error(f"❌ Hata: {str(e)}")
+                        
+                        # Display results if available (either from button click or cached)
+                        if perm_importance:
+                            # Sort by importance
+                            sorted_perm = sorted(
+                                perm_importance.items(),
+                                key=lambda x: abs(x[1]),
+                                reverse=True
+                            )
+                            
+                            top_n_perm = st.slider("Gösterilecek özellik sayısı:", 5, min(50, len(feature_names)), 15, key="top_n_perm")
+                            top_perm_features = sorted_perm[:top_n_perm]
+                            
+                            # Create bar chart
+                            perm_features = [f[0] for f in top_perm_features]
+                            perm_importances = [abs(f[1]) for f in top_perm_features]
+                            
+                            fig = go.Figure(data=[
+                                go.Bar(
+                                    x=perm_importances,
+                                    y=perm_features,
+                                    orientation='h',
+                                    marker=dict(
+                                        color=perm_importances,
+                                        colorscale='Plasma',
+                                        showscale=True,
+                                        colorbar=dict(
+                                            title=dict(text="Importance", font=dict(color='black', size=12)),
+                                            tickfont=dict(color='black')
+                                        )
+                                    ),
+                                    text=[f'{imp:.4f}' for imp in perm_importances],
+                                    textposition='outside',
+                                    textfont=dict(color='black', size=11)
+                                )
+                            ])
+                            
+                            fig.update_layout(
+                                title=dict(
+                                    text='<b>Permutation Importance (Top Features)</b>',
+                                    x=0.5,
+                                    xanchor='center',
+                                    font=dict(size=18, color='black')
+                                ),
+                                xaxis=dict(
+                                    title=dict(text='Importance', font=dict(size=14, color='black')),
+                                    tickfont=dict(color='black', size=12)
+                                ),
+                                yaxis=dict(
+                                    title=dict(text='Feature', font=dict(size=14, color='black')),
+                                    tickfont=dict(color='black', size=12)
+                                ),
+                                height=max(400, top_n_perm * 25),
+                                plot_bgcolor='white',
+                                paper_bgcolor='white',
+                                margin=dict(l=150, r=50, t=60, b=50),
+                                font=dict(color='black')
+                            )
+                            
+                            st.plotly_chart(fig, width='stretch', key=f"perm_importance_chart_{selected_model_name}")
+                            
+                            # Show results table
+                            st.markdown("#### 📊 Permutation Importance Sonuçları")
+                            perm_df = pd.DataFrame(sorted_perm[:15], columns=['Özellik', 'Importance'])
+                            perm_df['Sıra'] = range(1, len(perm_df) + 1)
+                            perm_df = perm_df[['Sıra', 'Özellik', 'Importance']]
+                            st.dataframe(perm_df, width='stretch', hide_index=True)
+                    
+                    with tab3:
+                        st.markdown("#### SHAP (SHapley Additive exPlanations) Değerleri")
+                        
+                        # Information card with expander
+                        with st.expander("✨ SHAP (SHapley Additive exPlanations) - Detaylı Bilgi", expanded=False):
+                            st.markdown("""
+                            <div style='
+                                background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%);
+                                padding: 15px;
+                                border-radius: 8px;
+                                margin: 10px 0;
+                                border-left: 4px solid #a855f7;
+                            '>
+                                <h4 style='color: #6b21a8; margin-top: 0;'>✨ SHAP (SHapley Additive exPlanations) Nedir?</h4>
+                                <p style='color: #581c87; line-height: 1.6;'>
+                                    <strong>SHAP değerleri</strong>, oyun teorisindeki Shapley değerlerinden esinlenerek geliştirilmiş, her bir özelliğin her bir tahmine ne kadar katkıda bulunduğunu açıklayan bir yöntemdir. Her özelliğin adil payını hesaplar.
+                                </p>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                            st.markdown("""
+                            <div style='
+                                background: #fff;
+                                padding: 12px;
+                                border-radius: 6px;
+                                margin: 10px 0;
+                                border: 1px solid #dee2e6;
+                            '>
+                                <strong style='color: #2d3748;'>🎯 Nasıl Çalışır?</strong>
+                                <p style='color: #4a5568; line-height: 1.6; margin: 5px 0 8px 0;'>
+                                    SHAP, her özelliğin modele katkısını, o özelliğin olmadığı durumla karşılaştırarak hesaplar. Tüm olası özellik kombinasyonlarını dikkate alarak, her özelliğe adil bir pay verir.
+                                </p>
+                                <ul style='color: #4a5568; line-height: 1.6; margin: 5px 0 0 0; padding-left: 20px;'>
+                                    <li><strong>Toplamsallık:</strong> Tüm SHAP değerlerinin toplamı, modelin tahmini ile ortalama tahmin arasındaki farkı verir</li>
+                                    <li><strong>Simetri:</strong> Aynı katkıyı sağlayan özellikler aynı SHAP değerini alır</li>
+                                    <li><strong>Dummy Özellik:</strong> Modele katkısı olmayan özelliklerin SHAP değeri sıfırdır</li>
+                                </ul>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                            st.markdown("""
+                            <div style='
+                                background: linear-gradient(135deg, #e7f3ff 0%, #d0e7ff 100%);
+                                padding: 12px;
+                                border-radius: 6px;
+                                margin: 10px 0;
+                                border-left: 4px solid #0066cc;
+                            '>
+                                <strong style='color: #004085;'>💡 Avantajları</strong>
+                                <ul style='color: #004085; line-height: 1.6; margin: 5px 0 0 0; padding-left: 20px;'>
+                                    <li><strong>Bireysel Açıklama:</strong> Her tahmin için özelliklerin katkısını gösterir</li>
+                                    <li><strong>Küresel Açıklama:</strong> Tüm veri seti üzerinde özelliklerin genel önemini gösterir</li>
+                                    <li><strong>Teorik Temel:</strong> Oyun teorisi ile güçlü matematiksel temellere dayanır</li>
+                                    <li><strong>Görselleştirme:</strong> SHAP değerleri görsel olarak çok etkili şekilde gösterilebilir</li>
+                                </ul>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                            st.markdown("""
+                            <div style='
+                                background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%);
+                                padding: 15px;
+                                border-radius: 8px;
+                                margin: 10px 0;
+                                border-left: 4px solid #a855f7;
+                            '>
+                                <h4 style='color: #6b21a8; margin-top: 0;'>🔢 Sayısal Değerler Ne Anlama Geliyor?</h4>
+                                <p style='color: #581c87; line-height: 1.6; margin-bottom: 8px;'>
+                                    SHAP değerleri, her bir özelliğin <strong>model tahminine ne kadar katkıda bulunduğunu</strong> gösterir. Grafikte gösterilen değerler, tüm örnekler üzerinden hesaplanan <strong>ortalama mutlak SHAP değerleridir</strong>.
+                                </p>
+                                <ul style='color: #581c87; line-height: 1.6; margin-bottom: 0; padding-left: 20px;'>
+                                    <li><strong>Yüksek pozitif değerler (örn: 0.5, 1.0, 2.0):</strong> Özellik çok önemlidir. Bu özellik, model tahminlerine büyük katkı sağlar. Değer ne kadar büyükse, özellik o kadar önemlidir.</li>
+                                    <li><strong>Orta pozitif değerler (örn: 0.1, 0.2, 0.3):</strong> Özellik orta düzeyde önemlidir. Model tahminlerine makul bir katkı sağlar.</li>
+                                    <li><strong>Düşük pozitif değerler (örn: 0.01, 0.05):</strong> Özellik az önemlidir veya önemsizdir.</li>
+                                    <li><strong>Sıfır değeri (0.0):</strong> Özellik modele hiç katkı sağlamıyor demektir.</li>
+                                    <li><strong>Karşılaştırma:</strong> Örneğin, bir özellik 0.6 ve diğeri 0.2 değerine sahipse, ilk özellik ikincisinden <strong>3 kat daha önemlidir</strong>.</li>
+                                    <li><strong>Mutlak Değer:</strong> Grafikte gösterilen değerler mutlak değerlerdir (her zaman pozitif). Gerçek SHAP değerleri pozitif veya negatif olabilir - pozitif değerler tahmini artırır, negatif değerler azaltır.</li>
+                                </ul>
+                                <p style='color: #581c87; line-height: 1.6; margin-top: 12px; margin-bottom: 0; font-style: italic;'>
+                                    <strong>Not:</strong> SHAP değerlerinin ölçeği, veri setinize ve modelinize bağlıdır. Önemli olan değerlerin birbirine göre oranlarıdır. Hangi özellik daha büyük değere sahipse, o özellik daha önemlidir.
+                                </p>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        
+                        # Check if we have cached results
+                        shap_result = None
+                        if f'shap_values_{selected_model_name}' in st.session_state:
+                            shap_result = st.session_state[f'shap_values_{selected_model_name}']
+                        
+                        # Button to calculate/recalculate
+                        if st.button("✨ SHAP Değerlerini Hesapla", type="primary", key="calc_shap"):
+                            with st.spinner("SHAP değerleri hesaplanıyor... Bu işlem biraz zaman alabilir."):
+                                try:
+                                    shap_result = calculate_shap_values(model, X_train, max_samples=100)
+                                    
+                                    if shap_result:
+                                        # Store in session state
+                                        st.session_state[f'shap_values_{selected_model_name}'] = shap_result
+                                        st.success("✅ SHAP değerleri başarıyla hesaplandı!")
+                                    else:
+                                        st.warning("⚠️ SHAP kütüphanesi yüklü değil veya hesaplama başarısız oldu. SHAP yüklemek için: `pip install shap`")
+                                        
+                                except ImportError:
+                                    st.error("❌ SHAP kütüphanesi yüklü değil. Yüklemek için: `pip install shap`")
+                                except Exception as e:
+                                    st.error(f"❌ Hata: {str(e)}")
+                        
+                        # Display results if available (either from button click or cached)
+                        if shap_result:
+                            mean_shap = shap_result.get('mean_abs_shap', {})
+                            
+                            if mean_shap:
+                                # Ensure mean_shap is a dict and values are numeric
+                                if isinstance(mean_shap, dict):
+                                    # Convert values to float if they are lists or other types
+                                    mean_shap_clean = {}
+                                    for key, value in mean_shap.items():
+                                        try:
+                                            if isinstance(value, (list, np.ndarray)):
+                                                # If it's a list/array, take the mean or first value
+                                                if len(value) > 0:
+                                                    mean_shap_clean[key] = float(np.mean(value))
+                                                else:
+                                                    mean_shap_clean[key] = 0.0
+                                            elif isinstance(value, (int, float)):
+                                                mean_shap_clean[key] = float(value)
+                                            elif hasattr(value, '__float__'):
+                                                mean_shap_clean[key] = float(value)
+                                            else:
+                                                mean_shap_clean[key] = 0.0
+                                        except (ValueError, TypeError):
+                                            mean_shap_clean[key] = 0.0
+                                    mean_shap = mean_shap_clean
+                                    
+                                    # Sort by SHAP importance
+                                    sorted_shap = sorted(
+                                        mean_shap.items(),
+                                        key=lambda x: abs(float(x[1])) if isinstance(x[1], (int, float)) or hasattr(x[1], '__float__') else 0.0,
+                                        reverse=True
+                                    )
+                                        
+                                    top_n_shap = st.slider("Gösterilecek özellik sayısı:", 5, min(50, len(feature_names)), 15, key="top_n_shap")
+                                    top_shap_features = sorted_shap[:top_n_shap]
+                                        
+                                        # Create bar chart
+                                    shap_features = [f[0] for f in top_shap_features]
+                                shap_importances = []
+                                for f in top_shap_features:
+                                    try:
+                                        val = f[1]
+                                        if isinstance(val, (list, np.ndarray)):
+                                            val = float(np.mean(val)) if len(val) > 0 else 0.0
+                                        else:
+                                            val = float(val)
+                                        shap_importances.append(abs(val))
+                                    except (ValueError, TypeError):
+                                        shap_importances.append(0.0)
+                                        
+                                        fig = go.Figure(data=[
+                                            go.Bar(
+                                                x=shap_importances,
+                                                y=shap_features,
+                                                orientation='h',
+                                                marker=dict(
+                                                    color=shap_importances,
+                                                    colorscale='Cividis',
+                                                    showscale=True,
+                                            colorbar=dict(
+                                                title=dict(text="Mean |SHAP|", font=dict(color='black', size=12)),
+                                                tickfont=dict(color='black')
+                                            )
+                                                ),
+                                                text=[f'{imp:.4f}' for imp in shap_importances],
+                                        textposition='outside',
+                                        textfont=dict(color='black', size=11)
+                                            )
+                                        ])
+                                        
+                                        fig.update_layout(
+                                            title=dict(
+                                                text='<b>Mean Absolute SHAP Values (Top Features)</b>',
+                                                x=0.5,
+                                                xanchor='center',
+                                        font=dict(size=18, color='black')
+                                            ),
+                                    xaxis=dict(
+                                        title=dict(text='Mean |SHAP|', font=dict(size=14, color='black')),
+                                        tickfont=dict(color='black', size=12)
+                                    ),
+                                    yaxis=dict(
+                                        title=dict(text='Feature', font=dict(size=14, color='black')),
+                                        tickfont=dict(color='black', size=12)
+                                    ),
+                                            height=max(400, top_n_shap * 25),
+                                            plot_bgcolor='white',
+                                            paper_bgcolor='white',
+                                    margin=dict(l=150, r=50, t=60, b=50),
+                                    font=dict(color='black')
+                                        )
+                                        
+                                st.plotly_chart(fig, width='stretch', key=f"shap_chart_{selected_model_name}")
+                                        
+                                # Show results table
+                                st.markdown("#### 📊 SHAP Sonuçları")
+                                shap_df = pd.DataFrame(sorted_shap[:15], columns=['Özellik', 'Mean |SHAP|'])
+                                shap_df['Sıra'] = range(1, len(shap_df) + 1)
+                                shap_df = shap_df[['Sıra', 'Özellik', 'Mean |SHAP|']]
+                                st.dataframe(shap_df, width='stretch', hide_index=True)
+                    
+                    st.markdown("<br>", unsafe_allow_html=True)
+            else:
+                st.error("❌ Eğitim verisi bulunamadı. Lütfen önce modelleri eğitin.")
     
     # Navigation buttons
     st.markdown("<br>", unsafe_allow_html=True)
@@ -2067,9 +3512,248 @@ elif current_step == 7:
             st.session_state.model_selection_step = 6
             st.rerun()
     with nav_col2:
-        # Son adımda Atla butonu yok
+        if st.button("⏭️ Atla", width='stretch'):
+            st.session_state.model_selection_step = 8
+            st.rerun()
+    with nav_col3:
+        if st.button("İleri →", type="primary", width='stretch'):
+            st.session_state.model_selection_step = 8
+            st.rerun()
+
+# STEP 8: Model Download
+elif current_step == 8:
+    st.header("💾 Adım 8: Model İndirme")
+                        
+    # Check if models are trained
+    if 'model_results' in st.session_state and st.session_state.model_results:
+        model_results = st.session_state.model_results
+        
+        if model_results:
+            st.markdown("### 📋 Eğitilen Modeller")
+            
+            # Display model list
+            model_names = list(model_results.keys())
+            selected_model = st.selectbox(
+                "İndirmek istediğiniz modeli seçin:",
+                model_names,
+                key="download_model_selector"
+            )
+            
+            if selected_model:
+                # Get model data
+                model_data = model_results[selected_model]
+                model = model_data.get('model')
+                metrics = model_data.get('metrics', {})
+                
+                # Display model info
+                st.markdown("#### 📊 Seçilen Model Bilgileri")
+                info_col1, info_col2, info_col3 = st.columns(3)
+                
+                with info_col1:
+                    st.markdown(f"""
+                    <div style='
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        padding: 15px;
+                        border-radius: 8px;
+                        color: white;
+                        text-align: center;
+                    '>
+                        <strong>Model Tipi</strong><br>
+                        <span style='font-size: 1.1em;'>{type(model).__name__ if model else 'N/A'}</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                with info_col2:
+                    primary_metric = 'accuracy' if st.session_state.problem_type in ['binary_classification', 'multiclass_classification'] else 'r2_score'
+                    metric_value = metrics.get(primary_metric, 'N/A')
+                    metric_display = f"{metric_value:.4f}" if isinstance(metric_value, (int, float)) else str(metric_value)
+                    st.markdown(f"""
+                    <div style='
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        padding: 15px;
+                        border-radius: 8px;
+                        color: white;
+                        text-align: center;
+                    '>
+                        <strong>Ana Metrik</strong><br>
+                        <span style='font-size: 1.1em;'>{metric_display}</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                with info_col3:
+                    st.markdown(f"""
+                    <div style='
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        padding: 15px;
+                        border-radius: 8px;
+                        color: white;
+                        text-align: center;
+                    '>
+                        <strong>Problem Tipi</strong><br>
+                        <span style='font-size: 1.1em;'>{st.session_state.problem_type}</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    
+                # LLM Recommendations - BAĞIMSIZ MODEL SEÇİCİ
+                try:
+                    from backend.modules.model_selection.model_download.llm_enhancer import get_model_recommendation
+                    
+                    # Initialize session state for recommendation - genel öneri (model seçiminden bağımsız)
+                    if 'llm_recommendation_general' not in st.session_state:
+                        st.session_state.llm_recommendation_general = None
+                    
+                    # Collect interpretation data
+                    feature_importance_data = {}
+                    permutation_importance_data = {}
+                    shap_data = {}
+                    
+                    for model_name in model_names:
+                        # Feature importance
+                        if f'feature_importance_{model_name}' in st.session_state:
+                            feature_importance_data[model_name] = st.session_state[f'feature_importance_{model_name}']
+                        
+                        # Permutation importance
+                        if f'perm_importance_{model_name}' in st.session_state:
+                            permutation_importance_data[model_name] = st.session_state[f'perm_importance_{model_name}']
+                        
+                        # SHAP
+                        if f'shap_values_{model_name}' in st.session_state:
+                            shap_data[model_name] = st.session_state[f'shap_values_{model_name}']
+                    
+                    # Get LLM recommendation - genel öneri (indirme seçiminden bağımsız)
+                    with st.expander("🤖 LLM Model Önerisi", expanded=False):
+                        # Get general recommendation (not tied to any specific model selection)
+                        current_recommendation = st.session_state.llm_recommendation_general
+                        
+                        # Button to get recommendation
+                        if current_recommendation is None:
+                            btn_col1, btn_col2 = st.columns([1, 4])
+                            with btn_col1:
+                                if st.button("🤖 LLM Önerileri Al", type="primary", key="get_recommendation_general"):
+                                    with st.spinner("LLM analiz ediyor ve öneri hazırlıyor..."):
+                                        recommendation = get_model_recommendation(
+                                            model_results,
+                                            st.session_state.problem_type,
+                                            feature_importance_data if feature_importance_data else None,
+                                            permutation_importance_data if permutation_importance_data else None,
+                                            shap_data if shap_data else None
+                                        )
+                                        
+                                        if recommendation:
+                                            st.session_state.llm_recommendation_general = recommendation
+                                            st.rerun()
+                                        else:
+                                            st.info("⚠️ LLM önerisi alınamadı. LLM servisi kullanılamıyor olabilir.")
+                        else:
+                            # Show recommendation
+                            recommendation = current_recommendation
+                            
+                            # Clean up excessive whitespace while preserving markdown structure
+                            import re
+                            # Remove multiple consecutive newlines (more than 2)
+                            cleaned_recommendation = re.sub(r'\n{3,}', '\n\n', recommendation)
+                            # Remove leading/trailing whitespace from each line, but preserve markdown formatting
+                            lines = cleaned_recommendation.split('\n')
+                            cleaned_lines = []
+                            prev_empty = False
+                            
+                            for line in lines:
+                                stripped = line.strip()
+                                # If line is empty
+                                if not stripped:
+                                    # Only add one empty line max between content
+                                    if not prev_empty and cleaned_lines:
+                                        cleaned_lines.append('')
+                                        prev_empty = True
+                                    continue
+                                
+                                prev_empty = False
+                                # Preserve markdown formatting (headers, lists, bold, etc.)
+                                cleaned_lines.append(stripped)
+                            
+                            # Remove empty lines at the beginning and end
+                            while cleaned_lines and not cleaned_lines[0]:
+                                cleaned_lines.pop(0)
+                            while cleaned_lines and not cleaned_lines[-1]:
+                                cleaned_lines.pop()
+                            
+                            cleaned_recommendation = '\n'.join(cleaned_lines)
+                            
+                            # Use components.html to render markdown in a styled container
+                            # First add CSS, then render markdown normally
+                            st.markdown("""
+                            <style>
+                                .llm-recommendation-wrapper {
+                                    background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+                                    padding: 20px;
+                                    border-radius: 8px;
+                                    margin: 10px 0;
+                                    border-left: 4px solid #0ea5e9;
+                                }
+                            </style>
+                            """, unsafe_allow_html=True)
+                            
+                            # Render markdown content normally
+                            st.markdown(cleaned_recommendation)
+                            
+                            # Apply wrapper style using JavaScript (runs after render)
+                            st.markdown("""
+                            <script>
+                                (function() {
+                                    const markdownContainers = document.querySelectorAll('[data-testid="stMarkdownContainer"]');
+                                    if (markdownContainers.length > 0) {
+                                        const lastContainer = markdownContainers[markdownContainers.length - 1];
+                                        lastContainer.classList.add('llm-recommendation-wrapper');
+                                    }
+                                })();
+                            </script>
+                            """, unsafe_allow_html=True)
+                            
+                            # Button to get new recommendation
+                            btn_col1, btn_col2 = st.columns([1, 4])
+                            with btn_col1:
+                                if st.button("🔄 Yeni Öneri Al", key="new_recommendation_general"):
+                                    # Clear the general recommendation
+                                    st.session_state.llm_recommendation_general = None
+                                    st.rerun()
+                except Exception as e:
+                    st.warning(f"⚠️ LLM önerisi yüklenemedi: {str(e)}")
+                
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                # Download button
+                if model:
+                    # Create download button
+                    model_bytes = pickle.dumps(model)
+                    st.download_button(
+                        label="💾 Modeli İndir",
+                        data=model_bytes,
+                        file_name=f"{selected_model}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pkl",
+                        mime="application/octet-stream",
+                        type="primary",
+                        width='stretch',
+                        key=f"download_{selected_model}"
+                    )
+                    
+                    st.info("💡 İndirilen model dosyasını pickle ile yüklemek için: `import pickle; model = pickle.load(open('model.pkl', 'rb'))`")
+                else:
+                    st.error("❌ Model bulunamadı. Lütfen modeli tekrar eğitin.")
+        else:
+            st.warning("⚠️ Henüz eğitilmiş model bulunmamaktadır. Lütfen önce modelleri eğitin.")
+    else:
+        st.error("❌ Eğitim verisi bulunamadı. Lütfen önce modelleri eğitin.")
+    
+    # Navigation buttons
+    st.markdown("<br>", unsafe_allow_html=True)
+    nav_col1, nav_col2, nav_col3 = st.columns([1, 1, 1])
+    with nav_col1:
+        if st.button("← Geri", width='stretch'):
+            st.session_state.model_selection_step = 7
+            st.rerun()
+    with nav_col2:
         st.empty()
     with nav_col3:
-        # Baştan Başla butonu şimdilik kaldırıldı
         st.empty()
 

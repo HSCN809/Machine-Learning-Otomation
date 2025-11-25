@@ -4712,10 +4712,7 @@ def render_summary_step(df):
         pass
     with col_nav4:
         # İleri butonu - son adımda gösterilmez veya farklı bir aksiyon olabilir
-        if st.button("✅ Tamamla", key="complete_summary", width='stretch', type="primary"):
-            # Mesajları alt alta, tam genişlikte göster
-            st.success("✅ Veri ön işleme tamamlandı!")
-            st.info("💡 İşlenmiş veriyi indirebilir veya model kurma adımına geçebilirsiniz.")
+        pass
 
 
 def render_outlier_step(df):
