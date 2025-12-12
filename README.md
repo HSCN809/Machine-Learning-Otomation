@@ -131,17 +131,13 @@ Veri setlerini şu adresten indirebilirsiniz:
 
 
 Proje Notları Yapılacaklar:
-1. Her bir aykırı değer tespit yöntemi için ayrı temizleme metotları uygulanacak.
-2. Encoding adımına llm önerisi eklenecek
-3. Llm önerilerine tümünü uygula butonu getirilecek böylece kullanıcı tek tek öneri uygulatmayacak
-4. Temizle Butonu koyulacak Veri yükleme Modülüne 
-5. EDA modülü llm önerileri kısmı incelenecek tekrardan (önemli)
-6. Feature Engineering e llm önerisi kısmı getir (opsiyonel)
-7. Feature engineering Yeni özellik kısmı ele alınacak (önemli)
-8. Llm önerilerindeki kartlar imleçle sağa sola fırlat (sağa öneri uygula sol öneri uygulanmasın) (opsiyonel)
-9. Bütün modüllere düzgün debug sistemi ve log çıktıları ekle (tasarımı güzel dili sade ve basit olmalı) (önemli)
-10. Tam otomatik sistem oluştur (opsiyonel)
-11. Veri Seti silindiği vakit model seçimindeki işlemler geri alınacak. 
-12. On-premise sistemler 
-13. Frontend gelişecek
-14. MlFLow eklenecek
+1. Llm önerilerine tümünü uygula butonu getirilecek böylece kullanıcı tek tek öneri uygulatmayacak
+2. EDA modülü llm önerileri kısmı incelenecek tekrardan (önemli)
+3. Feature Engineering e llm önerisi kısmı getir (opsiyonel)
+4. Feature engineering Yeni özellik kısmı ele alınacak (önemli)
+5. Llm önerilerindeki kartlar imleçle sağa sola fırlat (sağa öneri uygula sol öneri uygulanmasın) (opsiyonel)
+6. Bütün modüllere düzgün debug sistemi ve log çıktıları ekle (tasarımı güzel dili sade ve basit olmalı) (önemli)
+7. Tam otomatik sistem oluştur (opsiyonel)
+8. On-premise sistemler 
+9. Frontend gelişecek
+10. MlFLow eklenecek
