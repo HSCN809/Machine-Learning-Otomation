@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sidebar, Header } from '@/components/layout';
 import {
     StepProgress,
@@ -13,6 +13,7 @@ import {
     Scaling,
     Summary,
 } from '@/components/preprocessing';
+import { NoDataWarning } from '@/components/common';
 import { usePreprocessing, PREPROCESSING_STEPS } from '@/hooks/usePreprocessing';
 import { theme } from '@/styles/theme';
 import { Loader2 } from 'lucide-react';
@@ -32,6 +33,7 @@ export default function PreprocessingPage() {
         prevStep,
         canGoNext,
         canGoPrev,
+        loadColumns,
         applyMissingValues,
         applyOutliers,
         applyEncoding,
@@ -44,6 +46,12 @@ export default function PreprocessingPage() {
         columnsWithMissing,
     } = usePreprocessing();
 
+    // Load columns on mount
+    useEffect(() => {
+        loadColumns();
+    }, [loadColumns]);
+
+    const hasData = columns.length > 0;
     const currentStepInfo = PREPROCESSING_STEPS[currentStep];
     const isLastStep = currentStep === PREPROCESSING_STEPS.length - 1;
 

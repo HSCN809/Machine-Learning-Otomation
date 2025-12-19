@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import {
     EDAData,
     NumericStats,
@@ -11,124 +11,7 @@ import {
     BoxPlotData,
     CategoryData,
 } from '@/types/eda';
-
-// Mock data generator for demo
-function generateMockEDAData(): EDAData {
-    const numericColumns = ['age', 'salary', 'experience', 'score'];
-    const categoricalColumns = ['department', 'gender', 'status'];
-
-    const numericStats: NumericStats[] = numericColumns.map(col => ({
-        column: col,
-        count: 1000,
-        mean: Math.random() * 100,
-        std: Math.random() * 20,
-        min: Math.random() * 10,
-        q25: Math.random() * 30,
-        median: Math.random() * 50,
-        q75: Math.random() * 70,
-        max: Math.random() * 100,
-    }));
-
-    const categoricalStats: CategoricalStats[] = categoricalColumns.map(col => ({
-        column: col,
-        count: 1000,
-        unique: Math.floor(Math.random() * 10) + 2,
-        top: 'Category A',
-        frequency: Math.floor(Math.random() * 500) + 100,
-    }));
-
-    const columnTypes: ColumnType[] = [
-        ...numericColumns.map(col => ({
-            name: col,
-            dtype: 'float64',
-            type: 'numeric' as const,
-            nullCount: Math.floor(Math.random() * 50),
-            nullPercentage: Math.random() * 5,
-        })),
-        ...categoricalColumns.map(col => ({
-            name: col,
-            dtype: 'object',
-            type: 'categorical' as const,
-            nullCount: Math.floor(Math.random() * 20),
-            nullPercentage: Math.random() * 2,
-        })),
-    ];
-
-    // Generate correlation matrix
-    const correlationMatrix: CorrelationData[] = [];
-    numericColumns.forEach(x => {
-        numericColumns.forEach(y => {
-            correlationMatrix.push({
-                x,
-                y,
-                value: x === y ? 1 : Math.random() * 2 - 1, // -1 to 1
-            });
-        });
-    });
-
-    return {
-        numericStats,
-        categoricalStats,
-        columnTypes,
-        correlationMatrix,
-        numericColumns,
-        categoricalColumns,
-    };
-}
-
-// Generate histogram data for a column
-export function generateHistogramData(column: string): HistogramData[] {
-    const bins = ['0-10', '10-20', '20-30', '30-40', '40-50', '50-60', '60-70', '70-80', '80-90', '90-100'];
-    const total = 1000;
-
-    return bins.map(bin => {
-        const count = Math.floor(Math.random() * 200) + 20;
-        return {
-            bin,
-            count,
-            percentage: (count / total) * 100,
-        };
-    });
-}
-
-// Generate box plot data
-export function generateBoxPlotData(columns: string[]): BoxPlotData[] {
-    return columns.map(column => ({
-        column,
-        min: Math.random() * 10,
-        q1: Math.random() * 25 + 10,
-        median: Math.random() * 20 + 40,
-        q3: Math.random() * 20 + 60,
-        max: Math.random() * 20 + 80,
-        outliers: [Math.random() * 5, Math.random() * 100 + 95],
-    }));
-}
-
-// Generate category distribution
-export function generateCategoryData(column: string): CategoryData[] {
-    const categories = ['Kategori A', 'Kategori B', 'Kategori C', 'Kategori D', 'Diğer'];
-    const total = 1000;
-    let remaining = total;
-
-    return categories.map((name, index) => {
-        const isLast = index === categories.length - 1;
-        const value = isLast ? remaining : Math.floor(Math.random() * (remaining * 0.5)) + 50;
-        remaining -= value;
-        return {
-            name,
-            value,
-            percentage: (value / total) * 100,
-        };
-    });
-}
-
-// Generate scatter data
-export function generateScatterData(xColumn: string, yColumn: string): { x: number; y: number }[] {
-    return Array.from({ length: 100 }, () => ({
-        x: Math.random() * 100,
-        y: Math.random() * 100,
-    }));
-}
+import * as api from '@/lib/api';
 
 interface UseEDAReturn {
     edaData: EDAData | null;
@@ -140,7 +23,7 @@ interface UseEDAReturn {
     setSelectedCategoricalColumn: (col: string) => void;
     loadEDAData: () => Promise<void>;
     histogramData: HistogramData[];
-    boxPlotData: BoxPlotData[];
+    boxPlotData: BoxPlotData | null;
     categoryData: CategoryData[];
     scatterData: { x: number; y: number }[];
     scatterXColumn: string | null;
@@ -157,60 +40,143 @@ export function useEDA(): UseEDAReturn {
     const [scatterXColumn, setScatterXColumn] = useState<string | null>(null);
     const [scatterYColumn, setScatterYColumn] = useState<string | null>(null);
 
+    // Chart data from API
+    const [histogramData, setHistogramData] = useState<HistogramData[]>([]);
+    const [boxPlotData, setBoxPlotData] = useState<BoxPlotData | null>(null);
+    const [categoryData, setCategoryData] = useState<CategoryData[]>([]);
+
     const loadEDAData = useCallback(async () => {
         try {
             setIsLoading(true);
             setError(null);
 
-            // Simulate API call
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // Fetch from real API
+            const [summary, columnTypes, numericStats, categoricalStats, correlation] = await Promise.all([
+                api.getEDASummary(),
+                api.getColumnTypes(),
+                api.getNumericStats(),
+                api.getCategoricalStats(),
+                api.getCorrelation(),
+            ]);
 
-            // TODO: Replace with actual API call
-            const data = generateMockEDAData();
+            // Transform API response to EDAData format
+            const transformedColumnTypes: ColumnType[] = columnTypes.columns.map(col => ({
+                name: col.name,
+                dtype: col.dtype,
+                type: col.type,
+                nullCount: col.null_count,
+                nullPercentage: col.null_percentage,
+            }));
+
+            const transformedNumericStats: NumericStats[] = numericStats.stats.map(stat => ({
+                column: stat.column,
+                count: stat.count,
+                mean: stat.mean,
+                std: stat.std,
+                min: stat.min,
+                q25: stat.q25,
+                median: stat.median,
+                q75: stat.q75,
+                max: stat.max,
+            }));
+
+            const transformedCategoricalStats: CategoricalStats[] = categoricalStats.stats.map(stat => ({
+                column: stat.column,
+                count: stat.count,
+                unique: stat.unique,
+                top: stat.top || '',
+                frequency: stat.frequency,
+            }));
+
+            const transformedCorrelation: CorrelationData[] = correlation.correlation.map(item => ({
+                x: item.x,
+                y: item.y,
+                value: item.value,
+            }));
+
+            const data: EDAData = {
+                numericStats: transformedNumericStats,
+                categoricalStats: transformedCategoricalStats,
+                columnTypes: transformedColumnTypes,
+                correlationMatrix: transformedCorrelation,
+                numericColumns: summary.numeric_columns,
+                categoricalColumns: summary.categorical_columns,
+            };
+
             setEdaData(data);
 
             // Set default selections
-            if (data.numericColumns.length > 0) {
-                setSelectedNumericColumn(data.numericColumns[0]);
-                if (data.numericColumns.length > 1) {
-                    setScatterXColumn(data.numericColumns[0]);
-                    setScatterYColumn(data.numericColumns[1]);
+            if (summary.numeric_columns.length > 0) {
+                setSelectedNumericColumn(summary.numeric_columns[0]);
+                if (summary.numeric_columns.length > 1) {
+                    setScatterXColumn(summary.numeric_columns[0]);
+                    setScatterYColumn(summary.numeric_columns[1]);
                 }
             }
-            if (data.categoricalColumns.length > 0) {
-                setSelectedCategoricalColumn(data.categoricalColumns[0]);
+            if (summary.categorical_columns.length > 0) {
+                setSelectedCategoricalColumn(summary.categorical_columns[0]);
             }
         } catch (err) {
+            console.error('EDA Error:', err);
             setError(err instanceof Error ? err.message : 'EDA verisi yüklenirken hata oluştu');
         } finally {
             setIsLoading(false);
         }
     }, []);
 
+    // Load histogram when numeric column changes
+    useEffect(() => {
+        if (!selectedNumericColumn) return;
+
+        api.getHistogram(selectedNumericColumn)
+            .then(result => {
+                setHistogramData(result.data.map(d => ({
+                    bin: d.bin,
+                    count: d.count,
+                    percentage: d.percentage,
+                })));
+            })
+            .catch(console.error);
+    }, [selectedNumericColumn]);
+
+    // Load box plot when numeric column changes
+    useEffect(() => {
+        if (!selectedNumericColumn) return;
+
+        api.getBoxPlot(selectedNumericColumn)
+            .then(result => setBoxPlotData(result))
+            .catch(console.error);
+    }, [selectedNumericColumn]);
+
+    // Load category distribution when categorical column changes
+    useEffect(() => {
+        if (!selectedCategoricalColumn) return;
+
+        api.getCategoryDistribution(selectedCategoricalColumn)
+            .then(result => {
+                setCategoryData(result.data.map(d => ({
+                    name: d.name,
+                    value: d.value,
+                    percentage: d.percentage,
+                })));
+            })
+            .catch(console.error);
+    }, [selectedCategoricalColumn]);
+
     const setScatterColumns = useCallback((x: string, y: string) => {
         setScatterXColumn(x);
         setScatterYColumn(y);
     }, []);
 
-    // Memoized chart data
-    const histogramData = useMemo(() => {
-        if (!selectedNumericColumn) return [];
-        return generateHistogramData(selectedNumericColumn);
-    }, [selectedNumericColumn]);
 
-    const boxPlotData = useMemo(() => {
-        if (!edaData) return [];
-        return generateBoxPlotData(edaData.numericColumns);
-    }, [edaData]);
 
-    const categoryData = useMemo(() => {
-        if (!selectedCategoricalColumn) return [];
-        return generateCategoryData(selectedCategoricalColumn);
-    }, [selectedCategoricalColumn]);
-
+    // Scatter data (mock for now - would need API endpoint)
     const scatterData = useMemo(() => {
         if (!scatterXColumn || !scatterYColumn) return [];
-        return generateScatterData(scatterXColumn, scatterYColumn);
+        return Array.from({ length: 50 }, () => ({
+            x: Math.random() * 100,
+            y: Math.random() * 100,
+        }));
     }, [scatterXColumn, scatterYColumn]);
 
     return {

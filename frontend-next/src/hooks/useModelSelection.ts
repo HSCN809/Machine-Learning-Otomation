@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import {
     ProblemType,
     ModelInfo,
@@ -10,14 +10,13 @@ import {
     CLASSIFICATION_MODELS,
     REGRESSION_MODELS,
 } from '@/types/model-selection';
+import * as api from '@/lib/api';
 
-// Mock column info
-const MOCK_COLUMNS = [
-    { name: 'target', type: 'categorical' as const, uniqueValues: 2 },
-    { name: 'age', type: 'numeric' as const, uniqueValues: 80 },
-    { name: 'salary', type: 'numeric' as const, uniqueValues: 500 },
-    { name: 'department', type: 'categorical' as const, uniqueValues: 8 },
-];
+interface ColumnInfo {
+    name: string;
+    type: 'numeric' | 'categorical';
+    uniqueValues: number;
+}
 
 interface UseModelSelectionReturn {
     // State
@@ -29,7 +28,7 @@ interface UseModelSelectionReturn {
     trainingResults: TrainingResult[];
     isTraining: boolean;
     error: string | null;
-    columns: typeof MOCK_COLUMNS;
+    columns: ColumnInfo[];
 
     // Available models based on problem type
     availableModels: ModelInfo[];
@@ -42,6 +41,7 @@ interface UseModelSelectionReturn {
     canGoPrev: boolean;
 
     // Actions
+    loadColumns: () => Promise<void>;
     setTargetColumn: (column: string) => void;
     toggleModelSelection: (modelId: string) => void;
     updateModelParams: (modelId: string, params: Record<string, unknown>) => void;
@@ -58,8 +58,25 @@ export function useModelSelection(): UseModelSelectionReturn {
     const [trainingResults, setTrainingResults] = useState<TrainingResult[]>([]);
     const [isTraining, setIsTraining] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [columns, setColumns] = useState<ColumnInfo[]>([]);
 
-    const columns = MOCK_COLUMNS;
+    // Load columns from API
+    const loadColumns = useCallback(async () => {
+        try {
+            const columnTypes = await api.getColumnTypes();
+
+            const cols: ColumnInfo[] = columnTypes.columns.map(col => ({
+                name: col.name,
+                type: col.type === 'numeric' ? 'numeric' : 'categorical',
+                uniqueValues: col.unique_count,
+            }));
+
+            setColumns(cols);
+        } catch (err) {
+            console.error('Load columns error:', err);
+            setError(err instanceof Error ? err.message : 'Sütunlar yüklenirken hata oluştu');
+        }
+    }, []);
 
     // Available models based on problem type
     const availableModels = useMemo(() => {
@@ -100,17 +117,24 @@ export function useModelSelection(): UseModelSelectionReturn {
 
     const canGoPrev = currentStep > 0;
 
-    // Set target column and detect problem type
-    const setTargetColumn = useCallback((column: string) => {
+    // Set target column and detect problem type via API
+    const setTargetColumn = useCallback(async (column: string) => {
         setTargetColumnState(column);
+        setError(null);
 
-        // Auto-detect problem type based on column
-        const col = columns.find(c => c.name === column);
-        if (col) {
-            if (col.type === 'categorical' || col.uniqueValues <= 10) {
-                setProblemType('classification');
-            } else {
-                setProblemType('regression');
+        try {
+            // Use API to detect problem type
+            const result = await api.detectProblemType(column);
+            setProblemType(result.problem_type);
+        } catch (err) {
+            // Fallback to local detection
+            const col = columns.find(c => c.name === column);
+            if (col) {
+                if (col.type === 'categorical' || col.uniqueValues <= 10) {
+                    setProblemType('classification');
+                } else {
+                    setProblemType('regression');
+                }
             }
         }
 
@@ -138,75 +162,64 @@ export function useModelSelection(): UseModelSelectionReturn {
         }));
     }, []);
 
-    // Train models (mock implementation)
+    // Train models via API
     const trainModels = useCallback(async () => {
-        if (selectedModels.length === 0) return;
+        if (selectedModels.length === 0 || !targetColumn) return;
 
         try {
             setIsTraining(true);
             setError(null);
 
-            const results: TrainingResult[] = [];
+            // Call API to train models
+            const response = await api.trainModels(
+                targetColumn,
+                selectedModels,
+                0.2,
+                modelParams
+            );
 
-            for (const modelId of selectedModels) {
-                // Simulate training delay
-                await new Promise(resolve => setTimeout(resolve, 800));
-
-                const model = availableModels.find(m => m.id === modelId);
-                if (!model) continue;
-
-                // Generate mock metrics
-                const metrics: ModelMetrics = problemType === 'classification'
+            // Transform API response to TrainingResult format
+            const results: TrainingResult[] = response.results.map(result => {
+                const metrics: ModelMetrics = response.problem_type === 'classification'
                     ? {
-                        accuracy: 0.75 + Math.random() * 0.2,
-                        precision: 0.7 + Math.random() * 0.25,
-                        recall: 0.7 + Math.random() * 0.25,
-                        f1Score: 0.72 + Math.random() * 0.22,
-                        auc: 0.8 + Math.random() * 0.15,
+                        accuracy: result.metrics.accuracy || 0,
+                        precision: result.metrics.precision || 0,
+                        recall: result.metrics.recall || 0,
+                        f1Score: result.metrics.f1_score || 0,
+                        auc: result.metrics.auc,
                     }
                     : {
-                        mse: Math.random() * 100,
-                        rmse: Math.random() * 10,
-                        mae: Math.random() * 8,
-                        r2: 0.6 + Math.random() * 0.35,
+                        mse: result.metrics.mse || 0,
+                        rmse: result.metrics.rmse || 0,
+                        mae: result.metrics.mae || 0,
+                        r2: result.metrics.r2 || 0,
                     };
 
-                // Generate mock feature importance
-                const featureImportance: FeatureImportance[] = columns
-                    .filter(c => c.name !== targetColumn)
-                    .map(c => ({
-                        feature: c.name,
-                        importance: Math.random(),
-                    }))
-                    .sort((a, b) => b.importance - a.importance);
+                const featureImportance: FeatureImportance[] = result.feature_importance.map(fi => ({
+                    feature: fi.feature,
+                    importance: fi.importance,
+                }));
 
-                // Generate mock confusion matrix for classification
-                const confusionMatrix = problemType === 'classification'
-                    ? [
-                        [Math.floor(Math.random() * 100) + 50, Math.floor(Math.random() * 30)],
-                        [Math.floor(Math.random() * 30), Math.floor(Math.random() * 100) + 50],
-                    ]
-                    : undefined;
-
-                results.push({
-                    modelId,
-                    modelName: model.name,
+                return {
+                    modelId: result.model_id,
+                    modelName: result.model_name,
                     metrics,
                     featureImportance,
-                    confusionMatrix,
-                    trainingTime: Math.random() * 5 + 0.5,
+                    confusionMatrix: result.confusion_matrix || undefined,
+                    trainingTime: result.training_time,
                     timestamp: new Date(),
-                });
-            }
+                };
+            });
 
             setTrainingResults(results);
             nextStep(); // Go to results step
         } catch (err) {
+            console.error('Training error:', err);
             setError(err instanceof Error ? err.message : 'Eğitim sırasında hata oluştu');
         } finally {
             setIsTraining(false);
         }
-    }, [selectedModels, availableModels, problemType, targetColumn, columns, nextStep]);
+    }, [selectedModels, targetColumn, modelParams, nextStep]);
 
     // Reset all
     const resetAll = useCallback(() => {
@@ -235,6 +248,7 @@ export function useModelSelection(): UseModelSelectionReturn {
         prevStep,
         canGoNext,
         canGoPrev,
+        loadColumns,
         setTargetColumn,
         toggleModelSelection,
         updateModelParams,

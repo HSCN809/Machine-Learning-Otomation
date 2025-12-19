@@ -1,10 +1,9 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import {
     PreprocessingStep,
     ProcessingHistory,
-    PreprocessingState,
     ColumnInfo,
     MissingValueConfig,
     OutlierConfig,
@@ -12,6 +11,7 @@ import {
     ScalingConfig,
     FeatureConfig,
 } from '@/types/preprocessing';
+import * as api from '@/lib/api';
 
 // Preprocessing steps definition
 export const PREPROCESSING_STEPS: PreprocessingStep[] = [
@@ -22,18 +22,6 @@ export const PREPROCESSING_STEPS: PreprocessingStep[] = [
     { id: '5', name: 'Scaling', icon: '📏', key: 'scaling', description: 'Sayısal değişkenleri ölçeklendir' },
     { id: '6', name: 'Summary', icon: '📋', key: 'summary', description: 'İşlemleri gözden geçir' },
 ];
-
-// Mock column info generator
-function generateMockColumnInfo(): ColumnInfo[] {
-    return [
-        { name: 'age', type: 'numeric', dtype: 'int64', missingCount: 50, missingPercentage: 5, uniqueCount: 80 },
-        { name: 'salary', type: 'numeric', dtype: 'float64', missingCount: 20, missingPercentage: 2, uniqueCount: 500 },
-        { name: 'experience', type: 'numeric', dtype: 'int64', missingCount: 0, missingPercentage: 0, uniqueCount: 30 },
-        { name: 'department', type: 'categorical', dtype: 'object', missingCount: 5, missingPercentage: 0.5, uniqueCount: 8 },
-        { name: 'gender', type: 'categorical', dtype: 'object', missingCount: 0, missingPercentage: 0, uniqueCount: 2 },
-        { name: 'status', type: 'categorical', dtype: 'object', missingCount: 10, missingPercentage: 1, uniqueCount: 4 },
-    ];
-}
 
 interface UsePreprocessingReturn {
     // State
@@ -52,13 +40,14 @@ interface UsePreprocessingReturn {
     canGoPrev: boolean;
 
     // Actions
+    loadColumns: () => Promise<void>;
     applyMissingValues: (config: MissingValueConfig) => Promise<void>;
     applyOutliers: (config: OutlierConfig) => Promise<void>;
     applyEncoding: (config: EncodingConfig) => Promise<void>;
     applyScaling: (config: ScalingConfig) => Promise<void>;
     applyFeatureEngineering: (config: FeatureConfig) => Promise<void>;
     undoLastAction: () => void;
-    resetAll: () => void;
+    resetAll: () => Promise<void>;
 
     // Helpers
     numericColumns: ColumnInfo[];
@@ -70,9 +59,33 @@ export function usePreprocessing(): UsePreprocessingReturn {
     const [currentStep, setCurrentStep] = useState(0);
     const [completedSteps, setCompletedSteps] = useState<number[]>([]);
     const [history, setHistory] = useState<ProcessingHistory[]>([]);
-    const [columns, setColumns] = useState<ColumnInfo[]>(generateMockColumnInfo());
+    const [columns, setColumns] = useState<ColumnInfo[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    // Load columns from API
+    const loadColumns = useCallback(async () => {
+        try {
+            setIsLoading(true);
+            const columnTypes = await api.getColumnTypes();
+
+            const cols: ColumnInfo[] = columnTypes.columns.map(col => ({
+                name: col.name,
+                type: col.type === 'numeric' ? 'numeric' : 'categorical',
+                dtype: col.dtype,
+                missingCount: col.null_count,
+                missingPercentage: col.null_percentage,
+                uniqueCount: col.unique_count,
+            }));
+
+            setColumns(cols);
+        } catch (err) {
+            console.error('Load columns error:', err);
+            setError(err instanceof Error ? err.message : 'Sütunlar yüklenirken hata oluştu');
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
 
     // Navigation
     const goToStep = useCallback((step: number) => {
@@ -109,14 +122,17 @@ export function usePreprocessing(): UsePreprocessingReturn {
         setHistory(prev => [...prev, newEntry]);
     }, []);
 
-    // Actions
+    // Actions - connected to API
     const applyMissingValues = useCallback(async (config: MissingValueConfig) => {
         try {
             setIsLoading(true);
             setError(null);
 
-            // Simulate API call
-            await new Promise(resolve => setTimeout(resolve, 500));
+            const result = await api.applyMissingValues(
+                config.method,
+                config.columns,
+                config.fillValue !== undefined ? String(config.fillValue) : undefined
+            );
 
             addToHistory({
                 stepKey: 'missing_values',
@@ -124,28 +140,28 @@ export function usePreprocessing(): UsePreprocessingReturn {
                 columns: config.columns,
                 method: config.method,
                 params: config.fillValue ? { fillValue: config.fillValue } : undefined,
-                affectedRows: Math.floor(Math.random() * 100) + 10,
+                affectedRows: result.affected_rows || 0,
             });
 
-            // Update columns to reflect changes
-            setColumns(prev => prev.map(col =>
-                config.columns.includes(col.name)
-                    ? { ...col, missingCount: 0, missingPercentage: 0 }
-                    : col
-            ));
+            // Refresh columns
+            await loadColumns();
         } catch (err) {
             setError(err instanceof Error ? err.message : 'İşlem sırasında hata oluştu');
         } finally {
             setIsLoading(false);
         }
-    }, [addToHistory]);
+    }, [addToHistory, loadColumns]);
 
     const applyOutliers = useCallback(async (config: OutlierConfig) => {
         try {
             setIsLoading(true);
             setError(null);
 
-            await new Promise(resolve => setTimeout(resolve, 500));
+            const result = await api.applyOutliers(
+                config.method,
+                config.columns,
+                config.threshold
+            );
 
             addToHistory({
                 stepKey: 'outliers',
@@ -153,21 +169,27 @@ export function usePreprocessing(): UsePreprocessingReturn {
                 columns: config.columns,
                 method: config.method,
                 params: config.threshold ? { threshold: config.threshold } : undefined,
-                affectedRows: Math.floor(Math.random() * 50) + 5,
+                affectedRows: result.affected_rows || 0,
             });
+
+            await loadColumns();
         } catch (err) {
             setError(err instanceof Error ? err.message : 'İşlem sırasında hata oluştu');
         } finally {
             setIsLoading(false);
         }
-    }, [addToHistory]);
+    }, [addToHistory, loadColumns]);
 
     const applyEncoding = useCallback(async (config: EncodingConfig) => {
         try {
             setIsLoading(true);
             setError(null);
 
-            await new Promise(resolve => setTimeout(resolve, 500));
+            const result = await api.applyEncoding(
+                config.method,
+                config.columns,
+                config.dropFirst
+            );
 
             addToHistory({
                 stepKey: 'encoding',
@@ -177,25 +199,20 @@ export function usePreprocessing(): UsePreprocessingReturn {
                 params: { dropFirst: config.dropFirst },
             });
 
-            // Update column types after encoding
-            setColumns(prev => prev.map(col =>
-                config.columns.includes(col.name)
-                    ? { ...col, type: 'numeric' as const, dtype: 'int64' }
-                    : col
-            ));
+            await loadColumns();
         } catch (err) {
             setError(err instanceof Error ? err.message : 'İşlem sırasında hata oluştu');
         } finally {
             setIsLoading(false);
         }
-    }, [addToHistory]);
+    }, [addToHistory, loadColumns]);
 
     const applyScaling = useCallback(async (config: ScalingConfig) => {
         try {
             setIsLoading(true);
             setError(null);
 
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await api.applyScaling(config.method, config.columns);
 
             addToHistory({
                 stepKey: 'scaling',
@@ -204,20 +221,21 @@ export function usePreprocessing(): UsePreprocessingReturn {
                 method: config.method,
                 params: config.featureRange ? { featureRange: config.featureRange } : undefined,
             });
+
+            await loadColumns();
         } catch (err) {
             setError(err instanceof Error ? err.message : 'İşlem sırasında hata oluştu');
         } finally {
             setIsLoading(false);
         }
-    }, [addToHistory]);
+    }, [addToHistory, loadColumns]);
 
     const applyFeatureEngineering = useCallback(async (config: FeatureConfig) => {
         try {
             setIsLoading(true);
             setError(null);
 
-            await new Promise(resolve => setTimeout(resolve, 500));
-
+            // For now, just add to history - API doesn't have full feature engineering yet
             addToHistory({
                 stepKey: 'feature_engineering',
                 action: 'create_feature',
@@ -227,36 +245,35 @@ export function usePreprocessing(): UsePreprocessingReturn {
                 params: { expression: config.expression },
             });
 
-            // Add new column
-            setColumns(prev => [...prev, {
-                name: config.newColumnName,
-                type: 'numeric',
-                dtype: 'float64',
-                missingCount: 0,
-                missingPercentage: 0,
-                uniqueCount: 100,
-            }]);
+            await loadColumns();
         } catch (err) {
             setError(err instanceof Error ? err.message : 'İşlem sırasında hata oluştu');
         } finally {
             setIsLoading(false);
         }
-    }, [addToHistory]);
+    }, [addToHistory, loadColumns]);
 
     const undoLastAction = useCallback(() => {
         if (history.length > 0) {
             setHistory(prev => prev.slice(0, -1));
-            // In real implementation, would also revert data changes
         }
     }, [history]);
 
-    const resetAll = useCallback(() => {
-        setHistory([]);
-        setCompletedSteps([]);
-        setCurrentStep(0);
-        setColumns(generateMockColumnInfo());
-        setError(null);
-    }, []);
+    const resetAll = useCallback(async () => {
+        try {
+            setIsLoading(true);
+            await api.resetPreprocessing();
+            setHistory([]);
+            setCompletedSteps([]);
+            setCurrentStep(0);
+            await loadColumns();
+            setError(null);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Sıfırlama sırasında hata oluştu');
+        } finally {
+            setIsLoading(false);
+        }
+    }, [loadColumns]);
 
     // Memoized column filters
     const numericColumns = useMemo(() =>
@@ -280,6 +297,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
         prevStep,
         canGoNext,
         canGoPrev,
+        loadColumns,
         applyMissingValues,
         applyOutliers,
         applyEncoding,

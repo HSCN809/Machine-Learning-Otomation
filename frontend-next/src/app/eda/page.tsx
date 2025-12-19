@@ -11,6 +11,7 @@ import {
     CorrelationMatrix,
     CategoryDistribution,
 } from '@/components/eda';
+import { NoDataWarning } from '@/components/common';
 import { useEDA } from '@/hooks/useEDA';
 import { theme } from '@/styles/theme';
 import { Loader2, BarChart3, TrendingUp, GitBranch, Layers } from 'lucide-react';
@@ -85,11 +86,12 @@ export default function EDAPage() {
                         </div>
                     )}
 
-                    {/* Error State */}
-                    {error && (
-                        <div className="p-4 rounded-xl border border-red-500/30 bg-red-500/10">
-                            <p className="text-red-400">❌ {error}</p>
-                        </div>
+                    {/* No Data Warning */}
+                    {!isLoading && !edaData && (
+                        <NoDataWarning
+                            title="Veri Yüklenmedi"
+                            description="Keşifsel veri analizi yapabilmek için önce veri yüklemeniz gerekmektedir."
+                        />
                     )}
 
                     {/* Content */}
@@ -105,8 +107,8 @@ export default function EDAPage() {
                                             key={tab.id}
                                             onClick={() => setActiveTab(tab.id)}
                                             className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 ${isActive
-                                                    ? 'text-white'
-                                                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                                                ? 'text-white'
+                                                : 'text-gray-400 hover:text-white hover:bg-white/5'
                                                 }`}
                                             style={
                                                 isActive
@@ -162,7 +164,9 @@ export default function EDAPage() {
                                                 column={selectedNumericColumn}
                                             />
                                         )}
-                                        <BoxPlotChart data={boxPlotData} />
+                                        {selectedNumericColumn && boxPlotData && (
+                                            <BoxPlotChart data={boxPlotData} column={selectedNumericColumn} />
+                                        )}
                                     </div>
                                 </div>
                             )}

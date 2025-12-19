@@ -5,17 +5,18 @@ import {
     UploadedFile,
     DataSummary,
     ValidationReport,
+    ValidationIssue,
     UploadStatus,
     SampleDataset
 } from '@/types/data-upload';
+import * as api from '@/lib/api';
 
-// Sample datasets available
+// Sample datasets available (matches backend)
 export const SAMPLE_DATASETS: SampleDataset[] = [
-    { id: 'tips', name: 'Tips', description: 'Restoran bahşiş verileri', emoji: '🍽️', rows: 244, columns: 7 },
     { id: 'titanic', name: 'Titanic', description: 'Titanic yolcu verileri', emoji: '🚢', rows: 891, columns: 12 },
-    { id: 'iris', name: 'Iris', description: 'Çiçek türleri verileri', emoji: '🌸', rows: 150, columns: 5 },
+    { id: 'iris', name: 'Iris', description: 'Çiçek türleri verileri', emoji: '🌸', rows: 150, columns: 6 },
     { id: 'diamonds', name: 'Diamonds', description: 'Elmas özellikleri', emoji: '💎', rows: 53940, columns: 10 },
-    { id: 'penguins', name: 'Penguins', description: 'Penguen türleri', emoji: '🐧', rows: 344, columns: 7 },
+    { id: 'planets', name: 'Planets', description: 'Gezegen verileri', emoji: '🪐', rows: 1000, columns: 6 },
 ];
 
 interface UseDataUploadReturn {
@@ -41,7 +42,16 @@ export function useDataUpload(): UseDataUploadReturn {
     const [dataSummary, setDataSummary] = useState<DataSummary | null>(null);
     const [validationReport, setValidationReport] = useState<ValidationReport | null>(null);
 
-    const reset = useCallback(() => {
+    const reset = useCallback(async () => {
+        // Clear backend session
+        try {
+            await api.resetUpload();
+        } catch (err) {
+            // Ignore errors when clearing - session may not exist
+            console.log('Reset session:', err);
+        }
+
+        // Clear frontend state
         setStatus('idle');
         setProgress(0);
         setError(null);
@@ -56,10 +66,10 @@ export function useDataUpload(): UseDataUploadReturn {
             setStatus('uploading');
 
             // Validate file type
-            const validTypes = ['.csv', '.xlsx', '.xls'];
+            const validTypes = ['.csv', '.xlsx', '.xls', '.json'];
             const fileExt = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
             if (!validTypes.includes(fileExt)) {
-                throw new Error(`Desteklenmeyen dosya formatı: ${fileExt}. Desteklenen: CSV, Excel`);
+                throw new Error(`Desteklenmeyen dosya formatı: ${fileExt}. Desteklenen: CSV, Excel, JSON`);
             }
 
             // Validate file size (max 200MB)
@@ -75,58 +85,78 @@ export function useDataUpload(): UseDataUploadReturn {
                 type: file.type,
             });
 
-            // Simulate upload progress
-            for (let i = 0; i <= 100; i += 10) {
-                setProgress(i);
-                await new Promise(resolve => setTimeout(resolve, 100));
-            }
+            // Upload to API
+            setProgress(30);
+            const uploadResponse = await api.uploadFile(file);
+            setProgress(60);
 
             setStatus('validating');
 
-            // TODO: Replace with actual API call
-            // const response = await api.uploadData(file);
+            // Get summary, preview, and validation from backend
+            const [summary, preview, validation] = await Promise.all([
+                api.getDataSummary(),
+                api.getDataPreview(5),
+                api.getDataValidation(),
+            ]);
+            setProgress(100);
 
-            // Mock validation for now
-            await new Promise(resolve => setTimeout(resolve, 500));
-
-            // Mock data summary
+            // Transform to DataSummary
             setDataSummary({
-                shape: { rows: 1000, columns: 10 },
-                columns: [],
-                missingValues: { total: 50, percentage: 0.5 },
-                duplicateRows: 5,
-                preview: [],
+                shape: { rows: summary.rows, columns: summary.columns },
+                columns: summary.column_info.map(col => ({
+                    name: col.name,
+                    type: (summary.numeric_columns.includes(col.name) ? 'numeric' : 'categorical') as 'numeric' | 'categorical' | 'datetime' | 'text',
+                    dtype: col.dtype,
+                    missingCount: col.missing_count,
+                    missingPercentage: col.missing_percentage,
+                    uniqueCount: col.unique_count,
+                })),
+                missingValues: {
+                    total: summary.missing_total,
+                    percentage: summary.rows > 0 ? (summary.missing_total / (summary.rows * summary.columns)) * 100 : 0,
+                },
+                duplicateRows: summary.duplicate_rows,
+                preview: preview.data,
+            });
+
+            // Build validation report from backend response
+            const issues: ValidationReport['issuesBySeverity'] = {
+                critical: [],
+                warning: [],
+                info: [],
+            };
+
+            // Categorize issues by severity
+            validation.issues.forEach((issue) => {
+                const validationIssue: ValidationIssue = {
+                    id: issue.id,
+                    severity: issue.severity,
+                    type: issue.type as ValidationIssue['type'],
+                    column: issue.column,
+                    description: issue.description,
+                    suggestion: issue.suggestion,
+                    llmSuggestion: issue.llmSuggestion,
+                    priority: issue.priority as ValidationIssue['priority'],
+                };
+
+                if (issue.severity === 'critical') {
+                    issues.critical.push(validationIssue);
+                } else if (issue.severity === 'warning') {
+                    issues.warning.push(validationIssue);
+                } else {
+                    issues.info.push(validationIssue);
+                }
             });
 
             setValidationReport({
-                isValid: true,
-                totalIssues: 2,
-                issuesBySeverity: {
-                    critical: [],
-                    warning: [
-                        {
-                            id: '1',
-                            severity: 'warning',
-                            type: 'missing_values',
-                            column: 'age',
-                            description: 'age sütununda %5 eksik değer var',
-                            suggestion: 'Ortalama veya medyan ile doldurulabilir',
-                        },
-                    ],
-                    info: [
-                        {
-                            id: '2',
-                            severity: 'info',
-                            type: 'duplicate_rows',
-                            description: '5 tekrarlayan satır tespit edildi',
-                            suggestion: 'Tekrarlayan satırları kaldırabilirsiniz',
-                        },
-                    ],
-                },
+                isValid: validation.is_valid,
+                totalIssues: validation.issues.length,
+                issuesBySeverity: issues,
             });
 
             setStatus('success');
         } catch (err) {
+            console.error('Upload error:', err);
             setError(err instanceof Error ? err.message : 'Yükleme sırasında hata oluştu');
             setStatus('error');
         }
@@ -142,39 +172,78 @@ export function useDataUpload(): UseDataUploadReturn {
                 throw new Error(`Veri seti bulunamadı: ${datasetId}`);
             }
 
-            // Simulate loading
-            for (let i = 0; i <= 100; i += 20) {
-                setProgress(i);
-                await new Promise(resolve => setTimeout(resolve, 100));
-            }
+            setProgress(30);
+
+            // Call backend API to load sample dataset
+            const loadResponse = await api.loadSampleDataset(datasetId);
+            setProgress(60);
 
             setStatus('validating');
 
-            // TODO: Replace with actual API call
-            // const response = await api.loadSampleDataset(datasetId);
+            // Get summary and validation from backend
+            const [summary, validation] = await Promise.all([
+                api.getDataSummary(),
+                api.getDataValidation(),
+            ]);
+            setProgress(100);
 
-            await new Promise(resolve => setTimeout(resolve, 300));
-
+            // Transform to DataSummary
             setDataSummary({
-                shape: { rows: dataset.rows, columns: dataset.columns },
-                columns: [],
-                missingValues: { total: 0, percentage: 0 },
-                duplicateRows: 0,
+                shape: { rows: summary.rows, columns: summary.columns },
+                columns: summary.column_info.map(col => ({
+                    name: col.name,
+                    type: (summary.numeric_columns.includes(col.name) ? 'numeric' : 'categorical') as 'numeric' | 'categorical' | 'datetime' | 'text',
+                    dtype: col.dtype,
+                    missingCount: col.missing_count,
+                    missingPercentage: col.missing_percentage,
+                    uniqueCount: col.unique_count,
+                })),
+                missingValues: {
+                    total: summary.missing_total,
+                    percentage: summary.rows > 0 ? (summary.missing_total / (summary.rows * summary.columns)) * 100 : 0,
+                },
+                duplicateRows: summary.duplicate_rows,
                 preview: [],
             });
 
+            // Build validation report from backend response
+            const issues: ValidationReport['issuesBySeverity'] = {
+                critical: [],
+                warning: [],
+                info: [],
+            };
+
+            // Categorize issues by severity
+            validation.issues.forEach((issue) => {
+                const validationIssue: ValidationIssue = {
+                    id: issue.id,
+                    severity: issue.severity,
+                    type: issue.type as ValidationIssue['type'],
+                    column: issue.column,
+                    description: issue.description,
+                    suggestion: issue.suggestion,
+                    llmSuggestion: issue.llmSuggestion,
+                    priority: issue.priority as ValidationIssue['priority'],
+                };
+
+                if (issue.severity === 'critical') {
+                    issues.critical.push(validationIssue);
+                } else if (issue.severity === 'warning') {
+                    issues.warning.push(validationIssue);
+                } else {
+                    issues.info.push(validationIssue);
+                }
+            });
+
             setValidationReport({
-                isValid: true,
-                totalIssues: 0,
-                issuesBySeverity: {
-                    critical: [],
-                    warning: [],
-                    info: [],
-                },
+                isValid: validation.is_valid,
+                totalIssues: validation.issues.length,
+                issuesBySeverity: issues,
             });
 
             setStatus('success');
         } catch (err) {
+            console.error('Sample dataset error:', err);
             setError(err instanceof Error ? err.message : 'Veri seti yüklenirken hata oluştu');
             setStatus('error');
         }

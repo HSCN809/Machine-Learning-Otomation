@@ -58,16 +58,14 @@ export default function DataUploadPage() {
                             </p>
                         </div>
 
-                        {/* Reset button */}
-                        {status !== 'idle' && (
-                            <button
-                                onClick={reset}
-                                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-gray-400 hover:text-white hover:bg-white/5 transition-all"
-                            >
-                                <RefreshCw className="w-4 h-4" />
-                                <span>Sıfırla</span>
-                            </button>
-                        )}
+                        {/* Reset button - always visible */}
+                        <button
+                            onClick={reset}
+                            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-gray-400 hover:text-white hover:bg-white/5 transition-all"
+                        >
+                            <RefreshCw className="w-4 h-4" />
+                            <span>Sıfırla</span>
+                        </button>
                     </div>
 
                     {/* Upload section - only show when idle or on error */}
