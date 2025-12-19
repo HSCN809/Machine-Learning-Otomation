@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sidebar, Header } from '@/components/layout';
 import {
     TargetSelector,
@@ -13,6 +13,7 @@ import {
     ModelComparison,
     ResultsExport,
 } from '@/components/model-selection';
+import { NoDataWarning } from '@/components/common';
 import { useModelSelection } from '@/hooks/useModelSelection';
 import { theme } from '@/styles/theme';
 import { ChevronLeft, ChevronRight, Loader2, Play, RotateCcw } from 'lucide-react';
@@ -44,6 +45,7 @@ export default function ModelSelectionPage() {
         prevStep,
         canGoNext,
         canGoPrev,
+        loadColumns,
         setTargetColumn,
         toggleModelSelection,
         updateModelParams,
@@ -51,6 +53,12 @@ export default function ModelSelectionPage() {
         resetAll,
     } = useModelSelection();
 
+    // Load columns on mount
+    useEffect(() => {
+        loadColumns();
+    }, [loadColumns]);
+
+    const hasData = columns.length > 0;
     const currentStepInfo = STEPS[currentStep];
 
     // Render current step content
@@ -177,103 +185,116 @@ export default function ModelSelectionPage() {
                         </p>
                     </div>
 
-                    {/* Step Progress */}
-                    <div className="flex items-center gap-2">
-                        {STEPS.map((step, index) => (
-                            <div key={step.id} className="flex items-center">
-                                <button
-                                    onClick={() => index <= currentStep && goToStep(index)}
-                                    disabled={index > currentStep}
-                                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${index === currentStep
-                                            ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50'
-                                            : index < currentStep
-                                                ? 'bg-green-500/10 text-green-400 cursor-pointer hover:bg-green-500/20'
-                                                : 'bg-white/5 text-gray-500 cursor-not-allowed'
-                                        }`}
-                                >
-                                    <span>{step.icon}</span>
-                                    <span className="hidden sm:inline">{step.name}</span>
-                                </button>
-                                {index < STEPS.length - 1 && (
-                                    <ChevronRight className="w-5 h-5 text-gray-600 mx-1" />
-                                )}
-                            </div>
-                        ))}
-                    </div>
-
-                    {/* Error display */}
-                    {error && (
-                        <div className="p-4 rounded-xl border border-red-500/30 bg-red-500/10">
-                            <p className="text-red-400">❌ {error}</p>
-                        </div>
+                    {/* No Data Warning */}
+                    {!hasData && (
+                        <NoDataWarning
+                            title="Veri Yüklenmedi"
+                            description="Model seçimi ve eğitimi yapabilmek için önce veri yüklemeniz gerekmektedir."
+                        />
                     )}
 
-                    {/* Step content */}
-                    <div
-                        className="p-6 rounded-2xl border border-white/10"
-                        style={{
-                            background: 'linear-gradient(135deg, rgba(17, 24, 39, 0.6) 0%, rgba(31, 41, 55, 0.4) 100%)',
-                        }}
-                    >
-                        {/* Step header */}
-                        <div className="flex items-center gap-3 mb-6 pb-4 border-b border-white/10">
-                            <span className="text-3xl">{currentStepInfo?.icon}</span>
-                            <h2 className="text-xl font-bold text-white">{currentStepInfo?.name}</h2>
-                        </div>
-
-                        {/* Content */}
-                        {renderStepContent()}
-
-                        {/* Navigation */}
-                        <div className="flex items-center justify-between pt-6 mt-6 border-t border-white/10">
+                    {/* Content - only show when data is loaded */}
+                    {hasData && (
+                        <>
+                            {/* Step Progress */}
                             <div className="flex items-center gap-2">
-                                <button
-                                    onClick={prevStep}
-                                    disabled={!canGoPrev || isTraining}
-                                    className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-white hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                                >
-                                    <ChevronLeft className="w-4 h-4" />
-                                    Geri
-                                </button>
-                                <button
-                                    onClick={resetAll}
-                                    disabled={isTraining}
-                                    className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-gray-400 hover:text-white hover:bg-white/5 transition-all"
-                                >
-                                    <RotateCcw className="w-4 h-4" />
-                                </button>
+                                {STEPS.map((step, index) => (
+                                    <div key={step.id} className="flex items-center">
+                                        <button
+                                            onClick={() => index <= currentStep && goToStep(index)}
+                                            disabled={index > currentStep}
+                                            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${index === currentStep
+                                                ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50'
+                                                : index < currentStep
+                                                    ? 'bg-green-500/10 text-green-400 cursor-pointer hover:bg-green-500/20'
+                                                    : 'bg-white/5 text-gray-500 cursor-not-allowed'
+                                                }`}
+                                        >
+                                            <span>{step.icon}</span>
+                                            <span className="hidden sm:inline">{step.name}</span>
+                                        </button>
+                                        {index < STEPS.length - 1 && (
+                                            <ChevronRight className="w-5 h-5 text-gray-600 mx-1" />
+                                        )}
+                                    </div>
+                                ))}
                             </div>
 
-                            {currentStep < 3 && (
-                                <button
-                                    onClick={nextStep}
-                                    disabled={!canGoNext || isTraining}
-                                    className="flex items-center gap-2 px-6 py-2 rounded-xl font-medium text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105"
-                                    style={{
-                                        background: canGoNext && !isTraining ? theme.gradients.primary : 'rgba(255,255,255,0.1)',
-                                        boxShadow: canGoNext && !isTraining ? theme.glow.cyan : undefined,
-                                    }}
-                                >
-                                    İleri
-                                    <ChevronRight className="w-4 h-4" />
-                                </button>
+                            {/* Error display */}
+                            {error && (
+                                <div className="p-4 rounded-xl border border-red-500/30 bg-red-500/10">
+                                    <p className="text-red-400">❌ {error}</p>
+                                </div>
                             )}
 
-                            {currentStep === 3 && !isTraining && trainingResults.length === 0 && (
-                                <button
-                                    onClick={trainModels}
-                                    className="flex items-center gap-2 px-6 py-2 rounded-xl font-medium text-white transition-all hover:scale-105"
-                                    style={{
-                                        background: theme.gradients.primary,
-                                        boxShadow: theme.glow.cyan,
-                                    }}
-                                >
-                                    <Play className="w-4 h-4" />
-                                    Eğit
-                                </button>
-                            )}
-                        </div>
-                    </div>
+                            {/* Step content */}
+                            <div
+                                className="p-6 rounded-2xl border border-white/10"
+                                style={{
+                                    background: 'linear-gradient(135deg, rgba(17, 24, 39, 0.6) 0%, rgba(31, 41, 55, 0.4) 100%)',
+                                }}
+                            >
+                                {/* Step header */}
+                                <div className="flex items-center gap-3 mb-6 pb-4 border-b border-white/10">
+                                    <span className="text-3xl">{currentStepInfo?.icon}</span>
+                                    <h2 className="text-xl font-bold text-white">{currentStepInfo?.name}</h2>
+                                </div>
+
+                                {/* Content */}
+                                {renderStepContent()}
+
+                                {/* Navigation */}
+                                <div className="flex items-center justify-between pt-6 mt-6 border-t border-white/10">
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={prevStep}
+                                            disabled={!canGoPrev || isTraining}
+                                            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-white hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                        >
+                                            <ChevronLeft className="w-4 h-4" />
+                                            Geri
+                                        </button>
+                                        <button
+                                            onClick={resetAll}
+                                            disabled={isTraining}
+                                            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-gray-400 hover:text-white hover:bg-white/5 transition-all"
+                                        >
+                                            <RotateCcw className="w-4 h-4" />
+                                        </button>
+                                    </div>
+
+                                    {currentStep < 3 && (
+                                        <button
+                                            onClick={nextStep}
+                                            disabled={!canGoNext || isTraining}
+                                            className="flex items-center gap-2 px-6 py-2 rounded-xl font-medium text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105"
+                                            style={{
+                                                background: canGoNext && !isTraining ? theme.gradients.primary : 'rgba(255,255,255,0.1)',
+                                                boxShadow: canGoNext && !isTraining ? theme.glow.cyan : undefined,
+                                            }}
+                                        >
+                                            İleri
+                                            <ChevronRight className="w-4 h-4" />
+                                        </button>
+                                    )}
+
+                                    {currentStep === 3 && !isTraining && trainingResults.length === 0 && (
+                                        <button
+                                            onClick={trainModels}
+                                            className="flex items-center gap-2 px-6 py-2 rounded-xl font-medium text-white transition-all hover:scale-105"
+                                            style={{
+                                                background: theme.gradients.primary,
+                                                boxShadow: theme.glow.cyan,
+                                            }}
+                                        >
+                                            <Play className="w-4 h-4" />
+                                            Eğit
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        </>
+                    )}
                 </main>
             </div>
         </div>

@@ -139,68 +139,74 @@ export default function PreprocessingPage() {
                         </p>
                     </div>
 
-                    {/* Step Progress */}
-                    <StepProgress
-                        steps={PREPROCESSING_STEPS}
-                        currentStep={currentStep}
-                        completedSteps={completedSteps}
-                        onStepClick={goToStep}
-                    />
-
-                    {/* Error display */}
-                    {error && (
-                        <div className="p-4 rounded-xl border border-red-500/30 bg-red-500/10">
-                            <p className="text-red-400">❌ {error}</p>
-                        </div>
+                    {/* No Data Warning */}
+                    {!isLoading && !hasData && (
+                        <NoDataWarning
+                            title="Veri Yüklenmedi"
+                            description="Veri ön işleme yapabilmek için önce veri yüklemeniz gerekmektedir."
+                        />
                     )}
 
-                    {/* Main content area */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        {/* Step content */}
-                        <div className="lg:col-span-2">
-                            <div
-                                className="p-6 rounded-2xl border border-white/10"
-                                style={{
-                                    background: 'linear-gradient(135deg, rgba(17, 24, 39, 0.6) 0%, rgba(31, 41, 55, 0.4) 100%)',
-                                }}
-                            >
-                                {/* Step header */}
-                                <div className="flex items-center gap-3 mb-6 pb-4 border-b border-white/10">
-                                    <span className="text-3xl">{currentStepInfo?.icon}</span>
-                                    <div>
-                                        <h2 className="text-xl font-bold text-white">{currentStepInfo?.name}</h2>
-                                        <p className="text-sm text-gray-400">{currentStepInfo?.description}</p>
+                    {/* Content - only show when data is loaded */}
+                    {hasData && (
+                        <>
+                            {/* Step Progress */}
+                            <StepProgress
+                                steps={PREPROCESSING_STEPS}
+                                currentStep={currentStep}
+                                completedSteps={completedSteps}
+                                onStepClick={goToStep}
+                            />
+
+                            {/* Main content area */}
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                {/* Step content */}
+                                <div className="lg:col-span-2">
+                                    <div
+                                        className="p-6 rounded-2xl border border-white/10"
+                                        style={{
+                                            background: 'linear-gradient(135deg, rgba(17, 24, 39, 0.6) 0%, rgba(31, 41, 55, 0.4) 100%)',
+                                        }}
+                                    >
+                                        {/* Step header */}
+                                        <div className="flex items-center gap-3 mb-6 pb-4 border-b border-white/10">
+                                            <span className="text-3xl">{currentStepInfo?.icon}</span>
+                                            <div>
+                                                <h2 className="text-xl font-bold text-white">{currentStepInfo?.name}</h2>
+                                                <p className="text-sm text-gray-400">{currentStepInfo?.description}</p>
+                                            </div>
+                                        </div>
+
+                                        {/* Step content */}
+                                        {renderStepContent()}
+
+                                        {/* Navigation */}
+                                        {!isLastStep && (
+                                            <StepNavigation
+                                                onPrev={prevStep}
+                                                onNext={nextStep}
+                                                onSkip={nextStep}
+                                                onReset={resetAll}
+                                                canGoPrev={canGoPrev}
+                                                canGoNext={canGoNext}
+                                                isLastStep={isLastStep}
+                                                isLoading={isLoading}
+                                            />
+                                        )}
                                     </div>
                                 </div>
 
-                                {/* Step content */}
-                                {renderStepContent()}
-
-                                {/* Navigation */}
-                                {!isLastStep && (
-                                    <StepNavigation
-                                        onPrev={prevStep}
-                                        onNext={nextStep}
-                                        onSkip={nextStep}
-                                        onReset={resetAll}
-                                        canGoPrev={canGoPrev}
-                                        canGoNext={canGoNext}
-                                        isLastStep={isLastStep}
-                                        isLoading={isLoading}
+                                {/* History sidebar */}
+                                <div className="lg:col-span-1">
+                                    <HistoryLog
+                                        history={history}
+                                        onUndo={undoLastAction}
+                                        onClear={resetAll}
                                     />
-                                )}
+                                </div>
                             </div>
-                        </div>
-
-                        {/* History sidebar */}
-                        <div className="lg:col-span-1">
-                            <HistoryLog
-                                history={history}
-                                onUndo={undoLastAction}
-                                onClear={resetAll}
-                            />
-                        </div>
-                    </div>
+                        </>
+                    )}
                 </main>
             </div>
         </div>

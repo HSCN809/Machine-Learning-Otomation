@@ -61,7 +61,7 @@ export default function DataUploadPage() {
                         {/* Reset button - always visible */}
                         <button
                             onClick={reset}
-                            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-gray-400 hover:text-white hover:bg-white/5 transition-all"
+                            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-gray-400 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
                         >
                             <RefreshCw className="w-4 h-4" />
                             <span>Sıfırla</span>
