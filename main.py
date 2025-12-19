@@ -11,7 +11,7 @@ Usage:
 import subprocess
 import sys
 import os
-import threading
+import signal
 import time
 from pathlib import Path
 
@@ -49,25 +49,33 @@ def start_frontend():
     
     if not frontend_dir.exists():
         print(f"❌ Frontend directory not found: {frontend_dir}")
-        return
+        return None
     
     # Check if node_modules exists
     if not (frontend_dir / "node_modules").exists():
         print("📦 Installing npm dependencies...")
         subprocess.run(["npm", "install"], cwd=frontend_dir, shell=True)
     
-    # Start Next.js dev server
-    subprocess.run(["npm", "run", "dev"], cwd=frontend_dir, shell=True)
+    # Start Next.js dev server as subprocess
+    process = subprocess.Popen(
+        ["npm", "run", "dev"],
+        cwd=frontend_dir,
+        shell=True,
+        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0
+    )
+    return process
 
 
 def start_backend_process(port: int = 8000):
     """Start backend as a separate process"""
     project_root = Path(__file__).parent
-    subprocess.Popen(
+    process = subprocess.Popen(
         [sys.executable, "-m", "uvicorn", "backend.api.main:app", 
          "--host", "0.0.0.0", "--port", str(port), "--reload"],
-        cwd=project_root
+        cwd=project_root,
+        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0
     )
+    return process
 
 
 if __name__ == "__main__":
@@ -78,7 +86,12 @@ if __name__ == "__main__":
         start_backend(reload=True)
     elif "--frontend" in args:
         # Frontend only
-        start_frontend()
+        frontend_proc = start_frontend()
+        if frontend_proc:
+            try:
+                frontend_proc.wait()
+            except KeyboardInterrupt:
+                frontend_proc.terminate()
     else:
         # Start both backend and frontend
         print("=" * 50)
@@ -89,13 +102,50 @@ if __name__ == "__main__":
         print("📌 Frontend: http://localhost:3000")
         print("📌 API Docs: http://localhost:8000/docs")
         print()
+        print("Press Ctrl+C to stop both servers")
         print("=" * 50)
         
-        # Start backend as separate process
-        start_backend_process()
-        
-        # Wait a bit for backend to start
+        # Start both as separate processes
+        backend_proc = start_backend_process()
         time.sleep(2)
+        frontend_proc = start_frontend()
         
-        # Start frontend in main thread
-        start_frontend()
+        # Wait for both processes
+        try:
+            while True:
+                # Check if processes are still running
+                backend_alive = backend_proc.poll() is None
+                frontend_alive = frontend_proc and frontend_proc.poll() is None
+                
+                if not backend_alive and not frontend_alive:
+                    print("\n⚠️ Both processes stopped")
+                    break
+                
+                time.sleep(1)
+        except KeyboardInterrupt:
+            print("\n\n🛑 Stopping servers...")
+            
+            # Terminate processes
+            if backend_proc.poll() is None:
+                if os.name == 'nt':
+                    backend_proc.terminate()
+                else:
+                    backend_proc.send_signal(signal.SIGINT)
+            
+            if frontend_proc and frontend_proc.poll() is None:
+                if os.name == 'nt':
+                    frontend_proc.terminate()
+                else:
+                    frontend_proc.send_signal(signal.SIGINT)
+            
+            # Wait for graceful shutdown
+            time.sleep(2)
+            
+            # Force kill if still running
+            if backend_proc.poll() is None:
+                backend_proc.kill()
+            if frontend_proc and frontend_proc.poll() is None:
+                frontend_proc.kill()
+            
+            print("✅ Servers stopped")
+
