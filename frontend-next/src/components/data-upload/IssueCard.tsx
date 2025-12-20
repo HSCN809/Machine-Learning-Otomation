@@ -12,7 +12,7 @@ interface IssueCardProps {
 export function IssueCard({ issue }: IssueCardProps) {
     const [isExpanded, setIsExpanded] = useState(false);
 
-    const hasSuggestion = issue.suggestion || issue.llmSuggestion;
+    const hasLLMSuggestion = !!issue.llmSuggestion;
 
     return (
         <div
@@ -22,11 +22,8 @@ export function IssueCard({ issue }: IssueCardProps) {
             )}
         >
             <button
-                onClick={() => hasSuggestion && setIsExpanded(!isExpanded)}
-                className={cn(
-                    'w-full px-4 py-3 flex items-center justify-between text-left',
-                    hasSuggestion && 'cursor-pointer hover:bg-white/5'
-                )}
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="w-full px-4 py-3 flex items-center justify-between text-left cursor-pointer hover:bg-white/5"
             >
                 <div className="flex-1 min-w-0">
                     <p className="text-sm text-white">
@@ -39,29 +36,31 @@ export function IssueCard({ issue }: IssueCardProps) {
                     )}
                 </div>
 
-                {hasSuggestion && (
-                    <div className="flex items-center gap-2 ml-3">
+                <div className="flex items-center gap-2 ml-3">
+                    {hasLLMSuggestion ? (
                         <Lightbulb className="w-4 h-4 text-yellow-400" />
-                        {isExpanded ? (
-                            <ChevronUp className="w-4 h-4 text-gray-400" />
-                        ) : (
-                            <ChevronDown className="w-4 h-4 text-gray-400" />
-                        )}
-                    </div>
-                )}
+                    ) : (
+                        <Lightbulb className="w-4 h-4 text-gray-500" />
+                    )}
+                    {isExpanded ? (
+                        <ChevronUp className="w-4 h-4 text-gray-400" />
+                    ) : (
+                        <ChevronDown className="w-4 h-4 text-gray-400" />
+                    )}
+                </div>
             </button>
 
             {/* Expanded content */}
-            {isExpanded && hasSuggestion && (
+            {isExpanded && (
                 <div className="px-4 pb-3 pt-0 border-t border-white/10">
-                    {issue.llmSuggestion ? (
+                    {hasLLMSuggestion ? (
                         <div className="mt-3 p-3 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
                             <p className="text-xs text-cyan-400 mb-1">🤖 AI Önerisi:</p>
                             <p className="text-sm text-gray-300">{issue.llmSuggestion}</p>
                         </div>
                     ) : (
-                        <div className="mt-3 p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
-                            <p className="text-sm text-purple-300">
+                        <div className="mt-3 p-3 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
+                            <p className="text-sm text-cyan-300">
                                 ✨ Detaylı AI önerileri almak için yukarıdaki butona tıklayın
                             </p>
                         </div>

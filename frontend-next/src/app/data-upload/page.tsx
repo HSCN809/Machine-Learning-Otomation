@@ -88,6 +88,29 @@ export default function DataUploadPage() {
         setHasLLMSuggestions(false);
     }, [reset]);
 
+    // Reset only LLM suggestions (keep data loaded)
+    const handleResetLLMSuggestions = useCallback(() => {
+        if (validationReport) {
+            // Remove LLM suggestions from all issues
+            const resetIssues = (issues: ValidationIssue[]) =>
+                issues.map(issue => ({
+                    ...issue,
+                    llmSuggestion: undefined,
+                    priority: undefined,
+                }));
+
+            setValidationReport({
+                ...validationReport,
+                issuesBySeverity: {
+                    critical: resetIssues(validationReport.issuesBySeverity.critical),
+                    warning: resetIssues(validationReport.issuesBySeverity.warning),
+                    info: resetIssues(validationReport.issuesBySeverity.info),
+                },
+            });
+        }
+        setHasLLMSuggestions(false);
+    }, [validationReport, setValidationReport]);
+
     const isLoading = status === 'uploading' || status === 'validating';
     const showResults = status === 'success' && dataSummary && validationReport;
 
@@ -214,6 +237,7 @@ export default function DataUploadPage() {
                                 <ValidationReport
                                     report={validationReport}
                                     onEnhanceWithLLM={handleEnhanceWithLLM}
+                                    onResetLLMSuggestions={handleResetLLMSuggestions}
                                     isEnhancing={isEnhancing}
                                     hasLLMSuggestions={hasLLMSuggestions}
                                 />

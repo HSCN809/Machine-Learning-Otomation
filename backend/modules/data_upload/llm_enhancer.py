@@ -43,18 +43,18 @@ def get_function_declaration():
         "function_declarations": [
             {
                 "name": "enhance_validation_suggestion",
-                "description": "Veri kalitesi sorunu için zenginleştirilmiş öneri ve öncelik seviyesi üretir. Öneri içinde model performansına etkisini de belirtir.",
+                "description": "Veri kalitesi sorunu için KISA öneri üretir. Maksimum 2-4 cümle.",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "enhanced_suggestion": {
                             "type": "string",
-                            "description": "Kısa ve öz cümlelerle, bağlama özel öneri metni. Model performansına etkisini de içermeli. Türkçe olmalı ve kullanıcı dostu olmalı. Her adım kısa cümlelerle açıklanmalı."
+                            "description": "KISACA öner: 2 çözüm + 2 etki cümlesi."
                         },
                         "priority": {
                             "type": "string",
                             "enum": ["yüksek", "orta", "düşük"],
-                            "description": "Sorunun öncelik seviyesi"
+                            "description": "Öncelik seviyesi"
                         }
                     },
                     "required": ["enhanced_suggestion", "priority"]
