@@ -261,6 +261,20 @@ export async function getCategoryDistribution(column: string, topN: number = 10)
     return apiFetch(`/api/eda/category-distribution/${column}?top_n=${topN}`);
 }
 
+export interface ScatterData {
+    x: number;
+    y: number;
+}
+
+export async function getScatterData(xColumn: string, yColumn: string, sampleSize: number = 500): Promise<{
+    data: ScatterData[];
+    x_column: string;
+    y_column: string;
+    total_points: number;
+}> {
+    return apiFetch(`/api/eda/scatter?x_column=${xColumn}&y_column=${yColumn}&sample_size=${sampleSize}`);
+}
+
 // ============== Preprocessing API ==============
 
 export interface PreprocessingResponse {

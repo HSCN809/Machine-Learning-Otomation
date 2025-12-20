@@ -256,3 +256,48 @@ async def get_category_distribution(
         })
     
     return {"data": distribution, "column": column}
+
+
+@router.get("/scatter")
+async def get_scatter_data(
+    x_column: str = Query(..., description="X axis column name"),
+    y_column: str = Query(..., description="Y axis column name"),
+    sample_size: int = Query(500, description="Max number of points to return"),
+    session_id: str = Depends(require_session)
+):
+    """Get scatter plot data for two numeric columns"""
+    df = session_manager.get_dataframe(session_id)
+    if df is None:
+        raise HTTPException(status_code=400, detail="No data loaded")
+    
+    if x_column not in df.columns:
+        raise HTTPException(status_code=404, detail=f"Column '{x_column}' not found")
+    if y_column not in df.columns:
+        raise HTTPException(status_code=404, detail=f"Column '{y_column}' not found")
+    
+    # Get data for both columns, drop rows with NaN in either
+    scatter_df = df[[x_column, y_column]].dropna()
+    
+    # Check if columns are numeric
+    if not np.issubdtype(scatter_df[x_column].dtype, np.number):
+        raise HTTPException(status_code=400, detail=f"Column '{x_column}' must be numeric")
+    if not np.issubdtype(scatter_df[y_column].dtype, np.number):
+        raise HTTPException(status_code=400, detail=f"Column '{y_column}' must be numeric")
+    
+    # Sample if too many points
+    if len(scatter_df) > sample_size:
+        scatter_df = scatter_df.sample(n=sample_size, random_state=42)
+    
+    # Convert to list of dicts
+    data = [
+        {"x": round(float(row[x_column]), 4), "y": round(float(row[y_column]), 4)}
+        for _, row in scatter_df.iterrows()
+    ]
+    
+    return {
+        "data": data,
+        "x_column": x_column,
+        "y_column": y_column,
+        "total_points": len(data),
+    }
+

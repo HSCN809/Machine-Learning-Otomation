@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
     EDAData,
     NumericStats,
@@ -168,15 +168,21 @@ export function useEDA(): UseEDAReturn {
         setScatterYColumn(y);
     }, []);
 
+    // Scatter data from API
+    const [scatterData, setScatterData] = useState<{ x: number; y: number }[]>([]);
 
+    // Load scatter data when columns change
+    useEffect(() => {
+        if (!scatterXColumn || !scatterYColumn) {
+            setScatterData([]);
+            return;
+        }
 
-    // Scatter data (mock for now - would need API endpoint)
-    const scatterData = useMemo(() => {
-        if (!scatterXColumn || !scatterYColumn) return [];
-        return Array.from({ length: 50 }, () => ({
-            x: Math.random() * 100,
-            y: Math.random() * 100,
-        }));
+        api.getScatterData(scatterXColumn, scatterYColumn)
+            .then(result => {
+                setScatterData(result.data);
+            })
+            .catch(console.error);
     }, [scatterXColumn, scatterYColumn]);
 
     return {
@@ -197,3 +203,4 @@ export function useEDA(): UseEDAReturn {
         setScatterColumns,
     };
 }
+

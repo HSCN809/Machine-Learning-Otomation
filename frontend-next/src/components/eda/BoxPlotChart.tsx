@@ -1,16 +1,5 @@
 'use client';
 
-import {
-    ComposedChart,
-    Bar,
-    XAxis,
-    YAxis,
-    CartesianGrid,
-    Tooltip,
-    ResponsiveContainer,
-    Cell,
-    ReferenceLine,
-} from 'recharts';
 import { BoxPlotData } from '@/types/eda';
 import { theme } from '@/styles/theme';
 import { ChartCard } from './ChartCard';
@@ -20,89 +9,177 @@ interface BoxPlotChartProps {
     column: string;
 }
 
-// Transform box plot data for Recharts (single column)
-function transformBoxPlotData(data: BoxPlotData) {
-    return [{
-        column: data.column,
-        min: data.min,
-        q1: data.q1,
-        median: data.median,
-        q3: data.q3,
-        max: data.max,
-        boxLow: data.q1,
-        boxHigh: data.q3 - data.q1,
-        whiskerLow: data.min,
-        whiskerHigh: data.max,
-        iqr: data.q3 - data.q1,
-    }];
-}
-
 export function BoxPlotChart({ data, column }: BoxPlotChartProps) {
-    const transformedData = transformBoxPlotData(data);
+    // Calculate IQR and whisker bounds (proper box plot calculation)
+    const iqr = data.q3 - data.q1;
+    const lowerFence = data.q1 - 1.5 * iqr;
+    const upperFence = data.q3 + 1.5 * iqr;
+
+    // Whisker ends should be the actual min/max within the fences
+    // (not absolute min/max which may include outliers)
+    const whiskerLow = Math.max(data.min, lowerFence);
+    const whiskerHigh = Math.min(data.max, upperFence);
+
+    // Calculate positions for box plot elements
+    const padding = { top: 40, bottom: 40, left: 60, right: 40 };
+    const chartHeight = 300;
+    const chartWidth = 400; // Will be responsive
+
+    // Use full data range for Y-axis (including outliers if any)
+    const dataMin = data.min;
+    const dataMax = data.max;
+    const range = dataMax - dataMin || 1; // Prevent division by zero
+
+    const normalizeY = (value: number) => {
+        // Invert Y axis (SVG y increases downward)
+        const normalized = (value - dataMin) / range;
+        return chartHeight - padding.bottom - normalized * (chartHeight - padding.top - padding.bottom);
+    };
+
+    // Box plot positions
+    const boxCenterX = 200; // Center of the chart
+    const boxWidth = 80;
+    const whiskerWidth = 40;
+
+    const yWhiskerLow = normalizeY(whiskerLow);
+    const yQ1 = normalizeY(data.q1);
+    const yMedian = normalizeY(data.median);
+    const yQ3 = normalizeY(data.q3);
+    const yWhiskerHigh = normalizeY(whiskerHigh);
+
+    // Y-axis ticks
+    const tickCount = 5;
+    const tickStep = range / (tickCount - 1);
+    const ticks = Array.from({ length: tickCount }, (_, i) => dataMin + i * tickStep);
 
     return (
         <ChartCard
             title={`Box Plot - ${column}`}
             description="Seçilen sütunun dağılımı"
         >
-            <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart
-                        data={transformedData}
-                        margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
+            <div className="h-[300px] w-full">
+                <svg
+                    viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+                    className="w-full h-full"
+                    preserveAspectRatio="xMidYMid meet"
+                >
+                    {/* Grid lines */}
+                    {ticks.map((tick, i) => (
+                        <g key={i}>
+                            <line
+                                x1={padding.left}
+                                y1={normalizeY(tick)}
+                                x2={chartWidth - padding.right}
+                                y2={normalizeY(tick)}
+                                stroke="#374151"
+                                strokeDasharray="3 3"
+                            />
+                            <text
+                                x={padding.left - 10}
+                                y={normalizeY(tick)}
+                                fill="#9CA3AF"
+                                fontSize="12"
+                                textAnchor="end"
+                                dominantBaseline="middle"
+                            >
+                                {tick.toFixed(1)}
+                            </text>
+                        </g>
+                    ))}
+
+                    {/* Y-axis */}
+                    <line
+                        x1={padding.left}
+                        y1={padding.top}
+                        x2={padding.left}
+                        y2={chartHeight - padding.bottom}
+                        stroke="#374151"
+                    />
+
+                    {/* Lower whisker (whiskerLow to Q1) */}
+                    <line
+                        x1={boxCenterX}
+                        y1={yWhiskerLow}
+                        x2={boxCenterX}
+                        y2={yQ1}
+                        stroke={theme.colors.primary.cyan}
+                        strokeWidth="2"
+                    />
+                    {/* Lower whisker cap */}
+                    <line
+                        x1={boxCenterX - whiskerWidth / 2}
+                        y1={yWhiskerLow}
+                        x2={boxCenterX + whiskerWidth / 2}
+                        y2={yWhiskerLow}
+                        stroke={theme.colors.primary.cyan}
+                        strokeWidth="2"
+                    />
+
+                    {/* Upper whisker (Q3 to whiskerHigh) */}
+                    <line
+                        x1={boxCenterX}
+                        y1={yQ3}
+                        x2={boxCenterX}
+                        y2={yWhiskerHigh}
+                        stroke={theme.colors.primary.cyan}
+                        strokeWidth="2"
+                    />
+                    {/* Upper whisker cap */}
+                    <line
+                        x1={boxCenterX - whiskerWidth / 2}
+                        y1={yWhiskerHigh}
+                        x2={boxCenterX + whiskerWidth / 2}
+                        y2={yWhiskerHigh}
+                        stroke={theme.colors.primary.cyan}
+                        strokeWidth="2"
+                    />
+
+                    {/* Box (Q1 to Q3) */}
+                    <rect
+                        x={boxCenterX - boxWidth / 2}
+                        y={yQ3}
+                        width={boxWidth}
+                        height={yQ1 - yQ3}
+                        fill={`${theme.colors.primary.cyan}30`}
+                        stroke={theme.colors.primary.cyan}
+                        strokeWidth="2"
+                        rx="4"
+                    />
+
+                    {/* Median line */}
+                    <line
+                        x1={boxCenterX - boxWidth / 2}
+                        y1={yMedian}
+                        x2={boxCenterX + boxWidth / 2}
+                        y2={yMedian}
+                        stroke={theme.colors.secondary.green}
+                        strokeWidth="3"
+                    />
+
+                    {/* Outliers */}
+                    {data.outliers && data.outliers.map((outlier, i) => (
+                        <circle
+                            key={i}
+                            cx={boxCenterX}
+                            cy={normalizeY(outlier)}
+                            r="4"
+                            fill={theme.colors.status.warning}
+                            stroke={theme.colors.status.warning}
+                            strokeWidth="1"
+                        />
+                    ))}
+
+                    {/* X-axis label */}
+                    <text
+                        x={boxCenterX}
+                        y={chartHeight - 10}
+                        fill="#9CA3AF"
+                        fontSize="12"
+                        textAnchor="middle"
                     >
-                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                        <XAxis
-                            dataKey="column"
-                            tick={{ fill: '#9CA3AF', fontSize: 12 }}
-                            axisLine={{ stroke: '#374151' }}
-                        />
-                        <YAxis
-                            tick={{ fill: '#9CA3AF', fontSize: 12 }}
-                            axisLine={{ stroke: '#374151' }}
-                            domain={['auto', 'auto']}
-                        />
-                        <Tooltip
-                            contentStyle={{
-                                backgroundColor: theme.colors.background.secondary,
-                                border: `1px solid ${theme.colors.border.default}`,
-                                borderRadius: '8px',
-                                color: theme.colors.text.primary,
-                            }}
-                            formatter={(value: number, name: string) => {
-                                const labels: Record<string, string> = {
-                                    min: 'Min',
-                                    q1: 'Q1',
-                                    median: 'Medyan',
-                                    q3: 'Q3',
-                                    max: 'Max',
-                                    boxHigh: 'IQR',
-                                };
-                                return [value.toFixed(2), labels[name] || name];
-                            }}
-                        />
-                        {/* Median line */}
-                        <ReferenceLine
-                            y={data.median}
-                            stroke={theme.colors.secondary.green}
-                            strokeWidth={2}
-                            strokeDasharray="5 5"
-                            label={{ value: `Medyan: ${data.median.toFixed(2)}`, fill: theme.colors.secondary.green, position: 'right' }}
-                        />
-                        {/* Box */}
-                        <Bar dataKey="boxHigh" stackId="box" fill={theme.colors.primary.cyan} radius={[4, 4, 4, 4]}>
-                            {transformedData.map((entry, index) => (
-                                <Cell
-                                    key={`cell-${index}`}
-                                    fill={theme.colors.primary.cyan}
-                                    style={{
-                                        filter: `drop-shadow(0 0 6px ${theme.colors.primary.cyan}40)`,
-                                    }}
-                                />
-                            ))}
-                        </Bar>
-                    </ComposedChart>
-                </ResponsiveContainer>
+                        {column}
+                    </text>
+                </svg>
             </div>
 
             {/* Stats Summary */}
@@ -115,7 +192,7 @@ export function BoxPlotChart({ data, column }: BoxPlotChartProps) {
                     <div className="text-gray-400">Q1</div>
                     <div className="text-white font-medium">{data.q1.toFixed(2)}</div>
                 </div>
-                <div className="text-center p-2 rounded-lg bg-white/5" style={{ borderColor: theme.colors.secondary.green, borderWidth: 1 }}>
+                <div className="text-center p-2 rounded-lg bg-white/5">
                     <div className="text-gray-400">Medyan</div>
                     <div className="text-white font-medium">{data.median.toFixed(2)}</div>
                 </div>
@@ -139,13 +216,19 @@ export function BoxPlotChart({ data, column }: BoxPlotChartProps) {
             {/* Legend */}
             <div className="flex items-center justify-center gap-6 mt-4 text-sm text-gray-400">
                 <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded" style={{ backgroundColor: theme.colors.primary.cyan }} />
+                    <div className="w-4 h-4 rounded border-2" style={{ borderColor: theme.colors.primary.cyan, backgroundColor: `${theme.colors.primary.cyan}30` }} />
                     <span>IQR (Q1-Q3)</span>
                 </div>
                 <div className="flex items-center gap-2">
-                    <div className="w-4 h-0.5" style={{ backgroundColor: theme.colors.secondary.green }} />
+                    <div className="w-4 h-1 rounded" style={{ backgroundColor: theme.colors.secondary.green }} />
                     <span>Medyan</span>
                 </div>
+                {data.outliers && data.outliers.length > 0 && (
+                    <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: theme.colors.status.warning }} />
+                        <span>Aykırı Değer</span>
+                    </div>
+                )}
             </div>
         </ChartCard>
     );
