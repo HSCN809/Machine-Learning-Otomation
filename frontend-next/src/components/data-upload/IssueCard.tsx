@@ -54,17 +54,16 @@ export function IssueCard({ issue }: IssueCardProps) {
             {/* Expanded content */}
             {isExpanded && hasSuggestion && (
                 <div className="px-4 pb-3 pt-0 border-t border-white/10">
-                    {issue.suggestion && (
-                        <div className="mt-3">
-                            <p className="text-xs text-gray-500 mb-1">💡 Öneri:</p>
-                            <p className="text-sm text-gray-300">{issue.suggestion}</p>
-                        </div>
-                    )}
-
-                    {issue.llmSuggestion && (
+                    {issue.llmSuggestion ? (
                         <div className="mt-3 p-3 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
-                            <p className="text-xs text-cyan-400 mb-1">🤖 LLM Önerisi:</p>
+                            <p className="text-xs text-cyan-400 mb-1">🤖 AI Önerisi:</p>
                             <p className="text-sm text-gray-300">{issue.llmSuggestion}</p>
+                        </div>
+                    ) : (
+                        <div className="mt-3 p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
+                            <p className="text-sm text-purple-300">
+                                ✨ Detaylı AI önerileri almak için yukarıdaki butona tıklayın
+                            </p>
                         </div>
                     )}
                 </div>

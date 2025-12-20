@@ -27,6 +27,7 @@ interface UseDataUploadReturn {
     uploadedFile: UploadedFile | null;
     dataSummary: DataSummary | null;
     validationReport: ValidationReport | null;
+    setValidationReport: React.Dispatch<React.SetStateAction<ValidationReport | null>>;
 
     // Actions
     uploadFile: (file: File) => Promise<void>;
@@ -256,6 +257,7 @@ export function useDataUpload(): UseDataUploadReturn {
         uploadedFile,
         dataSummary,
         validationReport,
+        setValidationReport,
         uploadFile,
         loadSampleDataset,
         reset,

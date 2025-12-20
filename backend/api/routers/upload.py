@@ -128,15 +128,12 @@ async def get_summary(session_id: str = Depends(require_session)):
 
 @router.get("/validate")
 async def validate_upload(session_id: str = Depends(require_session)):
-    """Validate uploaded data with LLM-enhanced suggestions"""
+    """Validate uploaded data (without LLM - basic validation only)"""
     df = session_manager.get_dataframe(session_id)
     if df is None:
         raise HTTPException(status_code=400, detail="No data loaded")
     
     try:
-        # Import LLM enhancer
-        from backend.modules.data_upload.llm_enhancer import enhance_validation_report_with_llm
-        
         # Build detailed issues list
         issues = []
         issue_id = 0
@@ -151,8 +148,7 @@ async def validate_upload(session_id: str = Depends(require_session)):
                     "type": "missing_values",
                     "severity": "warning",
                     "column": col,
-                    "description": f"{col} sütununda %{missing_pct:.1f} eksik değer var",
-                    "suggestion": "Ortalama, medyan veya mod ile doldurulabilir"
+                    "description": f"{col} sütununda %{missing_pct:.1f} eksik değer var"
                 })
                 issue_id += 1
         
@@ -163,10 +159,64 @@ async def validate_upload(session_id: str = Depends(require_session)):
                 "id": f"duplicates_{issue_id}",
                 "type": "duplicate_rows",
                 "severity": "info",
+                "description": f"{dup_count} tekrarlayan satır tespit edildi"
+            })
+            issue_id += 1
+        
+        # Build data summary
+        data_summary = {
+            "rows": len(df),
+            "columns": len(df.columns),
+            "missing_total": int(df.isnull().sum().sum()),
+        }
+        
+        # Return validation report WITHOUT LLM enhancements
+        return {
+            "is_valid": len([i for i in issues if i["severity"] == "critical"]) == 0,
+            "issues": issues,
+            "summary": data_summary
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/enhance-with-llm")
+async def enhance_with_llm(session_id: str = Depends(require_session)):
+    """Get LLM-enhanced suggestions for validation issues (on-demand)"""
+    df = session_manager.get_dataframe(session_id)
+    if df is None:
+        raise HTTPException(status_code=400, detail="No data loaded")
+    
+    try:
+        from backend.modules.data_upload.llm_enhancer import enhance_validation_report_with_llm
+        
+        # First get basic validation issues
+        issues = []
+        issue_id = 0
+        
+        for col in df.columns:
+            missing_count = df[col].isnull().sum()
+            if missing_count > 0:
+                missing_pct = (missing_count / len(df)) * 100
+                issues.append({
+                    "id": f"missing_{issue_id}",
+                    "type": "missing_values",
+                    "severity": "warning",
+                    "column": col,
+                    "description": f"{col} sütununda %{missing_pct:.1f} eksik değer var",
+                    "suggestion": "Ortalama, medyan veya mod ile doldurulabilir"
+                })
+                issue_id += 1
+        
+        dup_count = int(df.duplicated().sum())
+        if dup_count > 0:
+            issues.append({
+                "id": f"duplicates_{issue_id}",
+                "type": "duplicate_rows",
+                "severity": "info",
                 "description": f"{dup_count} tekrarlayan satır tespit edildi",
                 "suggestion": "Tekrarlayan satırları kaldırabilirsiniz"
             })
-            issue_id += 1
         
         # Build data summary for LLM context
         data_summary = {
@@ -178,14 +228,13 @@ async def validate_upload(session_id: str = Depends(require_session)):
             "missing_total": int(df.isnull().sum().sum()),
         }
         
-        # Build initial validation report
         validation_report = {
             "is_valid": len([i for i in issues if i["severity"] == "critical"]) == 0,
             "issues": issues,
             "summary": data_summary
         }
         
-        # Enhance with LLM suggestions
+        # Enhance with LLM
         enhanced_report = enhance_validation_report_with_llm(
             validation_report, 
             data_summary, 

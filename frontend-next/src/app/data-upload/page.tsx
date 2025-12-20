@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Sidebar, Header } from '@/components/layout';
 import {
     FileDropzone,
@@ -10,11 +10,15 @@ import {
     DataPreview,
 } from '@/components/data-upload';
 import { useDataUpload } from '@/hooks/useDataUpload';
+import * as api from '@/lib/api';
 import { RefreshCw } from 'lucide-react';
 import { theme } from '@/styles/theme';
+import { ValidationReport as ValidationReportType, ValidationIssue } from '@/types/data-upload';
 
 export default function DataUploadPage() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+    const [isEnhancing, setIsEnhancing] = useState(false);
+    const [hasLLMSuggestions, setHasLLMSuggestions] = useState(false);
 
     const {
         status,
@@ -23,10 +27,66 @@ export default function DataUploadPage() {
         uploadedFile,
         dataSummary,
         validationReport,
+        setValidationReport,
         uploadFile,
         loadSampleDataset,
         reset,
     } = useDataUpload();
+
+    // Handle LLM enhancement request
+    const handleEnhanceWithLLM = useCallback(async () => {
+        try {
+            setIsEnhancing(true);
+            const enhanced = await api.enhanceWithLLM();
+
+            // Update validation report with LLM suggestions
+            if (enhanced && enhanced.issues) {
+                const issues: ValidationReportType['issuesBySeverity'] = {
+                    critical: [],
+                    warning: [],
+                    info: [],
+                };
+
+                enhanced.issues.forEach((issue: api.ValidationIssue) => {
+                    const validationIssue: ValidationIssue = {
+                        id: issue.id,
+                        severity: issue.severity,
+                        type: issue.type as ValidationIssue['type'],
+                        column: issue.column,
+                        description: issue.description,
+                        suggestion: issue.suggestion,
+                        llmSuggestion: issue.llmSuggestion,
+                        priority: issue.priority as ValidationIssue['priority'],
+                    };
+
+                    if (issue.severity === 'critical') {
+                        issues.critical.push(validationIssue);
+                    } else if (issue.severity === 'warning') {
+                        issues.warning.push(validationIssue);
+                    } else {
+                        issues.info.push(validationIssue);
+                    }
+                });
+
+                setValidationReport({
+                    isValid: enhanced.is_valid,
+                    totalIssues: enhanced.issues.length,
+                    issuesBySeverity: issues,
+                });
+                setHasLLMSuggestions(true);
+            }
+        } catch (err) {
+            console.error('LLM enhancement error:', err);
+        } finally {
+            setIsEnhancing(false);
+        }
+    }, [setValidationReport]);
+
+    // Reset LLM state when data is reset
+    const handleReset = useCallback(async () => {
+        await reset();
+        setHasLLMSuggestions(false);
+    }, [reset]);
 
     const isLoading = status === 'uploading' || status === 'validating';
     const showResults = status === 'success' && dataSummary && validationReport;
@@ -60,7 +120,7 @@ export default function DataUploadPage() {
 
                         {/* Reset button - always visible */}
                         <button
-                            onClick={reset}
+                            onClick={handleReset}
                             className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-gray-400 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
                         >
                             <RefreshCw className="w-4 h-4" />
@@ -151,7 +211,12 @@ export default function DataUploadPage() {
                                     background: 'linear-gradient(135deg, rgba(17, 24, 39, 0.6) 0%, rgba(31, 41, 55, 0.4) 100%)',
                                 }}
                             >
-                                <ValidationReport report={validationReport} />
+                                <ValidationReport
+                                    report={validationReport}
+                                    onEnhanceWithLLM={handleEnhanceWithLLM}
+                                    isEnhancing={isEnhancing}
+                                    hasLLMSuggestions={hasLLMSuggestions}
+                                />
                             </section>
 
                             {/* Next step CTA */}
