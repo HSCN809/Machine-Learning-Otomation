@@ -173,52 +173,58 @@ export default function EDAPage() {
 
                             {/* Correlation Tab */}
                             {activeTab === 'correlation' && (
-                                <div className="space-y-6">
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+                                    {/* Left: Correlation Matrix */}
                                     <CorrelationMatrix
                                         data={edaData.correlationMatrix}
                                         columns={edaData.numericColumns}
                                     />
 
-                                    {/* Scatter plot controls */}
-                                    <div className="flex items-center gap-4 flex-wrap">
-                                        <label className="text-sm text-gray-400">X Ekseni:</label>
-                                        <select
-                                            value={scatterXColumn || ''}
-                                            onChange={(e) =>
-                                                setScatterColumns(e.target.value, scatterYColumn || '')
-                                            }
-                                            className="px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-white outline-none focus:border-cyan-500/50"
-                                        >
-                                            {edaData.numericColumns.map((col) => (
-                                                <option key={col} value={col} className="bg-gray-800">
-                                                    {col}
-                                                </option>
-                                            ))}
-                                        </select>
+                                    {/* Right: Scatter Plot with controls */}
+                                    <div className="flex flex-col gap-4">
+                                        {/* Scatter plot controls */}
+                                        <div className="flex items-center gap-4 flex-wrap">
+                                            <label className="text-sm text-gray-400">X Ekseni:</label>
+                                            <select
+                                                value={scatterXColumn || ''}
+                                                onChange={(e) =>
+                                                    setScatterColumns(e.target.value, scatterYColumn || '')
+                                                }
+                                                className="px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-white outline-none focus:border-cyan-500/50"
+                                            >
+                                                {edaData.numericColumns.map((col) => (
+                                                    <option key={col} value={col} className="bg-gray-800">
+                                                        {col}
+                                                    </option>
+                                                ))}
+                                            </select>
 
-                                        <label className="text-sm text-gray-400">Y Ekseni:</label>
-                                        <select
-                                            value={scatterYColumn || ''}
-                                            onChange={(e) =>
-                                                setScatterColumns(scatterXColumn || '', e.target.value)
-                                            }
-                                            className="px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-white outline-none focus:border-cyan-500/50"
-                                        >
-                                            {edaData.numericColumns.map((col) => (
-                                                <option key={col} value={col} className="bg-gray-800">
-                                                    {col}
-                                                </option>
-                                            ))}
-                                        </select>
+                                            <label className="text-sm text-gray-400">Y Ekseni:</label>
+                                            <select
+                                                value={scatterYColumn || ''}
+                                                onChange={(e) =>
+                                                    setScatterColumns(scatterXColumn || '', e.target.value)
+                                                }
+                                                className="px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-white outline-none focus:border-cyan-500/50"
+                                            >
+                                                {edaData.numericColumns.map((col) => (
+                                                    <option key={col} value={col} className="bg-gray-800">
+                                                        {col}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        {scatterXColumn && scatterYColumn && (
+                                            <div className="flex-1">
+                                                <ScatterChart
+                                                    data={scatterData}
+                                                    xColumn={scatterXColumn}
+                                                    yColumn={scatterYColumn}
+                                                />
+                                            </div>
+                                        )}
                                     </div>
-
-                                    {scatterXColumn && scatterYColumn && (
-                                        <ScatterChart
-                                            data={scatterData}
-                                            xColumn={scatterXColumn}
-                                            yColumn={scatterYColumn}
-                                        />
-                                    )}
                                 </div>
                             )}
 

@@ -25,7 +25,7 @@ export function ChartCard({
     return (
         <div
             className={cn(
-                'rounded-xl border border-white/10 overflow-hidden',
+                'rounded-xl border border-white/10 overflow-hidden flex flex-col',
                 className
             )}
             style={{
@@ -63,7 +63,7 @@ export function ChartCard({
             </div>
 
             {/* Content */}
-            <div className="p-4">
+            <div className="p-4 flex-1">
                 {children}
             </div>
         </div>

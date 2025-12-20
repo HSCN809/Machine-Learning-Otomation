@@ -24,8 +24,9 @@ export function ScatterChart({ data, xColumn, yColumn }: ScatterChartProps) {
         <ChartCard
             title={`Scatter Plot: ${xColumn} vs ${yColumn}`}
             description="İki sayısal değişken arasındaki ilişki"
+            className="h-full"
         >
-            <div className="h-[300px]">
+            <div className="h-full min-h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
                     <RechartsScatterChart margin={{ top: 10, right: 10, bottom: 10, left: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
