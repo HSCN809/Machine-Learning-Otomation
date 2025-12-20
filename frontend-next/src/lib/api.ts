@@ -183,13 +183,17 @@ export async function getColumnTypes(): Promise<{ columns: ColumnType[] }> {
 export interface NumericStat {
     column: string;
     count: number;
+    unique_count: number;
     mean: number;
     std: number;
+    variance: number;
     min: number;
     q25: number;
     median: number;
     q75: number;
     max: number;
+    null_count: number;
+    null_percentage: number;
 }
 
 export async function getNumericStats(): Promise<{ stats: NumericStat[] }> {
@@ -202,6 +206,8 @@ export interface CategoricalStat {
     unique: number;
     top: string | null;
     frequency: number;
+    null_count: number;
+    null_percentage: number;
 }
 
 export async function getCategoricalStats(): Promise<{ stats: CategoricalStat[] }> {

@@ -84,19 +84,29 @@ async def get_numeric_stats(session_id: str = Depends(require_session)):
     stats = []
     for col in numeric_df.columns:
         col_data = numeric_df[col].dropna()
+        null_count = df[col].isnull().sum()
+        null_percentage = (null_count / len(df)) * 100 if len(df) > 0 else 0
+        unique_count = int(df[col].nunique())
+        
         if len(col_data) == 0:
             continue
+        
+        variance = float(col_data.var()) if len(col_data) > 1 else 0
             
         stats.append({
             "column": col,
             "count": int(col_data.count()),
+            "unique_count": unique_count,
             "mean": round(float(col_data.mean()), 4),
             "std": round(float(col_data.std()), 4),
+            "variance": round(variance, 6),
             "min": round(float(col_data.min()), 4),
             "q25": round(float(col_data.quantile(0.25)), 4),
             "median": round(float(col_data.median()), 4),
             "q75": round(float(col_data.quantile(0.75)), 4),
             "max": round(float(col_data.max()), 4),
+            "null_count": int(null_count),
+            "null_percentage": round(null_percentage, 2),
         })
     
     return {"stats": stats}
@@ -116,6 +126,10 @@ async def get_categorical_stats(session_id: str = Depends(require_session)):
     stats = []
     for col in categorical_df.columns:
         col_data = categorical_df[col].dropna()
+        null_count = df[col].isnull().sum()
+        null_percentage = (null_count / len(df)) * 100 if len(df) > 0 else 0
+        unique_count = int(df[col].nunique())
+        
         if len(col_data) == 0:
             continue
         
@@ -123,9 +137,11 @@ async def get_categorical_stats(session_id: str = Depends(require_session)):
         stats.append({
             "column": col,
             "count": int(len(col_data)),
-            "unique": int(col_data.nunique()),
+            "unique": unique_count,
             "top": str(value_counts.index[0]) if len(value_counts) > 0 else None,
             "frequency": int(value_counts.iloc[0]) if len(value_counts) > 0 else 0,
+            "null_count": int(null_count),
+            "null_percentage": round(null_percentage, 2),
         })
     
     return {"stats": stats}

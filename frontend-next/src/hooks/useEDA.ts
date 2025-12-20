@@ -59,6 +59,30 @@ export function useEDA(): UseEDAReturn {
                 api.getCorrelation(),
             ]);
 
+            // Filter constants
+            const VARIANCE_THRESHOLD = 0.001;
+            const NULL_PERCENTAGE_THRESHOLD = 50;
+            const MIN_CARDINALITY = 2;
+            const MAX_CARDINALITY = 50;
+
+            // Filter numeric columns: variance > 0.001 AND null% < 50 AND not all values unique (ID columns)
+            const filteredNumericColumns = numericStats.stats
+                .filter(stat =>
+                    stat.variance > VARIANCE_THRESHOLD &&
+                    stat.null_percentage < NULL_PERCENTAGE_THRESHOLD &&
+                    stat.unique_count < stat.count  // Exclude columns where all values are unique (IDs)
+                )
+                .map(stat => stat.column);
+
+            // Filter categorical columns: 2 <= unique <= 50 AND null% < 50
+            const filteredCategoricalColumns = categoricalStats.stats
+                .filter(stat =>
+                    stat.unique >= MIN_CARDINALITY &&
+                    stat.unique <= MAX_CARDINALITY &&
+                    stat.null_percentage < NULL_PERCENTAGE_THRESHOLD
+                )
+                .map(stat => stat.column);
+
             // Transform API response to EDAData format
             const transformedColumnTypes: ColumnType[] = columnTypes.columns.map(col => ({
                 name: col.name,
@@ -99,22 +123,22 @@ export function useEDA(): UseEDAReturn {
                 categoricalStats: transformedCategoricalStats,
                 columnTypes: transformedColumnTypes,
                 correlationMatrix: transformedCorrelation,
-                numericColumns: summary.numeric_columns,
-                categoricalColumns: summary.categorical_columns,
+                numericColumns: filteredNumericColumns,
+                categoricalColumns: filteredCategoricalColumns,
             };
 
             setEdaData(data);
 
-            // Set default selections
-            if (summary.numeric_columns.length > 0) {
-                setSelectedNumericColumn(summary.numeric_columns[0]);
-                if (summary.numeric_columns.length > 1) {
-                    setScatterXColumn(summary.numeric_columns[0]);
-                    setScatterYColumn(summary.numeric_columns[1]);
+            // Set default selections from filtered columns
+            if (filteredNumericColumns.length > 0) {
+                setSelectedNumericColumn(filteredNumericColumns[0]);
+                if (filteredNumericColumns.length > 1) {
+                    setScatterXColumn(filteredNumericColumns[0]);
+                    setScatterYColumn(filteredNumericColumns[1]);
                 }
             }
-            if (summary.categorical_columns.length > 0) {
-                setSelectedCategoricalColumn(summary.categorical_columns[0]);
+            if (filteredCategoricalColumns.length > 0) {
+                setSelectedCategoricalColumn(filteredCategoricalColumns[0]);
             }
         } catch (err) {
             console.error('EDA Error:', err);
