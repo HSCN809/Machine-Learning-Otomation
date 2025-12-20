@@ -72,8 +72,9 @@ export function CategoryDistribution({ data, column, chartType = 'bar' }: Catego
                                     backgroundColor: theme.colors.background.secondary,
                                     border: `1px solid ${theme.colors.border.default}`,
                                     borderRadius: '8px',
-                                    color: theme.colors.text.primary,
                                 }}
+                                labelStyle={{ color: 'white' }}
+                                itemStyle={{ color: 'white' }}
                                 formatter={(value: number) => [`${value.toLocaleString('tr-TR')}`, 'Değer']}
                             />
                             <Legend
@@ -116,8 +117,9 @@ export function CategoryDistribution({ data, column, chartType = 'bar' }: Catego
                                 backgroundColor: theme.colors.background.secondary,
                                 border: `1px solid ${theme.colors.border.default}`,
                                 borderRadius: '8px',
-                                color: theme.colors.text.primary,
                             }}
+                            labelStyle={{ color: 'white' }}
+                            itemStyle={{ color: 'white' }}
                             formatter={(value: number) => {
                                 const item = chartData.find(d => d.value === value);
                                 return [`${value.toLocaleString('tr-TR')} (${item?.percentage.toFixed(1)}%)`, 'Sayı'];

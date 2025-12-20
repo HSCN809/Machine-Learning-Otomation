@@ -64,8 +64,9 @@ export function ScatterChart({ data, xColumn, yColumn }: ScatterChartProps) {
                                 backgroundColor: theme.colors.background.secondary,
                                 border: `1px solid ${theme.colors.border.default}`,
                                 borderRadius: '8px',
-                                color: theme.colors.text.primary,
                             }}
+                            labelStyle={{ color: 'white' }}
+                            itemStyle={{ color: 'white' }}
                             formatter={(value: number, name: string) => [value.toFixed(2), name]}
                         />
                         <Scatter
