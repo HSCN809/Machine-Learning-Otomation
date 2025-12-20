@@ -28,3 +28,4 @@ build/
 
 # Pycache Temizleme Scripti
 cleanup.py
+cleanup_ports.py
