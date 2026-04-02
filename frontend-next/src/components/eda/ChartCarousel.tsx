@@ -89,6 +89,39 @@ export function ChartCarousel({ slides, className }: ChartCarouselProps) {
         goToSlide(nextIndex, 'forward');
     };
 
+    useEffect(() => {
+        if (!showNavigation) {
+            return;
+        }
+
+        const handleKeyDown = (event: KeyboardEvent) => {
+            const target = event.target as HTMLElement | null;
+            const tagName = target?.tagName;
+            const isTypingTarget =
+                tagName === 'INPUT' ||
+                tagName === 'TEXTAREA' ||
+                tagName === 'SELECT' ||
+                target?.isContentEditable;
+
+            if (isTypingTarget || event.altKey || event.ctrlKey || event.metaKey) {
+                return;
+            }
+
+            if (event.key === 'ArrowLeft') {
+                event.preventDefault();
+                handlePrevious();
+            }
+
+            if (event.key === 'ArrowRight') {
+                event.preventDefault();
+                handleNext();
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [activeIndex, isAnimating, showNavigation, slides.length]);
+
     if (!currentSlide) {
         return null;
     }
