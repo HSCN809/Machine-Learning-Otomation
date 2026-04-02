@@ -30,7 +30,7 @@ export function SampleDatasets({ onSelect, disabled = false, loading = false }: 
                         onClick={() => onSelect(dataset.id)}
                         disabled={disabled || loading}
                         className={cn(
-                            'group relative p-4 rounded-xl border border-white/10 transition-all duration-300',
+                            'group relative p-4 rounded-xl border border-white/10 transition-all duration-300 cursor-pointer',
                             'hover:border-cyan-500/50 hover:bg-white/5',
                             'disabled:opacity-50 disabled:cursor-not-allowed',
                             'flex flex-col items-center text-center'
