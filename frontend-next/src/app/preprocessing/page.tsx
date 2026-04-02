@@ -141,6 +141,7 @@ export default function PreprocessingPage() {
                                 currentStep={currentStep}
                                 completedSteps={completedSteps}
                                 onStepClick={goToStep}
+                                showActiveLine={false}
                             />
 
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

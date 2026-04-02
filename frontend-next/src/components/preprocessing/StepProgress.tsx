@@ -10,9 +10,16 @@ interface StepProgressProps {
     currentStep: number;
     completedSteps: number[];
     onStepClick?: (step: number) => void;
+    showActiveLine?: boolean;
 }
 
-export function StepProgress({ steps, currentStep, completedSteps, onStepClick }: StepProgressProps) {
+export function StepProgress({
+    steps,
+    currentStep,
+    completedSteps,
+    onStepClick,
+    showActiveLine = true,
+}: StepProgressProps) {
     const getStepStatus = (index: number): StepStatus => {
         if (completedSteps.includes(index)) return 'completed';
         if (index === currentStep) return 'current';
@@ -25,14 +32,16 @@ export function StepProgress({ steps, currentStep, completedSteps, onStepClick }
             <div className="hidden md:flex items-center justify-between relative">
                 {/* Progress line */}
                 <div className="absolute top-6 left-0 right-0 h-0.5 bg-white/10" />
-                <div
-                    className="absolute top-6 left-0 h-0.5 transition-all duration-500"
-                    style={{
-                        width: `${(currentStep / (steps.length - 1)) * 100}%`,
-                        background: theme.gradients.primary,
-                        boxShadow: theme.glow.cyan,
-                    }}
-                />
+                {showActiveLine && (
+                    <div
+                        className="absolute top-6 left-0 h-0.5 transition-all duration-500"
+                        style={{
+                            width: `${(currentStep / (steps.length - 1)) * 100}%`,
+                            background: theme.gradients.primary,
+                            boxShadow: theme.glow.cyan,
+                        }}
+                    />
+                )}
 
                 {steps.map((step, index) => {
                     const status = getStepStatus(index);

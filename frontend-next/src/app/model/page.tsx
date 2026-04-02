@@ -192,6 +192,7 @@ export default function ModelSelectionPage() {
                                 completedSteps={completedSteps}
                                 onStepClick={goToStep}
                                 isStepClickable={(index) => index <= currentStep}
+                                showActiveLine={false}
                             />
 
                             {error && (
