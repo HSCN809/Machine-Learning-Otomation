@@ -12,11 +12,10 @@ import {
     CorrelationMatrix,
     CategoryDistribution,
 } from '@/components/eda';
-import { NoDataWarning, StepProgress } from '@/components/common';
+import { NoDataWarning, SessionPageSkeleton, StepProgress } from '@/components/common';
 import { useEDA } from '@/hooks/useEDA';
 import { hasStoredSession } from '@/lib/api';
-import { theme } from '@/styles/theme';
-import { Loader2, BarChart3, TrendingUp, GitBranch, Layers } from 'lucide-react';
+import { BarChart3, TrendingUp, GitBranch, Layers } from 'lucide-react';
 
 type TabId = 'summary' | 'numeric' | 'correlation' | 'categorical';
 
@@ -98,12 +97,7 @@ export default function EDAPage() {
                 />
 
                 <main className="p-6 space-y-6">
-                    {isLoading && (
-                        <div className="flex items-center justify-center py-20">
-                            <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
-                            <span className="ml-3 text-gray-400">Veriler analiz ediliyor...</span>
-                        </div>
-                    )}
+                    {hasSession === true && isLoading && !edaData && <SessionPageSkeleton variant="analytics" />}
 
                     {!isLoading && hasSession !== null && !edaData && (
                         <NoDataWarning

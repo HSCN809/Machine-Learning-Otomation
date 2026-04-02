@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Sidebar, Header } from '@/components/layout';
 import {
     FileDropzone,
@@ -9,6 +9,7 @@ import {
     ValidationReport,
     DataPreview,
 } from '@/components/data-upload';
+import { SessionPageSkeleton } from '@/components/common';
 import { useDataUpload } from '@/hooks/useDataUpload';
 import * as api from '@/lib/api';
 import { theme } from '@/styles/theme';
@@ -18,6 +19,7 @@ export default function DataUploadPage() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [isEnhancing, setIsEnhancing] = useState(false);
     const [hasLLMSuggestions, setHasLLMSuggestions] = useState(false);
+    const [hasSession, setHasSession] = useState<boolean | null>(null);
 
     const {
         status,
@@ -26,11 +28,22 @@ export default function DataUploadPage() {
         uploadedFile,
         dataSummary,
         validationReport,
+        isInitializing,
         setValidationReport,
         uploadFile,
         loadSampleDataset,
+        hydrateSession,
         reset,
     } = useDataUpload();
+
+    useEffect(() => {
+        const sessionExists = api.hasStoredSession();
+        setHasSession(sessionExists);
+
+        if (sessionExists && !dataSummary && !validationReport && status === 'idle' && !isInitializing) {
+            hydrateSession();
+        }
+    }, [dataSummary, hydrateSession, isInitializing, status, validationReport]);
 
     const handleEnhanceWithLLM = useCallback(async () => {
         try {
@@ -108,6 +121,7 @@ export default function DataUploadPage() {
 
     const isLoading = status === 'uploading' || status === 'validating';
     const showResults = status === 'success' && dataSummary && validationReport;
+    const showSessionSkeleton = hasSession === true && (isInitializing || isLoading) && !showResults;
 
     return (
         <div className="min-h-screen">
@@ -128,7 +142,9 @@ export default function DataUploadPage() {
                 />
 
                 <main className="p-6 space-y-8">
-                    {(status === 'idle' || status === 'error') && (
+                    {showSessionSkeleton && <SessionPageSkeleton variant="upload" />}
+
+                    {!showSessionSkeleton && (status === 'idle' || status === 'error') && (
                         <>
                             <section
                                 className="p-6 rounded-2xl border border-white/10"
@@ -163,7 +179,7 @@ export default function DataUploadPage() {
                         </>
                     )}
 
-                    {(status === 'uploading' || status === 'validating') && (
+                    {!showSessionSkeleton && (status === 'uploading' || status === 'validating') && (
                         <UploadProgress
                             status={status}
                             progress={progress}
@@ -172,7 +188,7 @@ export default function DataUploadPage() {
                         />
                     )}
 
-                    {showResults && (
+                    {!showSessionSkeleton && showResults && (
                         <>
                             <section
                                 className="p-6 rounded-2xl border border-white/10"

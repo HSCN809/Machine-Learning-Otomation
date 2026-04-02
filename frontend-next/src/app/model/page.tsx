@@ -13,7 +13,7 @@ import {
     ModelComparison,
     ResultsExport,
 } from '@/components/model-selection';
-import { NoDataWarning, StepProgress } from '@/components/common';
+import { NoDataWarning, SessionPageSkeleton, StepProgress } from '@/components/common';
 import { useModelSelection } from '@/hooks/useModelSelection';
 import { hasStoredSession } from '@/lib/api';
 import { theme } from '@/styles/theme';
@@ -38,6 +38,7 @@ export default function ModelSelectionPage() {
         selectedModels,
         modelParams,
         trainingResults,
+        isLoading,
         isTraining,
         error,
         columns,
@@ -177,14 +178,16 @@ export default function ModelSelectionPage() {
                 />
 
                 <main className="p-6 space-y-6">
-                    {hasSession !== null && !hasData && (
+                    {hasSession === true && isLoading && !hasData && <SessionPageSkeleton variant="wizard" />}
+
+                    {hasSession !== null && !isLoading && !hasData && (
                         <NoDataWarning
                             title="Veri Yüklenmedi"
                             description="Model seçimi ve eğitimi yapabilmek için önce veri yüklemeniz gerekmektedir."
                         />
                     )}
 
-                    {hasData && (
+                    {hasData && !isLoading && (
                         <>
                             <StepProgress
                                 steps={STEPS}

@@ -13,7 +13,7 @@ import {
     Scaling,
     Summary,
 } from '@/components/preprocessing';
-import { NoDataWarning } from '@/components/common';
+import { NoDataWarning, SessionPageSkeleton } from '@/components/common';
 import { usePreprocessing, PREPROCESSING_STEPS } from '@/hooks/usePreprocessing';
 import { hasStoredSession } from '@/lib/api';
 
@@ -127,6 +127,8 @@ export default function PreprocessingPage() {
                 />
 
                 <main className="p-6 space-y-6">
+                    {hasSession === true && isLoading && !hasData && <SessionPageSkeleton variant="wizard" />}
+
                     {!isLoading && hasSession !== null && !hasData && (
                         <NoDataWarning
                             title="Veri Yüklenmedi"

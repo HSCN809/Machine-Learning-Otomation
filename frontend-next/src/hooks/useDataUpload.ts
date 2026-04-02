@@ -23,11 +23,13 @@ interface UseDataUploadReturn {
     uploadedFile: UploadedFile | null;
     dataSummary: DataSummary | null;
     validationReport: ValidationReport | null;
+    isInitializing: boolean;
     setValidationReport: React.Dispatch<React.SetStateAction<ValidationReport | null>>;
 
     // Actions
     uploadFile: (file: File) => Promise<void>;
     loadSampleDataset: (datasetId: string) => Promise<void>;
+    hydrateSession: () => Promise<void>;
     reset: () => Promise<void>;
 }
 
