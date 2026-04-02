@@ -15,11 +15,13 @@ import {
 } from '@/components/preprocessing';
 import { NoDataWarning } from '@/components/common';
 import { usePreprocessing, PREPROCESSING_STEPS } from '@/hooks/usePreprocessing';
+import { hasStoredSession } from '@/lib/api';
 import { theme } from '@/styles/theme';
 import { Loader2 } from 'lucide-react';
 
 export default function PreprocessingPage() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+    const [hasSession, setHasSession] = useState<boolean | null>(null);
 
     const {
         currentStep,
@@ -48,10 +50,14 @@ export default function PreprocessingPage() {
 
     // Load columns on mount
     useEffect(() => {
-        loadColumns();
+        const sessionExists = hasStoredSession();
+        setHasSession(sessionExists);
+        if (sessionExists) {
+            loadColumns();
+        }
     }, [loadColumns]);
 
-    const hasData = columns.length > 0;
+    const hasData = hasSession === true && columns.length > 0;
     const currentStepInfo = PREPROCESSING_STEPS[currentStep];
     const isLastStep = currentStep === PREPROCESSING_STEPS.length - 1;
 
@@ -140,7 +146,7 @@ export default function PreprocessingPage() {
                     </div>
 
                     {/* No Data Warning */}
-                    {!isLoading && !hasData && (
+                    {!isLoading && hasSession !== null && !hasData && (
                         <NoDataWarning
                             title="Veri Yüklenmedi"
                             description="Veri ön işleme yapabilmek için önce veri yüklemeniz gerekmektedir."

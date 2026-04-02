@@ -13,6 +13,7 @@ import {
 } from '@/components/eda';
 import { NoDataWarning } from '@/components/common';
 import { useEDA } from '@/hooks/useEDA';
+import { hasStoredSession } from '@/lib/api';
 import { theme } from '@/styles/theme';
 import { Loader2, BarChart3, TrendingUp, GitBranch, Layers } from 'lucide-react';
 
@@ -28,6 +29,7 @@ const tabs: { id: TabId; label: string; icon: React.ElementType }[] = [
 export default function EDAPage() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [activeTab, setActiveTab] = useState<TabId>('summary');
+    const [hasSession, setHasSession] = useState<boolean | null>(null);
 
     const {
         edaData,
@@ -49,7 +51,11 @@ export default function EDAPage() {
 
     // Load data on mount
     useEffect(() => {
-        loadEDAData();
+        const sessionExists = hasStoredSession();
+        setHasSession(sessionExists);
+        if (sessionExists) {
+            loadEDAData();
+        }
     }, [loadEDAData]);
 
     return (
@@ -87,7 +93,7 @@ export default function EDAPage() {
                     )}
 
                     {/* No Data Warning */}
-                    {!isLoading && !edaData && (
+                    {!isLoading && hasSession !== null && !edaData && (
                         <NoDataWarning
                             title="Veri Yüklenmedi"
                             description="Keşifsel veri analizi yapabilmek için önce veri yüklemeniz gerekmektedir."

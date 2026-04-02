@@ -21,6 +21,10 @@ function setSessionId(id: string): void {
     }
 }
 
+export function hasStoredSession(): boolean {
+    return Boolean(getSessionId());
+}
+
 // Base fetch with session header
 async function apiFetch<T>(
     endpoint: string,

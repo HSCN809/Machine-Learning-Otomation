@@ -15,6 +15,7 @@ import {
 } from '@/components/model-selection';
 import { NoDataWarning } from '@/components/common';
 import { useModelSelection } from '@/hooks/useModelSelection';
+import { hasStoredSession } from '@/lib/api';
 import { theme } from '@/styles/theme';
 import { ChevronLeft, ChevronRight, Loader2, Play, RotateCcw } from 'lucide-react';
 
@@ -28,6 +29,7 @@ const STEPS = [
 
 export default function ModelSelectionPage() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+    const [hasSession, setHasSession] = useState<boolean | null>(null);
 
     const {
         currentStep,
@@ -55,10 +57,14 @@ export default function ModelSelectionPage() {
 
     // Load columns on mount
     useEffect(() => {
-        loadColumns();
+        const sessionExists = hasStoredSession();
+        setHasSession(sessionExists);
+        if (sessionExists) {
+            loadColumns();
+        }
     }, [loadColumns]);
 
-    const hasData = columns.length > 0;
+    const hasData = hasSession === true && columns.length > 0;
     const currentStepInfo = STEPS[currentStep];
 
     // Render current step content
@@ -186,7 +192,7 @@ export default function ModelSelectionPage() {
                     </div>
 
                     {/* No Data Warning */}
-                    {!hasData && (
+                    {hasSession !== null && !hasData && (
                         <NoDataWarning
                             title="Veri Yüklenmedi"
                             description="Model seçimi ve eğitimi yapabilmek için önce veri yüklemeniz gerekmektedir."
