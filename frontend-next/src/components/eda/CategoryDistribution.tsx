@@ -103,7 +103,7 @@ export function CategoryDistribution({
                     <BarChart
                         data={chartData}
                         layout="vertical"
-                        margin={{ top: 10, right: 30, left: 80, bottom: 10 }}
+                        margin={{ top: 2, right: 8, left: 12, bottom: 2 }}
                     >
                         <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                         <XAxis
@@ -116,7 +116,7 @@ export function CategoryDistribution({
                             dataKey="name"
                             tick={{ fill: '#9CA3AF', fontSize: 12 }}
                             axisLine={{ stroke: '#374151' }}
-                            width={70}
+                            width={20}
                         />
                         <Tooltip
                             contentStyle={{

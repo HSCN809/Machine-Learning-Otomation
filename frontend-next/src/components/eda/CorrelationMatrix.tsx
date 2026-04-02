@@ -30,9 +30,17 @@ export function CorrelationMatrix({ data, columns }: CorrelationMatrixProps) {
 
     const getOpacity = (value: number) => Math.abs(value) * 0.8 + 0.2;
     const isCompactMatrix = columns.length > 4;
-    const headerSizeClassName = isCompactMatrix ? 'w-16 h-6 text-xs' : 'w-20 h-8 text-sm';
-    const rowLabelSizeClassName = isCompactMatrix ? 'w-16 h-14 text-xs' : 'w-20 h-18 text-sm';
+    const headerSizeClassName = isCompactMatrix ? 'w-16 h-7 text-xs' : 'w-20 h-8 text-sm';
+    const rowHeaderSizeClassName = isCompactMatrix ? 'w-16 h-14 text-xs' : 'w-20 h-18 text-sm';
+    const cornerSpacerClassName = isCompactMatrix ? 'w-16 h-7' : 'w-20 h-8';
     const cellSizeClassName = isCompactMatrix ? 'w-16 h-14 text-xs' : 'w-20 h-18 text-sm';
+    const legendItems = [
+        { label: '-1.0', color: theme.colors.status.error },
+        { label: '-0.5', color: theme.colors.status.warning },
+        { label: '0', color: theme.colors.status.info },
+        { label: '+0.5', color: theme.colors.primary.cyan },
+        { label: '+1.0', color: theme.colors.secondary.green },
+    ];
 
     return (
         <ChartCard
@@ -41,17 +49,17 @@ export function CorrelationMatrix({ data, columns }: CorrelationMatrixProps) {
             className="h-full"
         >
             <div className="h-[420px] overflow-auto">
-                <div className="flex h-full items-center justify-center">
+                <div className="flex h-full items-center justify-center gap-8">
                     <div className="inline-block min-w-fit">
                         <div className="flex">
-                            <div className={`${rowLabelSizeClassName} flex-shrink-0`} />
+                            <div className={`${cornerSpacerClassName} m-0.5`} />
                             {columns.map((col) => (
                                 <div
                                     key={`header-${col}`}
                                     className={`${headerSizeClassName} m-0.5 flex items-center justify-center font-medium text-gray-400 cursor-help`}
                                     title={col}
                                 >
-                                    {col.length > 3 ? `${col.slice(0, 3)}..` : col}
+                                    {col.slice(0, 3)}
                                 </div>
                             ))}
                         </div>
@@ -59,12 +67,11 @@ export function CorrelationMatrix({ data, columns }: CorrelationMatrixProps) {
                         {columns.map((rowCol) => (
                             <div key={`row-${rowCol}`} className="flex">
                                 <div
-                                    className={`${rowLabelSizeClassName} m-0.5 flex flex-shrink-0 items-center justify-center font-medium text-gray-400 cursor-help`}
+                                    className={`${rowHeaderSizeClassName} m-0.5 flex items-center justify-center font-medium text-gray-400 cursor-help`}
                                     title={rowCol}
                                 >
-                                    {rowCol.length > 3 ? `${rowCol.slice(0, 3)}..` : rowCol}
+                                    {rowCol.slice(0, 3)}
                                 </div>
-
                                 {columns.map((colCol) => {
                                     const value = matrix[rowCol]?.[colCol] ?? 0;
                                     const isMainDiagonal = rowCol === colCol;
@@ -95,30 +102,14 @@ export function CorrelationMatrix({ data, columns }: CorrelationMatrixProps) {
                             </div>
                         ))}
                     </div>
-                </div>
 
-                <div className="flex items-center justify-center gap-4 mt-4 text-xs text-gray-400">
-                    <div className="flex items-center gap-6">
-                        <div className="flex items-center gap-1">
-                            <div className="w-4 h-4 rounded" style={{ backgroundColor: theme.colors.status.error }} />
-                            <span>-1.0</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                            <div className="w-4 h-4 rounded" style={{ backgroundColor: theme.colors.status.warning }} />
-                            <span>-0.5</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                            <div className="w-4 h-4 rounded" style={{ backgroundColor: theme.colors.status.info }} />
-                            <span>0</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                            <div className="w-4 h-4 rounded" style={{ backgroundColor: theme.colors.primary.cyan }} />
-                            <span>+0.5</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                            <div className="w-4 h-4 rounded" style={{ backgroundColor: theme.colors.secondary.green }} />
-                            <span>+1.0</span>
-                        </div>
+                    <div className="flex flex-col gap-3 self-center text-sm text-gray-400">
+                        {legendItems.map((item) => (
+                            <div key={item.label} className="flex items-center gap-2">
+                                <div className="h-4 w-4 rounded" style={{ backgroundColor: item.color }} />
+                                <span>{item.label}</span>
+                            </div>
+                        ))}
                     </div>
                 </div>
             </div>

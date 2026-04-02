@@ -30,7 +30,7 @@ export function ScatterChart({ data, xColumn, yColumn, headerActions }: ScatterC
         >
             <div className="h-[420px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                    <RechartsScatterChart margin={{ top: 10, right: 10, bottom: 10, left: 0 }}>
+                    <RechartsScatterChart margin={{ top: 24, right: 28, bottom: 24, left: 20 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                         <XAxis
                             type="number"
@@ -41,7 +41,7 @@ export function ScatterChart({ data, xColumn, yColumn, headerActions }: ScatterC
                             label={{
                                 value: xColumn,
                                 position: 'insideBottom',
-                                offset: -5,
+                                offset: -8,
                                 fill: '#9CA3AF',
                                 fontSize: 12,
                             }}
@@ -56,6 +56,7 @@ export function ScatterChart({ data, xColumn, yColumn, headerActions }: ScatterC
                                 value: yColumn,
                                 angle: -90,
                                 position: 'insideLeft',
+                                offset: -2,
                                 fill: '#9CA3AF',
                                 fontSize: 12,
                             }}
