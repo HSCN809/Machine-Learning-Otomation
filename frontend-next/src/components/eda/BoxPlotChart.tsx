@@ -19,8 +19,8 @@ export function BoxPlotChart({ data, column, headerActions }: BoxPlotChartProps)
     const whiskerLow = Math.max(data.min, lowerFence);
     const whiskerHigh = Math.min(data.max, upperFence);
 
-    const padding = { top: 40, bottom: 40, left: 60, right: 40 };
-    const chartHeight = 300;
+    const padding = { top: 24, bottom: 28, left: 60, right: 40 };
+    const chartHeight = 210;
     const chartWidth = 400;
 
     const dataMin = data.min;
@@ -52,171 +52,167 @@ export function BoxPlotChart({ data, column, headerActions }: BoxPlotChartProps)
             description="Seçilen sütunun dağılımı"
             headerActions={headerActions}
         >
-            <div className="h-[300px] w-full">
-                <svg
-                    viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-                    className="w-full h-full"
-                    preserveAspectRatio="xMidYMid meet"
-                >
-                    {ticks.map((tick, i) => (
-                        <g key={i}>
-                            <line
-                                x1={padding.left}
-                                y1={normalizeY(tick)}
-                                x2={chartWidth - padding.right}
-                                y2={normalizeY(tick)}
-                                stroke="#374151"
-                                strokeDasharray="3 3"
-                            />
-                            <text
-                                x={padding.left - 10}
-                                y={normalizeY(tick)}
-                                fill="#9CA3AF"
-                                fontSize="12"
-                                textAnchor="end"
-                                dominantBaseline="middle"
-                            >
-                                {tick.toFixed(1)}
-                            </text>
-                        </g>
-                    ))}
-
-                    <line
-                        x1={padding.left}
-                        y1={padding.top}
-                        x2={padding.left}
-                        y2={chartHeight - padding.bottom}
-                        stroke="#374151"
-                    />
-
-                    <line
-                        x1={boxCenterX}
-                        y1={yWhiskerLow}
-                        x2={boxCenterX}
-                        y2={yQ1}
-                        stroke={theme.colors.primary.cyan}
-                        strokeWidth="2"
-                    />
-                    <line
-                        x1={boxCenterX - whiskerWidth / 2}
-                        y1={yWhiskerLow}
-                        x2={boxCenterX + whiskerWidth / 2}
-                        y2={yWhiskerLow}
-                        stroke={theme.colors.primary.cyan}
-                        strokeWidth="2"
-                    />
-
-                    <line
-                        x1={boxCenterX}
-                        y1={yQ3}
-                        x2={boxCenterX}
-                        y2={yWhiskerHigh}
-                        stroke={theme.colors.primary.cyan}
-                        strokeWidth="2"
-                    />
-                    <line
-                        x1={boxCenterX - whiskerWidth / 2}
-                        y1={yWhiskerHigh}
-                        x2={boxCenterX + whiskerWidth / 2}
-                        y2={yWhiskerHigh}
-                        stroke={theme.colors.primary.cyan}
-                        strokeWidth="2"
-                    />
-
-                    <rect
-                        x={boxCenterX - boxWidth / 2}
-                        y={yQ3}
-                        width={boxWidth}
-                        height={yQ1 - yQ3}
-                        fill={`${theme.colors.primary.cyan}30`}
-                        stroke={theme.colors.primary.cyan}
-                        strokeWidth="2"
-                        rx="4"
-                    />
-
-                    <line
-                        x1={boxCenterX - boxWidth / 2}
-                        y1={yMedian}
-                        x2={boxCenterX + boxWidth / 2}
-                        y2={yMedian}
-                        stroke={theme.colors.secondary.green}
-                        strokeWidth="3"
-                    />
-
-                    {data.outliers?.map((outlier, i) => (
-                        <circle
-                            key={i}
-                            cx={boxCenterX}
-                            cy={normalizeY(outlier)}
-                            r="4"
-                            fill={theme.colors.status.warning}
-                            stroke={theme.colors.status.warning}
-                            strokeWidth="1"
-                        />
-                    ))}
-
-                    <text
-                        x={boxCenterX}
-                        y={chartHeight - 10}
-                        fill="#9CA3AF"
-                        fontSize="12"
-                        textAnchor="middle"
+            <div className="h-[300px] w-full flex flex-col">
+                <div className="h-[210px] w-full">
+                    <svg
+                        viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+                        className="w-full h-full"
+                        preserveAspectRatio="xMidYMid meet"
                     >
-                        {column}
-                    </text>
-                </svg>
-            </div>
+                        {ticks.map((tick, i) => (
+                            <g key={i}>
+                                <line
+                                    x1={padding.left}
+                                    y1={normalizeY(tick)}
+                                    x2={chartWidth - padding.right}
+                                    y2={normalizeY(tick)}
+                                    stroke="#374151"
+                                    strokeDasharray="3 3"
+                                />
+                                <text
+                                    x={padding.left - 10}
+                                    y={normalizeY(tick)}
+                                    fill="#9CA3AF"
+                                    fontSize="12"
+                                    textAnchor="end"
+                                    dominantBaseline="middle"
+                                >
+                                    {tick.toFixed(1)}
+                                </text>
+                            </g>
+                        ))}
 
-            <div className="grid grid-cols-5 gap-2 mt-4 text-sm">
-                <div className="text-center p-2 rounded-lg bg-white/5">
-                    <div className="text-gray-400">Min</div>
-                    <div className="text-white font-medium">{data.min.toFixed(2)}</div>
-                </div>
-                <div className="text-center p-2 rounded-lg bg-white/5">
-                    <div className="text-gray-400">Q1</div>
-                    <div className="text-white font-medium">{data.q1.toFixed(2)}</div>
-                </div>
-                <div className="text-center p-2 rounded-lg bg-white/5">
-                    <div className="text-gray-400">Medyan</div>
-                    <div className="text-white font-medium">{data.median.toFixed(2)}</div>
-                </div>
-                <div className="text-center p-2 rounded-lg bg-white/5">
-                    <div className="text-gray-400">Q3</div>
-                    <div className="text-white font-medium">{data.q3.toFixed(2)}</div>
-                </div>
-                <div className="text-center p-2 rounded-lg bg-white/5">
-                    <div className="text-gray-400">Max</div>
-                    <div className="text-white font-medium">{data.max.toFixed(2)}</div>
-                </div>
-            </div>
+                        <line
+                            x1={padding.left}
+                            y1={padding.top}
+                            x2={padding.left}
+                            y2={chartHeight - padding.bottom}
+                            stroke="#374151"
+                        />
 
-            {data.outliers && data.outliers.length > 0 && (
-                <div className="mt-3 text-sm text-gray-400">
-                    <span className="text-yellow-400">{data.outliers.length}</span> aykırı değer tespit edildi
-                </div>
-            )}
+                        <line
+                            x1={boxCenterX}
+                            y1={yWhiskerLow}
+                            x2={boxCenterX}
+                            y2={yQ1}
+                            stroke={theme.colors.primary.cyan}
+                            strokeWidth="2"
+                        />
+                        <line
+                            x1={boxCenterX - whiskerWidth / 2}
+                            y1={yWhiskerLow}
+                            x2={boxCenterX + whiskerWidth / 2}
+                            y2={yWhiskerLow}
+                            stroke={theme.colors.primary.cyan}
+                            strokeWidth="2"
+                        />
 
-            <div className="flex items-center justify-center gap-6 mt-4 text-sm text-gray-400">
-                <div className="flex items-center gap-2">
-                    <div
-                        className="w-4 h-4 rounded border-2"
-                        style={{
-                            borderColor: theme.colors.primary.cyan,
-                            backgroundColor: `${theme.colors.primary.cyan}30`,
-                        }}
-                    />
-                    <span>IQR (Q1-Q3)</span>
+                        <line
+                            x1={boxCenterX}
+                            y1={yQ3}
+                            x2={boxCenterX}
+                            y2={yWhiskerHigh}
+                            stroke={theme.colors.primary.cyan}
+                            strokeWidth="2"
+                        />
+                        <line
+                            x1={boxCenterX - whiskerWidth / 2}
+                            y1={yWhiskerHigh}
+                            x2={boxCenterX + whiskerWidth / 2}
+                            y2={yWhiskerHigh}
+                            stroke={theme.colors.primary.cyan}
+                            strokeWidth="2"
+                        />
+
+                        <rect
+                            x={boxCenterX - boxWidth / 2}
+                            y={yQ3}
+                            width={boxWidth}
+                            height={yQ1 - yQ3}
+                            fill={`${theme.colors.primary.cyan}30`}
+                            stroke={theme.colors.primary.cyan}
+                            strokeWidth="2"
+                            rx="4"
+                        />
+
+                        <line
+                            x1={boxCenterX - boxWidth / 2}
+                            y1={yMedian}
+                            x2={boxCenterX + boxWidth / 2}
+                            y2={yMedian}
+                            stroke={theme.colors.secondary.green}
+                            strokeWidth="3"
+                        />
+
+                        {data.outliers?.map((outlier, i) => (
+                            <circle
+                                key={i}
+                                cx={boxCenterX}
+                                cy={normalizeY(outlier)}
+                                r="4"
+                                fill={theme.colors.status.warning}
+                                stroke={theme.colors.status.warning}
+                                strokeWidth="1"
+                            />
+                        ))}
+
+                        <text
+                            x={boxCenterX}
+                            y={chartHeight - 6}
+                            fill="#9CA3AF"
+                            fontSize="12"
+                            textAnchor="middle"
+                        >
+                            {column}
+                        </text>
+                    </svg>
                 </div>
-                <div className="flex items-center gap-2">
-                    <div className="w-4 h-1 rounded" style={{ backgroundColor: theme.colors.secondary.green }} />
-                    <span>Medyan</span>
-                </div>
-                {data.outliers && data.outliers.length > 0 && (
-                    <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: theme.colors.status.warning }} />
-                        <span>Aykırı Değer</span>
+
+                <div className="grid grid-cols-5 gap-2 mt-3 text-xs">
+                    <div className="text-center p-2 rounded-lg bg-white/5">
+                        <div className="text-gray-400">Min</div>
+                        <div className="text-white font-medium">{data.min.toFixed(2)}</div>
                     </div>
-                )}
+                    <div className="text-center p-2 rounded-lg bg-white/5">
+                        <div className="text-gray-400">Q1</div>
+                        <div className="text-white font-medium">{data.q1.toFixed(2)}</div>
+                    </div>
+                    <div className="text-center p-2 rounded-lg bg-white/5">
+                        <div className="text-gray-400">Medyan</div>
+                        <div className="text-white font-medium">{data.median.toFixed(2)}</div>
+                    </div>
+                    <div className="text-center p-2 rounded-lg bg-white/5">
+                        <div className="text-gray-400">Q3</div>
+                        <div className="text-white font-medium">{data.q3.toFixed(2)}</div>
+                    </div>
+                    <div className="text-center p-2 rounded-lg bg-white/5">
+                        <div className="text-gray-400">Max</div>
+                        <div className="text-white font-medium">{data.max.toFixed(2)}</div>
+                    </div>
+                </div>
+
+                <div className="flex items-center justify-center gap-6 mt-3 text-xs text-gray-400">
+                    <div className="flex items-center gap-2">
+                        <div
+                            className="w-4 h-4 rounded border-2"
+                            style={{
+                                borderColor: theme.colors.primary.cyan,
+                                backgroundColor: `${theme.colors.primary.cyan}30`,
+                            }}
+                        />
+                        <span>IQR</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-4 h-1 rounded" style={{ backgroundColor: theme.colors.secondary.green }} />
+                        <span>Medyan</span>
+                    </div>
+                    {data.outliers && data.outliers.length > 0 && (
+                        <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: theme.colors.status.warning }} />
+                            <span>{data.outliers.length} aykırı</span>
+                        </div>
+                    )}
+                </div>
             </div>
         </ChartCard>
     );
