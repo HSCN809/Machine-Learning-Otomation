@@ -353,33 +353,6 @@ export default function EDAPage() {
                                     />
                                 </div>
                             )}
-
-                            <div
-                                className="p-6 rounded-xl border border-cyan-500/20"
-                                style={{
-                                    background:
-                                        'linear-gradient(135deg, rgba(0, 217, 255, 0.05) 0%, rgba(0, 255, 136, 0.05) 100%)',
-                                }}
-                            >
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <h3 className="font-semibold text-white mb-1">Sonraki Adım</h3>
-                                        <p className="text-sm text-gray-400">
-                                            Verilerinizi ön işleme adımlarından geçirin.
-                                        </p>
-                                    </div>
-                                    <a
-                                        href="/preprocessing"
-                                        className="px-4 py-2 rounded-xl font-medium text-white transition-all hover:scale-105"
-                                        style={{
-                                            background: theme.gradients.primary,
-                                            boxShadow: theme.glow.cyan,
-                                        }}
-                                    >
-                                        Ön İşleme
-                                    </a>
-                                </div>
-                            </div>
                         </>
                     )}
                 </main>

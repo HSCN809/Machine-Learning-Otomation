@@ -200,41 +200,6 @@ export default function DataUploadPage() {
                                     hasLLMSuggestions={hasLLMSuggestions}
                                 />
                             </section>
-
-                            <div
-                                className="p-6 rounded-xl border border-cyan-500/20"
-                                style={{
-                                    background:
-                                        'linear-gradient(135deg, rgba(0, 217, 255, 0.05) 0%, rgba(0, 255, 136, 0.05) 100%)',
-                                }}
-                            >
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <h3 className="font-semibold text-white mb-1">Sonraki Adım</h3>
-                                        <p className="text-sm text-gray-400">
-                                            Verilerinizi analiz etmek için EDA modülüne geçin veya ön işleme yapın.
-                                        </p>
-                                    </div>
-                                    <div className="flex gap-3">
-                                        <a
-                                            href="/eda"
-                                            className="px-4 py-2 rounded-xl border border-white/20 text-white hover:bg-white/5 transition-all"
-                                        >
-                                            EDA
-                                        </a>
-                                        <a
-                                            href="/preprocessing"
-                                            className="px-4 py-2 rounded-xl font-medium text-white transition-all hover:scale-105"
-                                            style={{
-                                                background: theme.gradients.primary,
-                                                boxShadow: theme.glow.cyan,
-                                            }}
-                                        >
-                                            Ön İşleme
-                                        </a>
-                                    </div>
-                                </div>
-                            </div>
                         </>
                     )}
                 </main>
