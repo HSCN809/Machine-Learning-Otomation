@@ -66,10 +66,8 @@ export function Sidebar({ isCollapsed = false, onToggle }: SidebarProps) {
                 background: theme.colors.background.primary,
             }}
         >
-            {/* Logo Section */}
-            <div className="flex h-16 items-center justify-between px-4 border-b border-white/10">
+            <div className="flex min-h-16 items-center justify-between px-4 py-3 border-b border-white/10">
                 <Link href="/" className="flex items-center gap-3">
-                    {/* Animated Logo Icon */}
                     <div
                         className="relative w-10 h-10 rounded-xl flex items-center justify-center"
                         style={{
@@ -78,7 +76,6 @@ export function Sidebar({ isCollapsed = false, onToggle }: SidebarProps) {
                         }}
                     >
                         <BrainCircuit className="w-6 h-6 text-white" />
-                        {/* Pulse animation */}
                         <div
                             className="absolute inset-0 rounded-xl animate-ping opacity-20"
                             style={{ background: theme.gradients.primary }}
@@ -88,21 +85,20 @@ export function Sidebar({ isCollapsed = false, onToggle }: SidebarProps) {
                     {!isCollapsed && (
                         <div className="flex flex-col">
                             <span
-                                className="font-bold text-lg bg-clip-text text-transparent"
+                                className="font-bold text-xl leading-tight bg-clip-text text-transparent"
                                 style={{
                                     backgroundImage: theme.gradients.primary,
                                 }}
                             >
                                 ML Automation
                             </span>
-                            <span className="text-xs" style={{ color: theme.colors.text.muted }}>
+                            <span className="text-sm leading-tight" style={{ color: theme.colors.text.muted }}>
                                 Data Science Copilot
                             </span>
                         </div>
                     )}
                 </Link>
 
-                {/* Toggle Button */}
                 <button
                     onClick={onToggle}
                     className={cn(
@@ -120,7 +116,6 @@ export function Sidebar({ isCollapsed = false, onToggle }: SidebarProps) {
                 </button>
             </div>
 
-            {/* Navigation */}
             <nav className="flex-1 px-3 py-4 space-y-1">
                 {navItems.map((item) => {
                     const isActive = pathname === item.href;
@@ -140,13 +135,12 @@ export function Sidebar({ isCollapsed = false, onToggle }: SidebarProps) {
                             style={
                                 isActive
                                     ? {
-                                        background: `linear-gradient(135deg, ${theme.colors.primary.cyan}20 0%, ${theme.colors.secondary.green}10 100%)`,
-                                        boxShadow: theme.glow.cyan,
-                                    }
+                                          background: `linear-gradient(135deg, ${theme.colors.primary.cyan}20 0%, ${theme.colors.secondary.green}10 100%)`,
+                                          boxShadow: theme.glow.cyan,
+                                      }
                                     : undefined
                             }
                         >
-                            {/* Active indicator line */}
                             {isActive && (
                                 <div
                                     className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 rounded-r-full"
@@ -168,11 +162,8 @@ export function Sidebar({ isCollapsed = false, onToggle }: SidebarProps) {
                                 }
                             />
 
-                            {!isCollapsed && (
-                                <span className="font-medium">{item.label}</span>
-                            )}
+                            {!isCollapsed && <span className="font-medium">{item.label}</span>}
 
-                            {/* Hover glow effect */}
                             <div
                                 className={cn(
                                     'absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300',
@@ -184,9 +175,9 @@ export function Sidebar({ isCollapsed = false, onToggle }: SidebarProps) {
                 })}
             </nav>
 
-            {/* Bottom Section - Data Status */}
             {!isCollapsed && (
-                <div className="p-4 mx-3 mb-4 rounded-xl border border-white/10"
+                <div
+                    className="p-4 mx-3 mb-4 rounded-xl border border-white/10"
                     style={{ background: theme.colors.background.secondary }}
                 >
                     <div className="flex items-center gap-2 mb-2">

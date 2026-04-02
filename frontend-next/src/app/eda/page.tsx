@@ -12,7 +12,7 @@ import {
     CorrelationMatrix,
     CategoryDistribution,
 } from '@/components/eda';
-import { NoDataWarning } from '@/components/common';
+import { NoDataWarning, StepProgress } from '@/components/common';
 import { useEDA } from '@/hooks/useEDA';
 import { hasStoredSession } from '@/lib/api';
 import { theme } from '@/styles/theme';
@@ -20,11 +20,27 @@ import { Loader2, BarChart3, TrendingUp, GitBranch, Layers } from 'lucide-react'
 
 type TabId = 'summary' | 'numeric' | 'correlation' | 'categorical';
 
-const tabs: { id: TabId; label: string; icon: React.ElementType }[] = [
-    { id: 'summary', label: 'Özet', icon: BarChart3 },
-    { id: 'numeric', label: 'Sayısal Analiz', icon: TrendingUp },
-    { id: 'correlation', label: 'Korelasyon', icon: GitBranch },
-    { id: 'categorical', label: 'Kategorik', icon: Layers },
+const tabs = [
+    {
+        id: 'summary' as TabId,
+        label: 'Özet',
+        icon: <BarChart3 className="w-5 h-5" />,
+    },
+    {
+        id: 'numeric' as TabId,
+        label: 'Sayısal Analiz',
+        icon: <TrendingUp className="w-5 h-5" />,
+    },
+    {
+        id: 'correlation' as TabId,
+        label: 'Korelasyon',
+        icon: <GitBranch className="w-5 h-5" />,
+    },
+    {
+        id: 'categorical' as TabId,
+        label: 'Kategorik',
+        icon: <Layers className="w-5 h-5" />,
+    },
 ];
 
 const chartSelectClassName =
@@ -52,6 +68,8 @@ export default function EDAPage() {
         setScatterColumns,
     } = useEDA();
 
+    const activeTabIndex = tabs.findIndex((tab) => tab.id === activeTab);
+
     useEffect(() => {
         const sessionExists = hasStoredSession();
         setHasSession(sessionExists);
@@ -74,16 +92,12 @@ export default function EDAPage() {
                     marginLeft: sidebarCollapsed ? '80px' : '288px',
                 }}
             >
-                <Header title="Keşifsel Veri Analizi (EDA)" />
+                <Header
+                    title="Keşifsel Veri Analizi (EDA)"
+                    subtitle="Verilerinizi analiz edin, istatistikleri görüntüleyin ve görselleştirmeler oluşturun."
+                />
 
                 <main className="p-6 space-y-6">
-                    <div>
-                        <h1 className="text-2xl font-bold text-white mb-2">Keşifsel Veri Analizi</h1>
-                        <p className="text-gray-400">
-                            Verilerinizi analiz edin, istatistikleri görüntüleyin ve görselleştirmeler oluşturun.
-                        </p>
-                    </div>
-
                     {isLoading && (
                         <div className="flex items-center justify-center py-20">
                             <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
@@ -100,35 +114,17 @@ export default function EDAPage() {
 
                     {edaData && !isLoading && (
                         <>
-                            <div className="flex gap-2 border-b border-white/10 pb-2">
-                                {tabs.map((tab) => {
-                                    const Icon = tab.icon;
-                                    const isActive = activeTab === tab.id;
-
-                                    return (
-                                        <button
-                                            key={tab.id}
-                                            onClick={() => setActiveTab(tab.id)}
-                                            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 cursor-pointer ${
-                                                isActive
-                                                    ? 'text-white'
-                                                    : 'text-gray-400 hover:text-white hover:bg-white/5'
-                                            }`}
-                                            style={
-                                                isActive
-                                                    ? {
-                                                          background: `${theme.colors.primary.cyan}20`,
-                                                          boxShadow: `0 0 10px ${theme.colors.primary.cyan}30`,
-                                                      }
-                                                    : undefined
-                                            }
-                                        >
-                                            <Icon className="w-4 h-4" />
-                                            {tab.label}
-                                        </button>
-                                    );
-                                })}
-                            </div>
+                            <StepProgress
+                                steps={tabs.map((tab) => ({
+                                    id: tab.id,
+                                    name: tab.label,
+                                    icon: tab.icon,
+                                }))}
+                                currentStep={activeTabIndex}
+                                onStepClick={(step) => setActiveTab(tabs[step].id)}
+                                isStepClickable={() => true}
+                                showActiveLine={false}
+                            />
 
                             {activeTab === 'summary' && (
                                 <div className="space-y-6">
@@ -141,78 +137,78 @@ export default function EDAPage() {
                                 </div>
                             )}
 
-                            {activeTab === 'numeric' && (
+                            {activeTab === 'numeric' && selectedNumericColumn && (
                                 <div className="space-y-6">
-                                    {selectedNumericColumn && (
-                                        <ChartCarousel
-                                            slides={[
-                                                {
-                                                    id: 'histogram',
-                                                    label: 'Histogram',
-                                                    content: (
-                                                        <HistogramChart
-                                                            data={histogramData}
-                                                            column={selectedNumericColumn}
-                                                            headerActions={
-                                                                <>
-                                                                    <label className="text-sm text-gray-400">Sütun Seç:</label>
-                                                                    <select
-                                                                        value={selectedNumericColumn}
-                                                                        onChange={(e) => setSelectedNumericColumn(e.target.value)}
-                                                                        className={chartSelectClassName}
-                                                                        aria-label="Histogram sütunu seç"
-                                                                    >
-                                                                        {edaData.numericColumns.map((col) => (
-                                                                            <option key={col} value={col} className="bg-gray-800">
-                                                                                {col}
-                                                                            </option>
-                                                                        ))}
-                                                                    </select>
-                                                                </>
-                                                            }
-                                                        />
-                                                    ),
-                                                },
-                                                ...(boxPlotData
-                                                    ? [
-                                                          {
-                                                              id: 'boxplot',
-                                                              label: 'Box Plot',
-                                                              content: (
-                                                                  <BoxPlotChart
-                                                                      data={boxPlotData}
-                                                                      column={selectedNumericColumn}
-                                                                      headerActions={
-                                                                          <>
-                                                                              <label className="text-sm text-gray-400">Sütun Seç:</label>
-                                                                              <select
-                                                                                  value={selectedNumericColumn}
-                                                                                  onChange={(e) =>
-                                                                                      setSelectedNumericColumn(e.target.value)
-                                                                                  }
-                                                                                  className={chartSelectClassName}
-                                                                                  aria-label="Box plot sütunu seç"
-                                                                              >
-                                                                                  {edaData.numericColumns.map((col) => (
-                                                                                      <option
-                                                                                          key={col}
-                                                                                          value={col}
-                                                                                          className="bg-gray-800"
-                                                                                      >
-                                                                                          {col}
-                                                                                      </option>
-                                                                                  ))}
-                                                                              </select>
-                                                                          </>
-                                                                      }
-                                                                  />
-                                                              ),
-                                                          },
-                                                      ]
-                                                    : []),
-                                            ]}
-                                        />
-                                    )}
+                                    <ChartCarousel
+                                        slides={[
+                                            {
+                                                id: 'histogram',
+                                                label: 'Histogram',
+                                                content: (
+                                                    <HistogramChart
+                                                        data={histogramData}
+                                                        column={selectedNumericColumn}
+                                                        headerActions={
+                                                            <>
+                                                                <label className="text-sm text-gray-400">Sütun Seç:</label>
+                                                                <select
+                                                                    value={selectedNumericColumn}
+                                                                    onChange={(e) => setSelectedNumericColumn(e.target.value)}
+                                                                    className={chartSelectClassName}
+                                                                    aria-label="Histogram sütunu seç"
+                                                                >
+                                                                    {edaData.numericColumns.map((col) => (
+                                                                        <option key={col} value={col} className="bg-gray-800">
+                                                                            {col}
+                                                                        </option>
+                                                                    ))}
+                                                                </select>
+                                                            </>
+                                                        }
+                                                    />
+                                                ),
+                                            },
+                                            ...(boxPlotData
+                                                ? [
+                                                      {
+                                                          id: 'boxplot',
+                                                          label: 'Box Plot',
+                                                          content: (
+                                                              <BoxPlotChart
+                                                                  data={boxPlotData}
+                                                                  column={selectedNumericColumn}
+                                                                  headerActions={
+                                                                      <>
+                                                                          <label className="text-sm text-gray-400">
+                                                                              Sütun Seç:
+                                                                          </label>
+                                                                          <select
+                                                                              value={selectedNumericColumn}
+                                                                              onChange={(e) =>
+                                                                                  setSelectedNumericColumn(e.target.value)
+                                                                              }
+                                                                              className={chartSelectClassName}
+                                                                              aria-label="Box plot sütunu seç"
+                                                                          >
+                                                                              {edaData.numericColumns.map((col) => (
+                                                                                  <option
+                                                                                      key={col}
+                                                                                      value={col}
+                                                                                      className="bg-gray-800"
+                                                                                  >
+                                                                                      {col}
+                                                                                  </option>
+                                                                              ))}
+                                                                          </select>
+                                                                      </>
+                                                                  }
+                                                              />
+                                                          ),
+                                                      },
+                                                  ]
+                                                : []),
+                                        ]}
+                                    />
                                 </div>
                             )}
 
@@ -289,70 +285,72 @@ export default function EDAPage() {
                                 />
                             )}
 
-                            {activeTab === 'categorical' && (
+                            {activeTab === 'categorical' && selectedCategoricalColumn && (
                                 <div className="space-y-6">
-                                    {selectedCategoricalColumn && (
-                                        <ChartCarousel
-                                            slides={[
-                                                {
-                                                    id: 'category-bar',
-                                                    label: 'Çubuk Grafik',
-                                                    content: (
-                                                        <CategoryDistribution
-                                                            data={categoryData}
-                                                            column={selectedCategoricalColumn}
-                                                            chartType="bar"
-                                                            headerActions={
-                                                                <>
-                                                                    <label className="text-sm text-gray-400">Sütun Seç:</label>
-                                                                    <select
-                                                                        value={selectedCategoricalColumn}
-                                                                        onChange={(e) => setSelectedCategoricalColumn(e.target.value)}
-                                                                        className={chartSelectClassName}
-                                                                        aria-label="Kategorik çubuk grafik sütunu seç"
-                                                                    >
-                                                                        {edaData.categoricalColumns.map((col) => (
-                                                                            <option key={col} value={col} className="bg-gray-800">
-                                                                                {col}
-                                                                            </option>
-                                                                        ))}
-                                                                    </select>
-                                                                </>
-                                                            }
-                                                        />
-                                                    ),
-                                                },
-                                                {
-                                                    id: 'category-pie',
-                                                    label: 'Pasta Grafik',
-                                                    content: (
-                                                        <CategoryDistribution
-                                                            data={categoryData}
-                                                            column={selectedCategoricalColumn}
-                                                            chartType="pie"
-                                                            headerActions={
-                                                                <>
-                                                                    <label className="text-sm text-gray-400">Sütun Seç:</label>
-                                                                    <select
-                                                                        value={selectedCategoricalColumn}
-                                                                        onChange={(e) => setSelectedCategoricalColumn(e.target.value)}
-                                                                        className={chartSelectClassName}
-                                                                        aria-label="Kategorik pasta grafik sütunu seç"
-                                                                    >
-                                                                        {edaData.categoricalColumns.map((col) => (
-                                                                            <option key={col} value={col} className="bg-gray-800">
-                                                                                {col}
-                                                                            </option>
-                                                                        ))}
-                                                                    </select>
-                                                                </>
-                                                            }
-                                                        />
-                                                    ),
-                                                },
-                                            ]}
-                                        />
-                                    )}
+                                    <ChartCarousel
+                                        slides={[
+                                            {
+                                                id: 'category-bar',
+                                                label: 'Çubuk Grafik',
+                                                content: (
+                                                    <CategoryDistribution
+                                                        data={categoryData}
+                                                        column={selectedCategoricalColumn}
+                                                        chartType="bar"
+                                                        headerActions={
+                                                            <>
+                                                                <label className="text-sm text-gray-400">Sütun Seç:</label>
+                                                                <select
+                                                                    value={selectedCategoricalColumn}
+                                                                    onChange={(e) =>
+                                                                        setSelectedCategoricalColumn(e.target.value)
+                                                                    }
+                                                                    className={chartSelectClassName}
+                                                                    aria-label="Kategorik çubuk grafik sütunu seç"
+                                                                >
+                                                                    {edaData.categoricalColumns.map((col) => (
+                                                                        <option key={col} value={col} className="bg-gray-800">
+                                                                            {col}
+                                                                        </option>
+                                                                    ))}
+                                                                </select>
+                                                            </>
+                                                        }
+                                                    />
+                                                ),
+                                            },
+                                            {
+                                                id: 'category-pie',
+                                                label: 'Pasta Grafik',
+                                                content: (
+                                                    <CategoryDistribution
+                                                        data={categoryData}
+                                                        column={selectedCategoricalColumn}
+                                                        chartType="pie"
+                                                        headerActions={
+                                                            <>
+                                                                <label className="text-sm text-gray-400">Sütun Seç:</label>
+                                                                <select
+                                                                    value={selectedCategoricalColumn}
+                                                                    onChange={(e) =>
+                                                                        setSelectedCategoricalColumn(e.target.value)
+                                                                    }
+                                                                    className={chartSelectClassName}
+                                                                    aria-label="Kategorik pasta grafik sütunu seç"
+                                                                >
+                                                                    {edaData.categoricalColumns.map((col) => (
+                                                                        <option key={col} value={col} className="bg-gray-800">
+                                                                            {col}
+                                                                        </option>
+                                                                    ))}
+                                                                </select>
+                                                            </>
+                                                        }
+                                                    />
+                                                ),
+                                            },
+                                        ]}
+                                    />
                                 </div>
                             )}
 

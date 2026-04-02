@@ -13,18 +13,18 @@ import {
     ModelComparison,
     ResultsExport,
 } from '@/components/model-selection';
-import { NoDataWarning } from '@/components/common';
+import { NoDataWarning, StepProgress } from '@/components/common';
 import { useModelSelection } from '@/hooks/useModelSelection';
 import { hasStoredSession } from '@/lib/api';
 import { theme } from '@/styles/theme';
-import { ChevronLeft, ChevronRight, Loader2, Play, RotateCcw } from 'lucide-react';
+import { Target, BrainCircuit, SlidersHorizontal, Rocket, BarChart3, ChevronLeft, ChevronRight, Play, RotateCcw } from 'lucide-react';
 
 const STEPS = [
-    { id: 0, name: 'Target Seçimi', icon: '🎯' },
-    { id: 1, name: 'Model Seçimi', icon: '🧠' },
-    { id: 2, name: 'Hiperparametreler', icon: '⚙️' },
-    { id: 3, name: 'Eğitim', icon: '🚀' },
-    { id: 4, name: 'Sonuçlar', icon: '📊' },
+    { id: 0, name: 'Target Seçimi', icon: <Target className="w-5 h-5" /> },
+    { id: 1, name: 'Model Seçimi', icon: <BrainCircuit className="w-5 h-5" /> },
+    { id: 2, name: 'Hiperparametreler', icon: <SlidersHorizontal className="w-5 h-5" /> },
+    { id: 3, name: 'Eğitim', icon: <Rocket className="w-5 h-5" /> },
+    { id: 4, name: 'Sonuçlar', icon: <BarChart3 className="w-5 h-5" /> },
 ];
 
 export default function ModelSelectionPage() {
@@ -55,7 +55,6 @@ export default function ModelSelectionPage() {
         resetAll,
     } = useModelSelection();
 
-    // Load columns on mount
     useEffect(() => {
         const sessionExists = hasStoredSession();
         setHasSession(sessionExists);
@@ -66,8 +65,8 @@ export default function ModelSelectionPage() {
 
     const hasData = hasSession === true && columns.length > 0;
     const currentStepInfo = STEPS[currentStep];
+    const completedSteps = STEPS.map((_, index) => index).filter((index) => index < currentStep);
 
-    // Render current step content
     const renderStepContent = () => {
         switch (currentStep) {
             case 0:
@@ -130,7 +129,6 @@ export default function ModelSelectionPage() {
                     <div className="space-y-6">
                         {trainingResults.length > 0 && problemType && (
                             <>
-                                {/* Best model metrics */}
                                 <div>
                                     <h3 className="text-lg font-semibold text-white mb-3">
                                         🏆 En İyi Model: {trainingResults[0]?.modelName}
@@ -141,20 +139,15 @@ export default function ModelSelectionPage() {
                                     />
                                 </div>
 
-                                {/* Confusion matrix for classification */}
                                 {problemType === 'classification' && trainingResults[0]?.confusionMatrix && (
                                     <ConfusionMatrix matrix={trainingResults[0].confusionMatrix} />
                                 )}
 
-                                {/* Feature importance */}
                                 {trainingResults[0]?.featureImportance && (
                                     <FeatureImportance data={trainingResults[0].featureImportance} />
                                 )}
 
-                                {/* Model comparison */}
                                 <ModelComparison results={trainingResults} problemType={problemType} />
-
-                                {/* Export */}
                                 <ResultsExport results={trainingResults} />
                             </>
                         )}
@@ -167,31 +160,23 @@ export default function ModelSelectionPage() {
 
     return (
         <div className="min-h-screen">
-            {/* Sidebar */}
             <Sidebar
                 isCollapsed={sidebarCollapsed}
                 onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
             />
 
-            {/* Main Content */}
             <div
                 className="transition-all duration-300"
                 style={{
                     marginLeft: sidebarCollapsed ? '80px' : '288px',
                 }}
             >
-                <Header title="Model Seçimi" />
+                <Header
+                    title="Model Seçimi"
+                    subtitle="Verilerinize uygun modelleri seçin, eğitin ve karşılaştırın."
+                />
 
                 <main className="p-6 space-y-6">
-                    {/* Page Header */}
-                    <div>
-                        <h1 className="text-2xl font-bold text-white mb-2">🤖 Model Seçimi ve Eğitimi</h1>
-                        <p className="text-gray-400">
-                            Verilerinize uygun modelleri seçin, eğitin ve karşılaştırın.
-                        </p>
-                    </div>
-
-                    {/* No Data Warning */}
                     {hasSession !== null && !hasData && (
                         <NoDataWarning
                             title="Veri Yüklenmedi"
@@ -199,57 +184,36 @@ export default function ModelSelectionPage() {
                         />
                     )}
 
-                    {/* Content - only show when data is loaded */}
                     {hasData && (
                         <>
-                            {/* Step Progress */}
-                            <div className="flex items-center gap-2">
-                                {STEPS.map((step, index) => (
-                                    <div key={step.id} className="flex items-center">
-                                        <button
-                                            onClick={() => index <= currentStep && goToStep(index)}
-                                            disabled={index > currentStep}
-                                            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${index === currentStep
-                                                ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50'
-                                                : index < currentStep
-                                                    ? 'bg-green-500/10 text-green-400 cursor-pointer hover:bg-green-500/20'
-                                                    : 'bg-white/5 text-gray-500 cursor-not-allowed'
-                                                }`}
-                                        >
-                                            <span>{step.icon}</span>
-                                            <span className="hidden sm:inline">{step.name}</span>
-                                        </button>
-                                        {index < STEPS.length - 1 && (
-                                            <ChevronRight className="w-5 h-5 text-gray-600 mx-1" />
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
+                            <StepProgress
+                                steps={STEPS}
+                                currentStep={currentStep}
+                                completedSteps={completedSteps}
+                                onStepClick={goToStep}
+                                isStepClickable={(index) => index <= currentStep}
+                            />
 
-                            {/* Error display */}
                             {error && (
                                 <div className="p-4 rounded-xl border border-red-500/30 bg-red-500/10">
                                     <p className="text-red-400">❌ {error}</p>
                                 </div>
                             )}
 
-                            {/* Step content */}
                             <div
                                 className="p-6 rounded-2xl border border-white/10"
                                 style={{
-                                    background: 'linear-gradient(135deg, rgba(17, 24, 39, 0.6) 0%, rgba(31, 41, 55, 0.4) 100%)',
+                                    background:
+                                        'linear-gradient(135deg, rgba(17, 24, 39, 0.6) 0%, rgba(31, 41, 55, 0.4) 100%)',
                                 }}
                             >
-                                {/* Step header */}
                                 <div className="flex items-center gap-3 mb-6 pb-4 border-b border-white/10">
-                                    <span className="text-3xl">{currentStepInfo?.icon}</span>
+                                    <div className="text-cyan-400">{currentStepInfo?.icon}</div>
                                     <h2 className="text-xl font-bold text-white">{currentStepInfo?.name}</h2>
                                 </div>
 
-                                {/* Content */}
                                 {renderStepContent()}
 
-                                {/* Navigation */}
                                 <div className="flex items-center justify-between pt-6 mt-6 border-t border-white/10">
                                     <div className="flex items-center gap-2">
                                         <button
@@ -275,8 +239,12 @@ export default function ModelSelectionPage() {
                                             disabled={!canGoNext || isTraining}
                                             className="flex items-center gap-2 px-6 py-2 rounded-xl font-medium text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105"
                                             style={{
-                                                background: canGoNext && !isTraining ? theme.gradients.primary : 'rgba(255,255,255,0.1)',
-                                                boxShadow: canGoNext && !isTraining ? theme.glow.cyan : undefined,
+                                                background:
+                                                    canGoNext && !isTraining
+                                                        ? theme.gradients.primary
+                                                        : 'rgba(255,255,255,0.1)',
+                                                boxShadow:
+                                                    canGoNext && !isTraining ? theme.glow.cyan : undefined,
                                             }}
                                         >
                                             İleri

@@ -16,8 +16,6 @@ import {
 import { NoDataWarning } from '@/components/common';
 import { usePreprocessing, PREPROCESSING_STEPS } from '@/hooks/usePreprocessing';
 import { hasStoredSession } from '@/lib/api';
-import { theme } from '@/styles/theme';
-import { Loader2 } from 'lucide-react';
 
 export default function PreprocessingPage() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -29,7 +27,6 @@ export default function PreprocessingPage() {
         history,
         columns,
         isLoading,
-        error,
         goToStep,
         nextStep,
         prevStep,
@@ -48,7 +45,6 @@ export default function PreprocessingPage() {
         columnsWithMissing,
     } = usePreprocessing();
 
-    // Load columns on mount
     useEffect(() => {
         const sessionExists = hasStoredSession();
         setHasSession(sessionExists);
@@ -61,7 +57,6 @@ export default function PreprocessingPage() {
     const currentStepInfo = PREPROCESSING_STEPS[currentStep];
     const isLastStep = currentStep === PREPROCESSING_STEPS.length - 1;
 
-    // Render current step content
     const renderStepContent = () => {
         switch (currentStepInfo?.key) {
             case 'feature_engineering':
@@ -107,13 +102,7 @@ export default function PreprocessingPage() {
                     />
                 );
             case 'summary':
-                return (
-                    <Summary
-                        history={history}
-                        columns={columns}
-                        originalColumnCount={6}
-                    />
-                );
+                return <Summary history={history} columns={columns} originalColumnCount={6} />;
             default:
                 return null;
         }
@@ -121,31 +110,23 @@ export default function PreprocessingPage() {
 
     return (
         <div className="min-h-screen">
-            {/* Sidebar */}
             <Sidebar
                 isCollapsed={sidebarCollapsed}
                 onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
             />
 
-            {/* Main Content */}
             <div
                 className="transition-all duration-300"
                 style={{
                     marginLeft: sidebarCollapsed ? '80px' : '288px',
                 }}
             >
-                <Header title="Veri Ön İşleme" />
+                <Header
+                    title="Veri Ön İşleme"
+                    subtitle="Adım adım verilerinizi model eğitimine hazırlayın."
+                />
 
                 <main className="p-6 space-y-6">
-                    {/* Page Header */}
-                    <div>
-                        <h1 className="text-2xl font-bold text-white mb-2">🔧 Veri Ön İşleme</h1>
-                        <p className="text-gray-400">
-                            Adım adım verilerinizi model eğitimine hazırlayın.
-                        </p>
-                    </div>
-
-                    {/* No Data Warning */}
                     {!isLoading && hasSession !== null && !hasData && (
                         <NoDataWarning
                             title="Veri Yüklenmedi"
@@ -153,10 +134,8 @@ export default function PreprocessingPage() {
                         />
                     )}
 
-                    {/* Content - only show when data is loaded */}
                     {hasData && (
                         <>
-                            {/* Step Progress */}
                             <StepProgress
                                 steps={PREPROCESSING_STEPS}
                                 currentStep={currentStep}
@@ -164,17 +143,15 @@ export default function PreprocessingPage() {
                                 onStepClick={goToStep}
                             />
 
-                            {/* Main content area */}
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                                {/* Step content */}
                                 <div className="lg:col-span-2">
                                     <div
                                         className="p-6 rounded-2xl border border-white/10"
                                         style={{
-                                            background: 'linear-gradient(135deg, rgba(17, 24, 39, 0.6) 0%, rgba(31, 41, 55, 0.4) 100%)',
+                                            background:
+                                                'linear-gradient(135deg, rgba(17, 24, 39, 0.6) 0%, rgba(31, 41, 55, 0.4) 100%)',
                                         }}
                                     >
-                                        {/* Step header */}
                                         <div className="flex items-center gap-3 mb-6 pb-4 border-b border-white/10">
                                             <span className="text-3xl">{currentStepInfo?.icon}</span>
                                             <div>
@@ -183,10 +160,8 @@ export default function PreprocessingPage() {
                                             </div>
                                         </div>
 
-                                        {/* Step content */}
                                         {renderStepContent()}
 
-                                        {/* Navigation */}
                                         {!isLastStep && (
                                             <StepNavigation
                                                 onPrev={prevStep}
@@ -202,13 +177,8 @@ export default function PreprocessingPage() {
                                     </div>
                                 </div>
 
-                                {/* History sidebar */}
                                 <div className="lg:col-span-1">
-                                    <HistoryLog
-                                        history={history}
-                                        onUndo={undoLastAction}
-                                        onClear={resetAll}
-                                    />
+                                    <HistoryLog history={history} onUndo={undoLastAction} onClear={resetAll} />
                                 </div>
                             </div>
                         </>

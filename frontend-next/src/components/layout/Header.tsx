@@ -6,25 +6,33 @@ import { cn } from '@/lib/utils';
 
 interface HeaderProps {
     title?: string;
+    subtitle?: string;
 }
 
-export function Header({ title = 'Dashboard' }: HeaderProps) {
+export function Header({ title = 'Dashboard', subtitle }: HeaderProps) {
     return (
         <header
-            className="sticky top-0 z-30 flex items-center justify-between h-16 px-6 border-b border-white/10 backdrop-blur-xl"
+            className="sticky top-0 z-30 flex items-center justify-between min-h-16 px-6 py-3 border-b border-white/10 backdrop-blur-xl"
             style={{
                 background: `${theme.colors.background.primary}CC`,
             }}
         >
             <div className="flex items-center gap-4">
-                <h1
-                    className="text-xl font-bold bg-clip-text text-transparent"
-                    style={{
-                        backgroundImage: theme.gradients.primary,
-                    }}
-                >
-                    {title}
-                </h1>
+                <div>
+                    <h1
+                        className="text-xl font-bold bg-clip-text text-transparent"
+                        style={{
+                            backgroundImage: theme.gradients.primary,
+                        }}
+                    >
+                        {title}
+                    </h1>
+                    {subtitle && (
+                        <p className="mt-1 text-sm text-gray-400">
+                            {subtitle}
+                        </p>
+                    )}
+                </div>
             </div>
 
             <div className="flex items-center gap-2">
