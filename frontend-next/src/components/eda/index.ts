@@ -1,4 +1,5 @@
 // EDA components barrel export
+export { ChartCarousel } from './ChartCarousel';
 export { ChartCard } from './ChartCard';
 export { StatsSummary } from './StatsSummary';
 export { DataTypesTable } from './DataTypesTable';

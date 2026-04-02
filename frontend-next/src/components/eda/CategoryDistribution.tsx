@@ -1,5 +1,6 @@
 'use client';
 
+import { ReactNode } from 'react';
 import {
     BarChart,
     Bar,
@@ -21,6 +22,7 @@ interface CategoryDistributionProps {
     data: CategoryData[];
     column: string;
     chartType?: 'bar' | 'pie';
+    headerActions?: ReactNode;
 }
 
 const COLORS = [
@@ -31,9 +33,13 @@ const COLORS = [
     theme.colors.status.info,
 ];
 
-export function CategoryDistribution({ data, column, chartType = 'bar' }: CategoryDistributionProps) {
-    // Recharts için veriyi uygun formata dönüştür
-    const chartData = data.map(d => ({
+export function CategoryDistribution({
+    data,
+    column,
+    chartType = 'bar',
+    headerActions,
+}: CategoryDistributionProps) {
+    const chartData = data.map((d) => ({
         name: d.name,
         value: d.value,
         percentage: d.percentage,
@@ -44,6 +50,7 @@ export function CategoryDistribution({ data, column, chartType = 'bar' }: Catego
             <ChartCard
                 title={`Kategorik Dağılım: ${column}`}
                 description="Pasta grafiği"
+                headerActions={headerActions}
             >
                 <div className="h-[300px]">
                     <ResponsiveContainer width="100%" height="100%">
@@ -57,7 +64,7 @@ export function CategoryDistribution({ data, column, chartType = 'bar' }: Catego
                                 outerRadius={100}
                                 labelLine={{ stroke: '#6B7280' }}
                             >
-                                {chartData.map((entry, index) => (
+                                {chartData.map((_, index) => (
                                     <Cell
                                         key={`cell-${index}`}
                                         fill={COLORS[index % COLORS.length]}
@@ -77,9 +84,7 @@ export function CategoryDistribution({ data, column, chartType = 'bar' }: Catego
                                 itemStyle={{ color: 'white' }}
                                 formatter={(value: number) => [`${value.toLocaleString('tr-TR')}`, 'Değer']}
                             />
-                            <Legend
-                                wrapperStyle={{ color: theme.colors.text.secondary }}
-                            />
+                            <Legend wrapperStyle={{ color: theme.colors.text.secondary }} />
                         </PieChart>
                     </ResponsiveContainer>
                 </div>
@@ -91,6 +96,7 @@ export function CategoryDistribution({ data, column, chartType = 'bar' }: Catego
         <ChartCard
             title={`Kategorik Dağılım: ${column}`}
             description="Değer sayıları"
+            headerActions={headerActions}
         >
             <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
@@ -121,12 +127,12 @@ export function CategoryDistribution({ data, column, chartType = 'bar' }: Catego
                             labelStyle={{ color: 'white' }}
                             itemStyle={{ color: 'white' }}
                             formatter={(value: number) => {
-                                const item = chartData.find(d => d.value === value);
+                                const item = chartData.find((d) => d.value === value);
                                 return [`${value.toLocaleString('tr-TR')} (${item?.percentage.toFixed(1)}%)`, 'Sayı'];
                             }}
                         />
                         <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                            {chartData.map((entry, index) => (
+                            {chartData.map((_, index) => (
                                 <Cell
                                     key={`cell-${index}`}
                                     fill={COLORS[index % COLORS.length]}

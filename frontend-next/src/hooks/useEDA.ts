@@ -202,6 +202,11 @@ export function useEDA(): UseEDAReturn {
             return;
         }
 
+        if (scatterXColumn === scatterYColumn) {
+            setScatterData([]);
+            return;
+        }
+
         api.getScatterData(scatterXColumn, scatterYColumn)
             .then(result => {
                 setScatterData(result.data);

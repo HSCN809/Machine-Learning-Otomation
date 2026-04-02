@@ -10,6 +10,7 @@ interface ChartCardProps {
     description?: string;
     children: ReactNode;
     className?: string;
+    headerActions?: ReactNode;
     onExport?: () => void;
     onFullscreen?: () => void;
 }
@@ -19,6 +20,7 @@ export function ChartCard({
     description,
     children,
     className,
+    headerActions,
     onExport,
     onFullscreen,
 }: ChartCardProps) {
@@ -33,14 +35,15 @@ export function ChartCard({
             }}
         >
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+            <div className="flex flex-col gap-3 px-4 py-3 border-b border-white/10 md:flex-row md:items-start md:justify-between">
                 <div>
                     <h3 className="font-semibold text-white">{title}</h3>
                     {description && (
                         <p className="text-sm text-gray-400 mt-0.5">{description}</p>
                     )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 md:justify-end">
+                    {headerActions}
                     {onExport && (
                         <button
                             onClick={onExport}

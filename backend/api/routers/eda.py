@@ -1,13 +1,15 @@
 """
-EDA Router - Exploratory Data Analysis endpoints
+EDA Router - Exploratory Data Analysis endpoints.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from typing import Optional, List
-import pandas as pd
-import numpy as np
-import sys
+from typing import Any, cast
 import os
+import sys
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+import numpy as np
+import pandas as pd
+from pandas.api.types import is_datetime64_any_dtype, is_numeric_dtype, is_object_dtype
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
@@ -16,23 +18,60 @@ from ..dependencies import session_manager, require_session
 router = APIRouter()
 
 
-@router.get("/summary")
-async def get_eda_summary(session_id: str = Depends(require_session)):
-    """Get EDA summary statistics"""
+def _safe_percentage(numerator: float, denominator: float) -> float:
+    """Return percentage while avoiding division by zero."""
+    if denominator == 0:
+        return 0.0
+    return round(numerator / denominator * 100, 2)
+
+
+def _get_dataframe(session_id: str) -> pd.DataFrame:
+    """Return session dataframe or raise 400."""
     df = session_manager.get_dataframe(session_id)
     if df is None:
         raise HTTPException(status_code=400, detail="No data loaded")
+    return df
+
+
+def _get_series(df: pd.DataFrame, column: str) -> pd.Series:
+    """Return a dataframe column as Series for type checkers and runtime safety."""
+    if column not in df.columns:
+        raise HTTPException(status_code=404, detail=f"Column '{column}' not found")
+    return cast(pd.Series, df[column])
+
+
+def _is_numeric_series(series: pd.Series) -> bool:
+    """Check whether a pandas Series is numeric."""
+    return bool(is_numeric_dtype(series.dtype))
+
+
+def _is_categorical_series(series: pd.Series) -> bool:
+    """Check whether a pandas Series is categorical-like."""
+    return bool(is_object_dtype(series.dtype) or isinstance(series.dtype, pd.CategoricalDtype))
+
+
+def _is_datetime_series(series: pd.Series) -> bool:
+    """Check whether a pandas Series is datetime-like."""
+    return bool(is_datetime64_any_dtype(series.dtype))
+
+
+@router.get("/summary")
+async def get_eda_summary(session_id: str = Depends(require_session)):
+    """Get EDA summary statistics"""
+    df = _get_dataframe(session_id)
     
     numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
     categorical_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
     
+    total_cells = len(df) * len(df.columns)
+
     return {
         "row_count": len(df),
         "column_count": len(df.columns),
         "numeric_columns": numeric_cols,
         "categorical_columns": categorical_cols,
         "missing_count": int(df.isnull().sum().sum()),
-        "missing_percentage": round(df.isnull().sum().sum() / (len(df) * len(df.columns)) * 100, 2),
+        "missing_percentage": _safe_percentage(float(df.isnull().sum().sum()), float(total_cells)),
         "duplicate_rows": int(df.duplicated().sum()),
         "memory_mb": round(df.memory_usage(deep=True).sum() / 1024 / 1024, 2),
     }
@@ -41,19 +80,18 @@ async def get_eda_summary(session_id: str = Depends(require_session)):
 @router.get("/column-types")
 async def get_column_types(session_id: str = Depends(require_session)):
     """Get detailed column type information"""
-    df = session_manager.get_dataframe(session_id)
-    if df is None:
-        raise HTTPException(status_code=400, detail="No data loaded")
+    df = _get_dataframe(session_id)
     
-    columns = []
+    columns: list[dict[str, Any]] = []
     for col in df.columns:
-        dtype = str(df[col].dtype)
+        series = _get_series(df, col)
+        dtype = str(series.dtype)
         
-        if np.issubdtype(df[col].dtype, np.number):
+        if _is_numeric_series(series):
             col_type = "numeric"
-        elif df[col].dtype == 'object' or df[col].dtype.name == 'category':
+        elif _is_categorical_series(series):
             col_type = "categorical"
-        elif np.issubdtype(df[col].dtype, np.datetime64):
+        elif _is_datetime_series(series):
             col_type = "datetime"
         else:
             col_type = "text"
@@ -62,9 +100,9 @@ async def get_column_types(session_id: str = Depends(require_session)):
             "name": col,
             "dtype": dtype,
             "type": col_type,
-            "null_count": int(df[col].isnull().sum()),
-            "null_percentage": round(df[col].isnull().sum() / len(df) * 100, 2),
-            "unique_count": int(df[col].nunique()),
+            "null_count": int(series.isnull().sum()),
+            "null_percentage": _safe_percentage(float(series.isnull().sum()), float(len(df))),
+            "unique_count": int(series.nunique()),
         })
     
     return {"columns": columns}
@@ -73,32 +111,32 @@ async def get_column_types(session_id: str = Depends(require_session)):
 @router.get("/numeric-stats")
 async def get_numeric_stats(session_id: str = Depends(require_session)):
     """Get statistics for numeric columns"""
-    df = session_manager.get_dataframe(session_id)
-    if df is None:
-        raise HTTPException(status_code=400, detail="No data loaded")
+    df = _get_dataframe(session_id)
     
     numeric_df = df.select_dtypes(include=['number'])
     if numeric_df.empty:
         return {"stats": []}
     
-    stats = []
+    stats: list[dict[str, Any]] = []
     for col in numeric_df.columns:
-        col_data = numeric_df[col].dropna()
-        null_count = df[col].isnull().sum()
-        null_percentage = (null_count / len(df)) * 100 if len(df) > 0 else 0
-        unique_count = int(df[col].nunique())
+        series = _get_series(df, col)
+        col_data = cast(pd.Series, numeric_df[col].dropna())
+        null_count = series.isnull().sum()
+        null_percentage = _safe_percentage(float(null_count), float(len(df)))
+        unique_count = int(series.nunique())
         
         if len(col_data) == 0:
             continue
         
-        variance = float(col_data.var()) if len(col_data) > 1 else 0
+        variance = float(col_data.var()) if len(col_data) > 1 else 0.0
+        std = float(col_data.std()) if len(col_data) > 1 else 0.0
             
         stats.append({
             "column": col,
             "count": int(col_data.count()),
             "unique_count": unique_count,
             "mean": round(float(col_data.mean()), 4),
-            "std": round(float(col_data.std()), 4),
+            "std": round(std, 4),
             "variance": round(variance, 6),
             "min": round(float(col_data.min()), 4),
             "q25": round(float(col_data.quantile(0.25)), 4),
@@ -115,25 +153,24 @@ async def get_numeric_stats(session_id: str = Depends(require_session)):
 @router.get("/categorical-stats")
 async def get_categorical_stats(session_id: str = Depends(require_session)):
     """Get statistics for categorical columns"""
-    df = session_manager.get_dataframe(session_id)
-    if df is None:
-        raise HTTPException(status_code=400, detail="No data loaded")
+    df = _get_dataframe(session_id)
     
     categorical_df = df.select_dtypes(include=['object', 'category'])
     if categorical_df.empty:
         return {"stats": []}
     
-    stats = []
+    stats: list[dict[str, Any]] = []
     for col in categorical_df.columns:
-        col_data = categorical_df[col].dropna()
-        null_count = df[col].isnull().sum()
-        null_percentage = (null_count / len(df)) * 100 if len(df) > 0 else 0
-        unique_count = int(df[col].nunique())
+        series = _get_series(df, col)
+        col_data = cast(pd.Series, categorical_df[col].dropna())
+        null_count = series.isnull().sum()
+        null_percentage = _safe_percentage(float(null_count), float(len(df)))
+        unique_count = int(series.nunique())
         
         if len(col_data) == 0:
             continue
         
-        value_counts = col_data.value_counts()
+        value_counts = cast(pd.Series, col_data.value_counts())
         stats.append({
             "column": col,
             "count": int(len(col_data)),
@@ -150,9 +187,7 @@ async def get_categorical_stats(session_id: str = Depends(require_session)):
 @router.get("/correlation")
 async def get_correlation(session_id: str = Depends(require_session)):
     """Get correlation matrix for numeric columns"""
-    df = session_manager.get_dataframe(session_id)
-    if df is None:
-        raise HTTPException(status_code=400, detail="No data loaded")
+    df = _get_dataframe(session_id)
     
     numeric_df = df.select_dtypes(include=['number'])
     if numeric_df.shape[1] < 2:
@@ -161,13 +196,14 @@ async def get_correlation(session_id: str = Depends(require_session)):
     corr_matrix = numeric_df.corr()
     
     # Convert to list of dicts for frontend
-    correlation_data = []
+    correlation_data: list[dict[str, Any]] = []
     for i, row in enumerate(corr_matrix.index):
         for j, col in enumerate(corr_matrix.columns):
+            corr_value = corr_matrix.iloc[i, j]
             correlation_data.append({
                 "x": row,
                 "y": col,
-                "value": round(float(corr_matrix.iloc[i, j]), 4),
+                "value": round(float(corr_value), 4) if pd.notna(corr_value) else 0.0,
             })
     
     return {
@@ -183,26 +219,23 @@ async def get_histogram(
     session_id: str = Depends(require_session)
 ):
     """Get histogram data for a numeric column"""
-    df = session_manager.get_dataframe(session_id)
-    if df is None:
-        raise HTTPException(status_code=400, detail="No data loaded")
+    df = _get_dataframe(session_id)
+    series = _get_series(df, column)
+    col_data = cast(pd.Series, series.dropna())
     
-    if column not in df.columns:
-        raise HTTPException(status_code=404, detail=f"Column '{column}' not found")
-    
-    col_data = df[column].dropna()
-    
-    if not np.issubdtype(col_data.dtype, np.number):
+    if not _is_numeric_series(series):
         raise HTTPException(status_code=400, detail="Column must be numeric")
+    if col_data.empty:
+        return {"data": [], "column": column}
     
     counts, bin_edges = np.histogram(col_data, bins=bins)
     
-    histogram_data = []
+    histogram_data: list[dict[str, Any]] = []
     for i in range(len(counts)):
         histogram_data.append({
             "bin": f"{bin_edges[i]:.2f}-{bin_edges[i+1]:.2f}",
             "count": int(counts[i]),
-            "percentage": round(counts[i] / len(col_data) * 100, 2),
+            "percentage": _safe_percentage(float(counts[i]), float(len(col_data))),
         })
     
     return {"data": histogram_data, "column": column}
@@ -214,17 +247,14 @@ async def get_boxplot(
     session_id: str = Depends(require_session)
 ):
     """Get boxplot data for a numeric column"""
-    df = session_manager.get_dataframe(session_id)
-    if df is None:
-        raise HTTPException(status_code=400, detail="No data loaded")
+    df = _get_dataframe(session_id)
+    series = _get_series(df, column)
+    col_data = cast(pd.Series, series.dropna())
     
-    if column not in df.columns:
-        raise HTTPException(status_code=404, detail=f"Column '{column}' not found")
-    
-    col_data = df[column].dropna()
-    
-    if not np.issubdtype(col_data.dtype, np.number):
+    if not _is_numeric_series(series):
         raise HTTPException(status_code=400, detail="Column must be numeric")
+    if col_data.empty:
+        raise HTTPException(status_code=400, detail="Column has no non-null numeric values")
     
     q1 = float(col_data.quantile(0.25))
     q3 = float(col_data.quantile(0.75))
@@ -233,7 +263,7 @@ async def get_boxplot(
     lower_fence = q1 - 1.5 * iqr
     upper_fence = q3 + 1.5 * iqr
     
-    outliers = col_data[(col_data < lower_fence) | (col_data > upper_fence)].tolist()
+    outliers = [float(value) for value in col_data[(col_data < lower_fence) | (col_data > upper_fence)].tolist()]
     
     return {
         "column": column,
@@ -253,17 +283,15 @@ async def get_category_distribution(
     session_id: str = Depends(require_session)
 ):
     """Get distribution for a categorical column"""
-    df = session_manager.get_dataframe(session_id)
-    if df is None:
-        raise HTTPException(status_code=400, detail="No data loaded")
+    df = _get_dataframe(session_id)
+    series = _get_series(df, column)
     
-    if column not in df.columns:
-        raise HTTPException(status_code=404, detail=f"Column '{column}' not found")
+    value_counts = cast(pd.Series, series.value_counts().head(top_n))
+    total = len(series.dropna())
+    if total == 0:
+        return {"data": [], "column": column}
     
-    value_counts = df[column].value_counts().head(top_n)
-    total = len(df[column].dropna())
-    
-    distribution = []
+    distribution: list[dict[str, Any]] = []
     for name, count in value_counts.items():
         distribution.append({
             "name": str(name),
@@ -282,33 +310,39 @@ async def get_scatter_data(
     session_id: str = Depends(require_session)
 ):
     """Get scatter plot data for two numeric columns"""
-    df = session_manager.get_dataframe(session_id)
-    if df is None:
-        raise HTTPException(status_code=400, detail="No data loaded")
-    
-    if x_column not in df.columns:
-        raise HTTPException(status_code=404, detail=f"Column '{x_column}' not found")
-    if y_column not in df.columns:
-        raise HTTPException(status_code=404, detail=f"Column '{y_column}' not found")
-    
-    # Get data for both columns, drop rows with NaN in either
-    scatter_df = df[[x_column, y_column]].dropna()
-    
-    # Check if columns are numeric
-    if not np.issubdtype(scatter_df[x_column].dtype, np.number):
+    df = _get_dataframe(session_id)
+    x_series = _get_series(df, x_column)
+    y_series = _get_series(df, y_column)
+
+    if not _is_numeric_series(x_series):
         raise HTTPException(status_code=400, detail=f"Column '{x_column}' must be numeric")
-    if not np.issubdtype(scatter_df[y_column].dtype, np.number):
+    if not _is_numeric_series(y_series):
         raise HTTPException(status_code=400, detail=f"Column '{y_column}' must be numeric")
+
+    # Build a normalized scatter dataframe so duplicate column names do not break
+    scatter_df = pd.DataFrame({
+        "x": x_series,
+        "y": y_series,
+    }).dropna()
+    if scatter_df.empty:
+        return {
+            "data": [],
+            "x_column": x_column,
+            "y_column": y_column,
+            "total_points": 0,
+        }
     
     # Sample if too many points
     if len(scatter_df) > sample_size:
         scatter_df = scatter_df.sample(n=sample_size, random_state=42)
     
     # Convert to list of dicts
-    data = [
-        {"x": round(float(row[x_column]), 4), "y": round(float(row[y_column]), 4)}
-        for _, row in scatter_df.iterrows()
-    ]
+    data: list[dict[str, float]] = []
+    for _, row in scatter_df.iterrows():
+        data.append({
+            "x": round(float(row["x"]), 4),
+            "y": round(float(row["y"]), 4),
+        })
     
     return {
         "data": data,

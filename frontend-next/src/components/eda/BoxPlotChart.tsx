@@ -1,5 +1,6 @@
 'use client';
 
+import { ReactNode } from 'react';
 import { BoxPlotData } from '@/types/eda';
 import { theme } from '@/styles/theme';
 import { ChartCard } from './ChartCard';
@@ -7,37 +8,31 @@ import { ChartCard } from './ChartCard';
 interface BoxPlotChartProps {
     data: BoxPlotData;
     column: string;
+    headerActions?: ReactNode;
 }
 
-export function BoxPlotChart({ data, column }: BoxPlotChartProps) {
-    // Calculate IQR and whisker bounds (proper box plot calculation)
+export function BoxPlotChart({ data, column, headerActions }: BoxPlotChartProps) {
     const iqr = data.q3 - data.q1;
     const lowerFence = data.q1 - 1.5 * iqr;
     const upperFence = data.q3 + 1.5 * iqr;
 
-    // Whisker ends should be the actual min/max within the fences
-    // (not absolute min/max which may include outliers)
     const whiskerLow = Math.max(data.min, lowerFence);
     const whiskerHigh = Math.min(data.max, upperFence);
 
-    // Calculate positions for box plot elements
     const padding = { top: 40, bottom: 40, left: 60, right: 40 };
     const chartHeight = 300;
-    const chartWidth = 400; // Will be responsive
+    const chartWidth = 400;
 
-    // Use full data range for Y-axis (including outliers if any)
     const dataMin = data.min;
     const dataMax = data.max;
-    const range = dataMax - dataMin || 1; // Prevent division by zero
+    const range = dataMax - dataMin || 1;
 
     const normalizeY = (value: number) => {
-        // Invert Y axis (SVG y increases downward)
         const normalized = (value - dataMin) / range;
         return chartHeight - padding.bottom - normalized * (chartHeight - padding.top - padding.bottom);
     };
 
-    // Box plot positions
-    const boxCenterX = 200; // Center of the chart
+    const boxCenterX = 200;
     const boxWidth = 80;
     const whiskerWidth = 40;
 
@@ -47,7 +42,6 @@ export function BoxPlotChart({ data, column }: BoxPlotChartProps) {
     const yQ3 = normalizeY(data.q3);
     const yWhiskerHigh = normalizeY(whiskerHigh);
 
-    // Y-axis ticks
     const tickCount = 5;
     const tickStep = range / (tickCount - 1);
     const ticks = Array.from({ length: tickCount }, (_, i) => dataMin + i * tickStep);
@@ -56,6 +50,7 @@ export function BoxPlotChart({ data, column }: BoxPlotChartProps) {
         <ChartCard
             title={`Box Plot - ${column}`}
             description="Seçilen sütunun dağılımı"
+            headerActions={headerActions}
         >
             <div className="h-[300px] w-full">
                 <svg
@@ -63,7 +58,6 @@ export function BoxPlotChart({ data, column }: BoxPlotChartProps) {
                     className="w-full h-full"
                     preserveAspectRatio="xMidYMid meet"
                 >
-                    {/* Grid lines */}
                     {ticks.map((tick, i) => (
                         <g key={i}>
                             <line
@@ -87,7 +81,6 @@ export function BoxPlotChart({ data, column }: BoxPlotChartProps) {
                         </g>
                     ))}
 
-                    {/* Y-axis */}
                     <line
                         x1={padding.left}
                         y1={padding.top}
@@ -96,7 +89,6 @@ export function BoxPlotChart({ data, column }: BoxPlotChartProps) {
                         stroke="#374151"
                     />
 
-                    {/* Lower whisker (whiskerLow to Q1) */}
                     <line
                         x1={boxCenterX}
                         y1={yWhiskerLow}
@@ -105,7 +97,6 @@ export function BoxPlotChart({ data, column }: BoxPlotChartProps) {
                         stroke={theme.colors.primary.cyan}
                         strokeWidth="2"
                     />
-                    {/* Lower whisker cap */}
                     <line
                         x1={boxCenterX - whiskerWidth / 2}
                         y1={yWhiskerLow}
@@ -115,7 +106,6 @@ export function BoxPlotChart({ data, column }: BoxPlotChartProps) {
                         strokeWidth="2"
                     />
 
-                    {/* Upper whisker (Q3 to whiskerHigh) */}
                     <line
                         x1={boxCenterX}
                         y1={yQ3}
@@ -124,7 +114,6 @@ export function BoxPlotChart({ data, column }: BoxPlotChartProps) {
                         stroke={theme.colors.primary.cyan}
                         strokeWidth="2"
                     />
-                    {/* Upper whisker cap */}
                     <line
                         x1={boxCenterX - whiskerWidth / 2}
                         y1={yWhiskerHigh}
@@ -134,7 +123,6 @@ export function BoxPlotChart({ data, column }: BoxPlotChartProps) {
                         strokeWidth="2"
                     />
 
-                    {/* Box (Q1 to Q3) */}
                     <rect
                         x={boxCenterX - boxWidth / 2}
                         y={yQ3}
@@ -146,7 +134,6 @@ export function BoxPlotChart({ data, column }: BoxPlotChartProps) {
                         rx="4"
                     />
 
-                    {/* Median line */}
                     <line
                         x1={boxCenterX - boxWidth / 2}
                         y1={yMedian}
@@ -156,8 +143,7 @@ export function BoxPlotChart({ data, column }: BoxPlotChartProps) {
                         strokeWidth="3"
                     />
 
-                    {/* Outliers */}
-                    {data.outliers && data.outliers.map((outlier, i) => (
+                    {data.outliers?.map((outlier, i) => (
                         <circle
                             key={i}
                             cx={boxCenterX}
@@ -169,7 +155,6 @@ export function BoxPlotChart({ data, column }: BoxPlotChartProps) {
                         />
                     ))}
 
-                    {/* X-axis label */}
                     <text
                         x={boxCenterX}
                         y={chartHeight - 10}
@@ -182,7 +167,6 @@ export function BoxPlotChart({ data, column }: BoxPlotChartProps) {
                 </svg>
             </div>
 
-            {/* Stats Summary */}
             <div className="grid grid-cols-5 gap-2 mt-4 text-sm">
                 <div className="text-center p-2 rounded-lg bg-white/5">
                     <div className="text-gray-400">Min</div>
@@ -206,17 +190,21 @@ export function BoxPlotChart({ data, column }: BoxPlotChartProps) {
                 </div>
             </div>
 
-            {/* Outliers count */}
             {data.outliers && data.outliers.length > 0 && (
                 <div className="mt-3 text-sm text-gray-400">
                     <span className="text-yellow-400">{data.outliers.length}</span> aykırı değer tespit edildi
                 </div>
             )}
 
-            {/* Legend */}
             <div className="flex items-center justify-center gap-6 mt-4 text-sm text-gray-400">
                 <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded border-2" style={{ borderColor: theme.colors.primary.cyan, backgroundColor: `${theme.colors.primary.cyan}30` }} />
+                    <div
+                        className="w-4 h-4 rounded border-2"
+                        style={{
+                            borderColor: theme.colors.primary.cyan,
+                            backgroundColor: `${theme.colors.primary.cyan}30`,
+                        }}
+                    />
                     <span>IQR (Q1-Q3)</span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -233,4 +221,3 @@ export function BoxPlotChart({ data, column }: BoxPlotChartProps) {
         </ChartCard>
     );
 }
-

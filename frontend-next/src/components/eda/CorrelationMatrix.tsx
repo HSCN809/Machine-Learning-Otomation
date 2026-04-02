@@ -1,9 +1,9 @@
 'use client';
 
 import { useMemo } from 'react';
-import { Grid3X3 } from 'lucide-react';
 import { CorrelationData } from '@/types/eda';
 import { theme } from '@/styles/theme';
+import { ChartCard } from './ChartCard';
 
 interface CorrelationMatrixProps {
     data: CorrelationData[];
@@ -11,17 +11,15 @@ interface CorrelationMatrixProps {
 }
 
 export function CorrelationMatrix({ data, columns }: CorrelationMatrixProps) {
-    // Create a matrix from the correlation data
     const matrix = useMemo(() => {
         const matrixData: Record<string, Record<string, number>> = {};
-        data.forEach(d => {
+        data.forEach((d) => {
             if (!matrixData[d.y]) matrixData[d.y] = {};
             matrixData[d.y][d.x] = d.value;
         });
         return matrixData;
     }, [data]);
 
-    // Get color based on correlation value
     const getColor = (value: number) => {
         if (value >= 0.7) return theme.colors.secondary.green;
         if (value >= 0.4) return theme.colors.primary.cyan;
@@ -30,41 +28,20 @@ export function CorrelationMatrix({ data, columns }: CorrelationMatrixProps) {
         return theme.colors.status.error;
     };
 
-    const getOpacity = (value: number) => {
-        return Math.abs(value) * 0.8 + 0.2;
-    };
-
-    // Calculate container width based on columns (96px for row labels + 68px per column cell)
-    const containerWidth = 68 + (columns.length * 68) + 32; // +32 for padding
+    const getOpacity = (value: number) => Math.abs(value) * 0.8 + 0.2;
 
     return (
-        <div
-            className="rounded-xl border border-white/10 overflow-hidden mx-auto"
-            style={{
-                background: 'linear-gradient(135deg, rgba(17, 24, 39, 0.6) 0%, rgba(31, 41, 55, 0.4) 100%)',
-                width: `${containerWidth}px`,
-                maxWidth: '100%',
-            }}
+        <ChartCard
+            title="Korelasyon Matrisi"
+            description={`${columns.length} değişken arasındaki korelasyon`}
+            className="h-full"
         >
-            {/* Header */}
-            <div className="flex items-center gap-3 px-4 py-3 border-b border-white/10">
-                <Grid3X3 className="w-5 h-5 text-cyan-400" />
-                <div>
-                    <span className="font-semibold text-white">Korelasyon Matrisi</span>
-                    <p className="text-sm text-gray-400 mt-0.5">
-                        {columns.length} değişken arasındaki korelasyon
-                    </p>
-                </div>
-            </div>
-
-            {/* Content */}
-            <div className="p-4">
-                <div className="flex justify-center">
-                    <div className="inline-block">
-                        {/* Header row */}
+            <div className="h-[300px] overflow-auto">
+                <div className="flex h-full items-center justify-center">
+                    <div className="inline-block min-w-fit">
                         <div className="flex">
-                            <div className="w-16 h-6 flex-shrink-0" /> {/* Empty corner cell */}
-                            {columns.map(col => (
+                            <div className="w-16 h-6 flex-shrink-0" />
+                            {columns.map((col) => (
                                 <div
                                     key={`header-${col}`}
                                     className="w-16 h-6 flex items-center justify-center text-xs text-gray-400 font-medium cursor-help m-0.5"
@@ -75,10 +52,8 @@ export function CorrelationMatrix({ data, columns }: CorrelationMatrixProps) {
                             ))}
                         </div>
 
-                        {/* Matrix rows */}
-                        {columns.map(rowCol => (
+                        {columns.map((rowCol) => (
                             <div key={`row-${rowCol}`} className="flex">
-                                {/* Row label */}
                                 <div
                                     className="w-16 h-14 flex items-center justify-center text-xs text-gray-400 font-medium flex-shrink-0 cursor-help m-0.5"
                                     title={rowCol}
@@ -86,8 +61,7 @@ export function CorrelationMatrix({ data, columns }: CorrelationMatrixProps) {
                                     {rowCol.length > 3 ? `${rowCol.slice(0, 3)}..` : rowCol}
                                 </div>
 
-                                {/* Cells */}
-                                {columns.map(colCol => {
+                                {columns.map((colCol) => {
                                     const value = matrix[rowCol]?.[colCol] ?? 0;
                                     const isMainDiagonal = rowCol === colCol;
 
@@ -98,8 +72,15 @@ export function CorrelationMatrix({ data, columns }: CorrelationMatrixProps) {
                                             style={{
                                                 backgroundColor: getColor(value),
                                                 opacity: getOpacity(value),
-                                                color: isMainDiagonal ? 'white' : Math.abs(value) > 0.5 ? 'white' : theme.colors.text.primary,
-                                                boxShadow: Math.abs(value) > 0.6 ? `0 0 10px ${getColor(value)}40` : undefined,
+                                                color: isMainDiagonal
+                                                    ? 'white'
+                                                    : Math.abs(value) > 0.5
+                                                      ? 'white'
+                                                      : theme.colors.text.primary,
+                                                boxShadow:
+                                                    Math.abs(value) > 0.6
+                                                        ? `0 0 10px ${getColor(value)}40`
+                                                        : undefined,
                                             }}
                                             title={`${rowCol} ↔ ${colCol}: ${value.toFixed(3)}`}
                                         >
@@ -112,7 +93,6 @@ export function CorrelationMatrix({ data, columns }: CorrelationMatrixProps) {
                     </div>
                 </div>
 
-                {/* Legend */}
                 <div className="flex items-center justify-center gap-4 mt-4 text-xs text-gray-400">
                     <div className="flex items-center gap-6">
                         <div className="flex items-center gap-1">
@@ -138,6 +118,6 @@ export function CorrelationMatrix({ data, columns }: CorrelationMatrixProps) {
                     </div>
                 </div>
             </div>
-        </div>
+        </ChartCard>
     );
 }

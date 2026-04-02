@@ -1,5 +1,6 @@
 'use client';
 
+import { ReactNode } from 'react';
 import {
     BarChart,
     Bar,
@@ -17,15 +18,17 @@ import { ChartCard } from './ChartCard';
 interface HistogramChartProps {
     data: HistogramData[];
     column: string;
+    headerActions?: ReactNode;
 }
 
-export function HistogramChart({ data, column }: HistogramChartProps) {
+export function HistogramChart({ data, column, headerActions }: HistogramChartProps) {
     return (
         <ChartCard
             title={`Histogram: ${column}`}
             description="Değer dağılımı"
+            headerActions={headerActions}
         >
-            <div className="w-full aspect-[4/3]">
+            <div className="h-[300px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -53,7 +56,7 @@ export function HistogramChart({ data, column }: HistogramChartProps) {
                             }}
                         />
                         <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                            {data.map((entry, index) => (
+                            {data.map((_, index) => (
                                 <Cell
                                     key={`cell-${index}`}
                                     fill={theme.colors.primary.cyan}

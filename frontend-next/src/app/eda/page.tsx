@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Sidebar, Header } from '@/components/layout';
 import {
+    ChartCarousel,
     StatsSummary,
     DataTypesTable,
     HistogramChart,
@@ -26,6 +27,9 @@ const tabs: { id: TabId; label: string; icon: React.ElementType }[] = [
     { id: 'categorical', label: 'Kategorik', icon: Layers },
 ];
 
+const chartSelectClassName =
+    'min-w-[160px] rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-cyan-500/50';
+
 export default function EDAPage() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [activeTab, setActiveTab] = useState<TabId>('summary');
@@ -34,7 +38,6 @@ export default function EDAPage() {
     const {
         edaData,
         isLoading,
-        error,
         selectedNumericColumn,
         selectedCategoricalColumn,
         setSelectedNumericColumn,
@@ -49,10 +52,10 @@ export default function EDAPage() {
         setScatterColumns,
     } = useEDA();
 
-    // Load data on mount
     useEffect(() => {
         const sessionExists = hasStoredSession();
         setHasSession(sessionExists);
+
         if (sessionExists) {
             loadEDAData();
         }
@@ -60,13 +63,11 @@ export default function EDAPage() {
 
     return (
         <div className="min-h-screen">
-            {/* Sidebar */}
             <Sidebar
                 isCollapsed={sidebarCollapsed}
                 onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
             />
 
-            {/* Main Content */}
             <div
                 className="transition-all duration-300"
                 style={{
@@ -76,15 +77,13 @@ export default function EDAPage() {
                 <Header title="Keşifsel Veri Analizi (EDA)" />
 
                 <main className="p-6 space-y-6">
-                    {/* Page Header */}
                     <div>
-                        <h1 className="text-2xl font-bold text-white mb-2">📊 Keşifsel Veri Analizi</h1>
+                        <h1 className="text-2xl font-bold text-white mb-2">Keşifsel Veri Analizi</h1>
                         <p className="text-gray-400">
                             Verilerinizi analiz edin, istatistikleri görüntüleyin ve görselleştirmeler oluşturun.
                         </p>
                     </div>
 
-                    {/* Loading State */}
                     {isLoading && (
                         <div className="flex items-center justify-center py-20">
                             <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
@@ -92,7 +91,6 @@ export default function EDAPage() {
                         </div>
                     )}
 
-                    {/* No Data Warning */}
                     {!isLoading && hasSession !== null && !edaData && (
                         <NoDataWarning
                             title="Veri Yüklenmedi"
@@ -100,28 +98,28 @@ export default function EDAPage() {
                         />
                     )}
 
-                    {/* Content */}
                     {edaData && !isLoading && (
                         <>
-                            {/* Tab Navigation */}
                             <div className="flex gap-2 border-b border-white/10 pb-2">
                                 {tabs.map((tab) => {
                                     const Icon = tab.icon;
                                     const isActive = activeTab === tab.id;
+
                                     return (
                                         <button
                                             key={tab.id}
                                             onClick={() => setActiveTab(tab.id)}
-                                            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 cursor-pointer ${isActive
-                                                ? 'text-white'
-                                                : 'text-gray-400 hover:text-white hover:bg-white/5'
-                                                }`}
+                                            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 cursor-pointer ${
+                                                isActive
+                                                    ? 'text-white'
+                                                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                                            }`}
                                             style={
                                                 isActive
                                                     ? {
-                                                        background: `${theme.colors.primary.cyan}20`,
-                                                        boxShadow: `0 0 10px ${theme.colors.primary.cyan}30`,
-                                                    }
+                                                          background: `${theme.colors.primary.cyan}20`,
+                                                          boxShadow: `0 0 10px ${theme.colors.primary.cyan}30`,
+                                                      }
                                                     : undefined
                                             }
                                         >
@@ -132,7 +130,6 @@ export default function EDAPage() {
                                 })}
                             </div>
 
-                            {/* Summary Tab */}
                             {activeTab === 'summary' && (
                                 <div className="space-y-6">
                                     <StatsSummary
@@ -144,135 +141,221 @@ export default function EDAPage() {
                                 </div>
                             )}
 
-                            {/* Numeric Analysis Tab */}
                             {activeTab === 'numeric' && (
                                 <div className="space-y-6">
-                                    {/* Column selector */}
-                                    <div className="flex items-center gap-4">
-                                        <label className="text-sm text-gray-400">Sütun Seç:</label>
-                                        <select
-                                            value={selectedNumericColumn || ''}
-                                            onChange={(e) => setSelectedNumericColumn(e.target.value)}
-                                            className="px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-white outline-none focus:border-cyan-500/50"
-                                        >
-                                            {edaData.numericColumns.map((col) => (
-                                                <option key={col} value={col} className="bg-gray-800">
-                                                    {col}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                        {selectedNumericColumn && (
-                                            <HistogramChart
-                                                data={histogramData}
-                                                column={selectedNumericColumn}
-                                            />
-                                        )}
-                                        {selectedNumericColumn && boxPlotData && (
-                                            <BoxPlotChart data={boxPlotData} column={selectedNumericColumn} />
-                                        )}
-                                    </div>
+                                    {selectedNumericColumn && (
+                                        <ChartCarousel
+                                            slides={[
+                                                {
+                                                    id: 'histogram',
+                                                    label: 'Histogram',
+                                                    content: (
+                                                        <HistogramChart
+                                                            data={histogramData}
+                                                            column={selectedNumericColumn}
+                                                            headerActions={
+                                                                <>
+                                                                    <label className="text-sm text-gray-400">Sütun Seç:</label>
+                                                                    <select
+                                                                        value={selectedNumericColumn}
+                                                                        onChange={(e) => setSelectedNumericColumn(e.target.value)}
+                                                                        className={chartSelectClassName}
+                                                                        aria-label="Histogram sütunu seç"
+                                                                    >
+                                                                        {edaData.numericColumns.map((col) => (
+                                                                            <option key={col} value={col} className="bg-gray-800">
+                                                                                {col}
+                                                                            </option>
+                                                                        ))}
+                                                                    </select>
+                                                                </>
+                                                            }
+                                                        />
+                                                    ),
+                                                },
+                                                ...(boxPlotData
+                                                    ? [
+                                                          {
+                                                              id: 'boxplot',
+                                                              label: 'Box Plot',
+                                                              content: (
+                                                                  <BoxPlotChart
+                                                                      data={boxPlotData}
+                                                                      column={selectedNumericColumn}
+                                                                      headerActions={
+                                                                          <>
+                                                                              <label className="text-sm text-gray-400">Sütun Seç:</label>
+                                                                              <select
+                                                                                  value={selectedNumericColumn}
+                                                                                  onChange={(e) =>
+                                                                                      setSelectedNumericColumn(e.target.value)
+                                                                                  }
+                                                                                  className={chartSelectClassName}
+                                                                                  aria-label="Box plot sütunu seç"
+                                                                              >
+                                                                                  {edaData.numericColumns.map((col) => (
+                                                                                      <option
+                                                                                          key={col}
+                                                                                          value={col}
+                                                                                          className="bg-gray-800"
+                                                                                      >
+                                                                                          {col}
+                                                                                      </option>
+                                                                                  ))}
+                                                                              </select>
+                                                                          </>
+                                                                      }
+                                                                  />
+                                                              ),
+                                                          },
+                                                      ]
+                                                    : []),
+                                            ]}
+                                        />
+                                    )}
                                 </div>
                             )}
 
-                            {/* Correlation Tab */}
                             {activeTab === 'correlation' && (
-                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
-                                    {/* Left: Correlation Matrix */}
-                                    <CorrelationMatrix
-                                        data={edaData.correlationMatrix}
-                                        columns={edaData.numericColumns}
-                                    />
-
-                                    {/* Right: Scatter Plot with controls */}
-                                    <div className="flex flex-col gap-4">
-                                        {/* Scatter plot controls */}
-                                        <div className="flex items-center gap-4 flex-wrap">
-                                            <label className="text-sm text-gray-400">X Ekseni:</label>
-                                            <select
-                                                value={scatterXColumn || ''}
-                                                onChange={(e) =>
-                                                    setScatterColumns(e.target.value, scatterYColumn || '')
-                                                }
-                                                className="px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-white outline-none focus:border-cyan-500/50"
-                                            >
-                                                {edaData.numericColumns.map((col) => (
-                                                    <option key={col} value={col} className="bg-gray-800">
-                                                        {col}
-                                                    </option>
-                                                ))}
-                                            </select>
-
-                                            <label className="text-sm text-gray-400">Y Ekseni:</label>
-                                            <select
-                                                value={scatterYColumn || ''}
-                                                onChange={(e) =>
-                                                    setScatterColumns(scatterXColumn || '', e.target.value)
-                                                }
-                                                className="px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-white outline-none focus:border-cyan-500/50"
-                                            >
-                                                {edaData.numericColumns.map((col) => (
-                                                    <option key={col} value={col} className="bg-gray-800">
-                                                        {col}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </div>
-
-                                        {scatterXColumn && scatterYColumn && (
-                                            <div className="flex-1">
-                                                <ScatterChart
-                                                    data={scatterData}
-                                                    xColumn={scatterXColumn}
-                                                    yColumn={scatterYColumn}
+                                <ChartCarousel
+                                    slides={[
+                                        {
+                                            id: 'correlation-matrix',
+                                            label: 'Korelasyon Matrisi',
+                                            content: (
+                                                <CorrelationMatrix
+                                                    data={edaData.correlationMatrix}
+                                                    columns={edaData.numericColumns}
                                                 />
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
+                                            ),
+                                        },
+                                        {
+                                            id: 'scatter-plot',
+                                            label: 'Scatter Plot',
+                                            content:
+                                                scatterXColumn && scatterYColumn ? (
+                                                    <ScatterChart
+                                                        data={scatterData}
+                                                        xColumn={scatterXColumn}
+                                                        yColumn={scatterYColumn}
+                                                        headerActions={
+                                                            <>
+                                                                <label className="text-sm text-gray-400">X Ekseni:</label>
+                                                                <select
+                                                                    value={scatterXColumn}
+                                                                    onChange={(e) =>
+                                                                        setScatterColumns(e.target.value, scatterYColumn)
+                                                                    }
+                                                                    className={chartSelectClassName}
+                                                                    aria-label="Scatter X ekseni seç"
+                                                                >
+                                                                    {edaData.numericColumns.map((col) => (
+                                                                        <option
+                                                                            key={col}
+                                                                            value={col}
+                                                                            className="bg-gray-800"
+                                                                            disabled={col === scatterYColumn}
+                                                                        >
+                                                                            {col}
+                                                                        </option>
+                                                                    ))}
+                                                                </select>
+                                                                <label className="text-sm text-gray-400">Y Ekseni:</label>
+                                                                <select
+                                                                    value={scatterYColumn}
+                                                                    onChange={(e) =>
+                                                                        setScatterColumns(scatterXColumn, e.target.value)
+                                                                    }
+                                                                    className={chartSelectClassName}
+                                                                    aria-label="Scatter Y ekseni seç"
+                                                                >
+                                                                    {edaData.numericColumns.map((col) => (
+                                                                        <option
+                                                                            key={col}
+                                                                            value={col}
+                                                                            className="bg-gray-800"
+                                                                            disabled={col === scatterXColumn}
+                                                                        >
+                                                                            {col}
+                                                                        </option>
+                                                                    ))}
+                                                                </select>
+                                                            </>
+                                                        }
+                                                    />
+                                                ) : null,
+                                        },
+                                    ]}
+                                />
                             )}
 
-                            {/* Categorical Tab */}
                             {activeTab === 'categorical' && (
                                 <div className="space-y-6">
-                                    {/* Column selector */}
-                                    <div className="flex items-center gap-4">
-                                        <label className="text-sm text-gray-400">Sütun Seç:</label>
-                                        <select
-                                            value={selectedCategoricalColumn || ''}
-                                            onChange={(e) => setSelectedCategoricalColumn(e.target.value)}
-                                            className="px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-white outline-none focus:border-cyan-500/50"
-                                        >
-                                            {edaData.categoricalColumns.map((col) => (
-                                                <option key={col} value={col} className="bg-gray-800">
-                                                    {col}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                        {selectedCategoricalColumn && (
-                                            <>
-                                                <CategoryDistribution
-                                                    data={categoryData}
-                                                    column={selectedCategoricalColumn}
-                                                    chartType="bar"
-                                                />
-                                                <CategoryDistribution
-                                                    data={categoryData}
-                                                    column={selectedCategoricalColumn}
-                                                    chartType="pie"
-                                                />
-                                            </>
-                                        )}
-                                    </div>
+                                    {selectedCategoricalColumn && (
+                                        <ChartCarousel
+                                            slides={[
+                                                {
+                                                    id: 'category-bar',
+                                                    label: 'Çubuk Grafik',
+                                                    content: (
+                                                        <CategoryDistribution
+                                                            data={categoryData}
+                                                            column={selectedCategoricalColumn}
+                                                            chartType="bar"
+                                                            headerActions={
+                                                                <>
+                                                                    <label className="text-sm text-gray-400">Sütun Seç:</label>
+                                                                    <select
+                                                                        value={selectedCategoricalColumn}
+                                                                        onChange={(e) => setSelectedCategoricalColumn(e.target.value)}
+                                                                        className={chartSelectClassName}
+                                                                        aria-label="Kategorik çubuk grafik sütunu seç"
+                                                                    >
+                                                                        {edaData.categoricalColumns.map((col) => (
+                                                                            <option key={col} value={col} className="bg-gray-800">
+                                                                                {col}
+                                                                            </option>
+                                                                        ))}
+                                                                    </select>
+                                                                </>
+                                                            }
+                                                        />
+                                                    ),
+                                                },
+                                                {
+                                                    id: 'category-pie',
+                                                    label: 'Pasta Grafik',
+                                                    content: (
+                                                        <CategoryDistribution
+                                                            data={categoryData}
+                                                            column={selectedCategoricalColumn}
+                                                            chartType="pie"
+                                                            headerActions={
+                                                                <>
+                                                                    <label className="text-sm text-gray-400">Sütun Seç:</label>
+                                                                    <select
+                                                                        value={selectedCategoricalColumn}
+                                                                        onChange={(e) => setSelectedCategoricalColumn(e.target.value)}
+                                                                        className={chartSelectClassName}
+                                                                        aria-label="Kategorik pasta grafik sütunu seç"
+                                                                    >
+                                                                        {edaData.categoricalColumns.map((col) => (
+                                                                            <option key={col} value={col} className="bg-gray-800">
+                                                                                {col}
+                                                                            </option>
+                                                                        ))}
+                                                                    </select>
+                                                                </>
+                                                            }
+                                                        />
+                                                    ),
+                                                },
+                                            ]}
+                                        />
+                                    )}
                                 </div>
                             )}
 
-                            {/* Next Step CTA */}
                             <div
                                 className="p-6 rounded-xl border border-cyan-500/20"
                                 style={{
@@ -295,7 +378,7 @@ export default function EDAPage() {
                                             boxShadow: theme.glow.cyan,
                                         }}
                                     >
-                                        🔧 Ön İşleme
+                                        Ön İşleme
                                     </a>
                                 </div>
                             </div>

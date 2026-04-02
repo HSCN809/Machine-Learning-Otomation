@@ -1,5 +1,6 @@
 'use client';
 
+import { ReactNode } from 'react';
 import {
     ScatterChart as RechartsScatterChart,
     Scatter,
@@ -8,7 +9,6 @@ import {
     CartesianGrid,
     Tooltip,
     ResponsiveContainer,
-    ZAxis,
 } from 'recharts';
 import { theme } from '@/styles/theme';
 import { ChartCard } from './ChartCard';
@@ -17,16 +17,18 @@ interface ScatterChartProps {
     data: { x: number; y: number }[];
     xColumn: string;
     yColumn: string;
+    headerActions?: ReactNode;
 }
 
-export function ScatterChart({ data, xColumn, yColumn }: ScatterChartProps) {
+export function ScatterChart({ data, xColumn, yColumn, headerActions }: ScatterChartProps) {
     return (
         <ChartCard
             title={`Scatter Plot: ${xColumn} vs ${yColumn}`}
             description="İki sayısal değişken arasındaki ilişki"
             className="h-full"
+            headerActions={headerActions}
         >
-            <div className="h-full min-h-[300px]">
+            <div className="h-[300px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                     <RechartsScatterChart margin={{ top: 10, right: 10, bottom: 10, left: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -58,7 +60,6 @@ export function ScatterChart({ data, xColumn, yColumn }: ScatterChartProps) {
                                 fontSize: 12,
                             }}
                         />
-                        <ZAxis range={[40, 40]} />
                         <Tooltip
                             cursor={{ strokeDasharray: '3 3' }}
                             contentStyle={{
