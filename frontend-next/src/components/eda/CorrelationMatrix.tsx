@@ -29,6 +29,10 @@ export function CorrelationMatrix({ data, columns }: CorrelationMatrixProps) {
     };
 
     const getOpacity = (value: number) => Math.abs(value) * 0.8 + 0.2;
+    const isCompactMatrix = columns.length > 4;
+    const headerSizeClassName = isCompactMatrix ? 'w-16 h-6 text-xs' : 'w-20 h-8 text-sm';
+    const rowLabelSizeClassName = isCompactMatrix ? 'w-16 h-14 text-xs' : 'w-20 h-18 text-sm';
+    const cellSizeClassName = isCompactMatrix ? 'w-16 h-14 text-xs' : 'w-20 h-18 text-sm';
 
     return (
         <ChartCard
@@ -36,15 +40,15 @@ export function CorrelationMatrix({ data, columns }: CorrelationMatrixProps) {
             description={`${columns.length} değişken arasındaki korelasyon`}
             className="h-full"
         >
-            <div className="h-[300px] overflow-auto">
+            <div className="h-[420px] overflow-auto">
                 <div className="flex h-full items-center justify-center">
                     <div className="inline-block min-w-fit">
                         <div className="flex">
-                            <div className="w-16 h-6 flex-shrink-0" />
+                            <div className={`${rowLabelSizeClassName} flex-shrink-0`} />
                             {columns.map((col) => (
                                 <div
                                     key={`header-${col}`}
-                                    className="w-16 h-6 flex items-center justify-center text-xs text-gray-400 font-medium cursor-help m-0.5"
+                                    className={`${headerSizeClassName} m-0.5 flex items-center justify-center font-medium text-gray-400 cursor-help`}
                                     title={col}
                                 >
                                     {col.length > 3 ? `${col.slice(0, 3)}..` : col}
@@ -55,7 +59,7 @@ export function CorrelationMatrix({ data, columns }: CorrelationMatrixProps) {
                         {columns.map((rowCol) => (
                             <div key={`row-${rowCol}`} className="flex">
                                 <div
-                                    className="w-16 h-14 flex items-center justify-center text-xs text-gray-400 font-medium flex-shrink-0 cursor-help m-0.5"
+                                    className={`${rowLabelSizeClassName} m-0.5 flex flex-shrink-0 items-center justify-center font-medium text-gray-400 cursor-help`}
                                     title={rowCol}
                                 >
                                     {rowCol.length > 3 ? `${rowCol.slice(0, 3)}..` : rowCol}
@@ -68,7 +72,7 @@ export function CorrelationMatrix({ data, columns }: CorrelationMatrixProps) {
                                     return (
                                         <div
                                             key={`cell-${rowCol}-${colCol}`}
-                                            className="w-16 h-14 flex items-center justify-center text-xs font-medium border border-white/5 rounded-md m-0.5 transition-all duration-200 hover:scale-110 cursor-pointer"
+                                            className={`${cellSizeClassName} m-0.5 flex items-center justify-center rounded-md border border-white/5 font-medium transition-all duration-200 hover:scale-110 cursor-pointer`}
                                             style={{
                                                 backgroundColor: getColor(value),
                                                 opacity: getOpacity(value),

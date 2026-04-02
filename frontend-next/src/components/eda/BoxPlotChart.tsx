@@ -19,9 +19,9 @@ export function BoxPlotChart({ data, column, headerActions }: BoxPlotChartProps)
     const whiskerLow = Math.max(data.min, lowerFence);
     const whiskerHigh = Math.min(data.max, upperFence);
 
-    const padding = { top: 24, bottom: 28, left: 60, right: 40 };
-    const chartHeight = 210;
-    const chartWidth = 400;
+    const padding = { top: 28, bottom: 34, left: 68, right: 48 };
+    const chartHeight = 300;
+    const chartWidth = 420;
 
     const dataMin = data.min;
     const dataMax = data.max;
@@ -32,9 +32,9 @@ export function BoxPlotChart({ data, column, headerActions }: BoxPlotChartProps)
         return chartHeight - padding.bottom - normalized * (chartHeight - padding.top - padding.bottom);
     };
 
-    const boxCenterX = 200;
-    const boxWidth = 80;
-    const whiskerWidth = 40;
+    const boxCenterX = chartWidth / 2;
+    const boxWidth = 96;
+    const whiskerWidth = 52;
 
     const yWhiskerLow = normalizeY(whiskerLow);
     const yQ1 = normalizeY(data.q1);
@@ -52,8 +52,8 @@ export function BoxPlotChart({ data, column, headerActions }: BoxPlotChartProps)
             description="Seçilen sütunun dağılımı"
             headerActions={headerActions}
         >
-            <div className="h-[300px] w-full flex flex-col">
-                <div className="h-[210px] w-full">
+            <div className="flex h-[420px] w-full flex-col">
+                <div className="h-[300px] w-full">
                     <svg
                         viewBox={`0 0 ${chartWidth} ${chartHeight}`}
                         className="w-full h-full"
@@ -168,7 +168,7 @@ export function BoxPlotChart({ data, column, headerActions }: BoxPlotChartProps)
                     </svg>
                 </div>
 
-                <div className="grid grid-cols-5 gap-2 mt-3 text-xs">
+                <div className="mt-4 grid grid-cols-5 gap-2 text-xs">
                     <div className="text-center p-2 rounded-lg bg-white/5">
                         <div className="text-gray-400">Min</div>
                         <div className="text-white font-medium">{data.min.toFixed(2)}</div>
@@ -191,7 +191,7 @@ export function BoxPlotChart({ data, column, headerActions }: BoxPlotChartProps)
                     </div>
                 </div>
 
-                <div className="flex items-center justify-center gap-6 mt-3 text-xs text-gray-400">
+                <div className="mt-4 flex items-center justify-center gap-6 text-xs text-gray-400">
                     <div className="flex items-center gap-2">
                         <div
                             className="w-4 h-4 rounded border-2"

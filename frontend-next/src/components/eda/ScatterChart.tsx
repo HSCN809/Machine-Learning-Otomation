@@ -28,7 +28,7 @@ export function ScatterChart({ data, xColumn, yColumn, headerActions }: ScatterC
             className="h-full"
             headerActions={headerActions}
         >
-            <div className="h-[300px] w-full">
+            <div className="h-[420px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                     <RechartsScatterChart margin={{ top: 10, right: 10, bottom: 10, left: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#374151" />

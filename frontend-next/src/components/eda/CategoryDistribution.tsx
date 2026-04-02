@@ -52,7 +52,7 @@ export function CategoryDistribution({
                 description="Pasta grafiği"
                 headerActions={headerActions}
             >
-                <div className="h-[300px]">
+                <div className="h-[420px]">
                     <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                             <Pie
@@ -60,8 +60,8 @@ export function CategoryDistribution({
                                 dataKey="value"
                                 nameKey="name"
                                 cx="50%"
-                                cy="50%"
-                                outerRadius={100}
+                                cy="46%"
+                                outerRadius={148}
                                 labelLine={{ stroke: '#6B7280' }}
                             >
                                 {chartData.map((_, index) => (
@@ -98,7 +98,7 @@ export function CategoryDistribution({
             description="Değer sayıları"
             headerActions={headerActions}
         >
-            <div className="h-[300px]">
+            <div className="h-[420px]">
                 <ResponsiveContainer width="100%" height="100%">
                     <BarChart
                         data={chartData}

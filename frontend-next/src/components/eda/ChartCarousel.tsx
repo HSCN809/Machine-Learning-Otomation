@@ -3,7 +3,6 @@
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { theme } from '@/styles/theme';
 
 interface ChartSlide {
     id: string;
@@ -95,46 +94,39 @@ export function ChartCarousel({ slides, className }: ChartCarouselProps) {
     }
 
     return (
-        <div className={cn('space-y-4', className)}>
-            <div
-                className="flex items-center justify-between gap-3 rounded-xl border border-white/10 px-4 py-3"
-                style={{
-                    background: 'linear-gradient(135deg, rgba(17, 24, 39, 0.45) 0%, rgba(31, 41, 55, 0.25) 100%)',
-                }}
-            >
-                <div>
-                    <p className="text-xs uppercase tracking-[0.24em] text-cyan-300/70">Grafik Görünümü</p>
-                    <p className="text-sm font-medium text-white">{currentSlide.label}</p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-400">
-                        {activeIndex + 1} / {slides.length}
-                    </span>
+        <div className={cn('space-y-3', className)}>
+            <div className="grid grid-cols-[56px_minmax(0,1fr)_56px] items-center gap-3 lg:grid-cols-[64px_minmax(0,1fr)_64px] lg:gap-5">
+                <div className="flex items-center justify-center">
                     <button
                         type="button"
                         onClick={handlePrevious}
                         disabled={!showNavigation || isAnimating}
-                        className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-xl border border-white/10 bg-white/5 text-gray-300 transition-all duration-200 hover:border-cyan-400/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-                        aria-label="Önceki grafik"
+                        className="flex h-12 w-12 cursor-pointer items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-gray-300 transition-all duration-200 hover:border-cyan-400/40 hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+                        aria-label="Onceki grafik"
                     >
                         <ChevronLeft className="h-5 w-5" />
                     </button>
+                </div>
+
+                <div className="min-w-0">
+                    <div className="mx-auto w-full max-w-[1080px] overflow-hidden">
+                        <div className="mb-3 text-center text-xs font-medium tracking-[0.18em] text-gray-400">
+                            {currentSlide.label} {' / '} {activeIndex + 1} / {slides.length}
+                        </div>
+                        <div className={stageClassName}>{currentSlide.content}</div>
+                    </div>
+                </div>
+
+                <div className="flex items-center justify-center">
                     <button
                         type="button"
                         onClick={handleNext}
                         disabled={!showNavigation || isAnimating}
-                        className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-xl border border-white/10 bg-white/5 text-gray-300 transition-all duration-200 hover:border-cyan-400/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                        className="flex h-12 w-12 cursor-pointer items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-gray-300 transition-all duration-200 hover:border-cyan-400/40 hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
                         aria-label="Sonraki grafik"
                     >
                         <ChevronRight className="h-5 w-5" />
                     </button>
-                </div>
-            </div>
-
-            <div className="overflow-hidden">
-                <div className={stageClassName}>
-                    {currentSlide.content}
                 </div>
             </div>
 
