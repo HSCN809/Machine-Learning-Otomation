@@ -1,9 +1,8 @@
 'use client';
 
-import { useState } from 'react';
-import { AlertTriangle, AlertCircle, Info, CheckCircle, Sparkles, Loader2, RotateCcw } from 'lucide-react';
+import { AlertTriangle, AlertCircle, Info, CheckCircle, Sparkles, Loader2, RotateCcw, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { theme } from '@/styles/theme'
+import { theme } from '@/styles/theme';
 import { ValidationReport as ValidationReportType, ValidationIssue } from '@/types/data-upload';
 import { IssueCard } from './IssueCard';
 
@@ -11,11 +10,19 @@ interface ValidationReportProps {
     report: ValidationReportType;
     onEnhanceWithLLM?: () => Promise<void>;
     onResetLLMSuggestions?: () => void;
+    onDelete?: () => void | Promise<void>;
     isEnhancing?: boolean;
     hasLLMSuggestions?: boolean;
 }
 
-export function ValidationReport({ report, onEnhanceWithLLM, onResetLLMSuggestions, isEnhancing = false, hasLLMSuggestions = false }: ValidationReportProps) {
+export function ValidationReport({
+    report,
+    onEnhanceWithLLM,
+    onResetLLMSuggestions,
+    onDelete,
+    isEnhancing = false,
+    hasLLMSuggestions = false,
+}: ValidationReportProps) {
     const { totalIssues, issuesBySeverity } = report;
 
     const severityConfig = {
@@ -45,20 +52,32 @@ export function ValidationReport({ report, onEnhanceWithLLM, onResetLLMSuggestio
     if (totalIssues === 0) {
         return (
             <div className="p-6 rounded-xl border border-green-500/30 bg-green-500/5">
-                <div className="flex items-center gap-3">
-                    <div
-                        className="p-3 rounded-lg"
-                        style={{
-                            background: `${theme.colors.status.success}20`,
-                            boxShadow: `0 0 15px ${theme.colors.status.success}30`,
-                        }}
-                    >
-                        <CheckCircle className="w-6 h-6 text-green-400" />
+                <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <div
+                            className="p-3 rounded-lg"
+                            style={{
+                                background: `${theme.colors.status.success}20`,
+                                boxShadow: `0 0 15px ${theme.colors.status.success}30`,
+                            }}
+                        >
+                            <CheckCircle className="w-6 h-6 text-green-400" />
+                        </div>
+                        <div>
+                            <p className="font-semibold text-white">Veri kalitesi iyi görünüyor!</p>
+                            <p className="text-sm text-gray-400">Tespit edilen sorun yok.</p>
+                        </div>
                     </div>
-                    <div>
-                        <p className="font-semibold text-white">Veri kalitesi iyi görünüyor!</p>
-                        <p className="text-sm text-gray-400">Tespit edilen sorun yok.</p>
-                    </div>
+
+                    {onDelete && (
+                        <button
+                            onClick={onDelete}
+                            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 text-gray-400 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                            <span>Sil</span>
+                        </button>
+                    )}
                 </div>
             </div>
         );
@@ -66,32 +85,42 @@ export function ValidationReport({ report, onEnhanceWithLLM, onResetLLMSuggestio
 
     return (
         <div className="space-y-6">
-            {/* Summary */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-4">
                 <h3 className="text-lg font-semibold text-white">Doğrulama Raporu</h3>
-                <div className="flex items-center gap-4 text-sm">
-                    {issuesBySeverity.critical.length > 0 && (
-                        <span className="flex items-center gap-1 text-red-400">
-                            <AlertCircle className="w-4 h-4" />
-                            {issuesBySeverity.critical.length} kritik
-                        </span>
-                    )}
-                    {issuesBySeverity.warning.length > 0 && (
-                        <span className="flex items-center gap-1 text-yellow-400">
-                            <AlertTriangle className="w-4 h-4" />
-                            {issuesBySeverity.warning.length} uyarı
-                        </span>
-                    )}
-                    {issuesBySeverity.info.length > 0 && (
-                        <span className="flex items-center gap-1 text-blue-400">
-                            <Info className="w-4 h-4" />
-                            {issuesBySeverity.info.length} bilgi
-                        </span>
+                <div className="flex items-center gap-3 text-sm">
+                    <div className="flex items-center gap-4">
+                        {issuesBySeverity.critical.length > 0 && (
+                            <span className="flex items-center gap-1 text-red-400">
+                                <AlertCircle className="w-4 h-4" />
+                                {issuesBySeverity.critical.length} kritik
+                            </span>
+                        )}
+                        {issuesBySeverity.warning.length > 0 && (
+                            <span className="flex items-center gap-1 text-yellow-400">
+                                <AlertTriangle className="w-4 h-4" />
+                                {issuesBySeverity.warning.length} uyarı
+                            </span>
+                        )}
+                        {issuesBySeverity.info.length > 0 && (
+                            <span className="flex items-center gap-1 text-blue-400">
+                                <Info className="w-4 h-4" />
+                                {issuesBySeverity.info.length} bilgi
+                            </span>
+                        )}
+                    </div>
+
+                    {onDelete && (
+                        <button
+                            onClick={onDelete}
+                            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 text-gray-400 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                            <span>Sil</span>
+                        </button>
                     )}
                 </div>
             </div>
 
-            {/* LLM Enhancement Button */}
             {onEnhanceWithLLM && !hasLLMSuggestions && (
                 <button
                     onClick={onEnhanceWithLLM}
@@ -110,7 +139,7 @@ export function ValidationReport({ report, onEnhanceWithLLM, onResetLLMSuggestio
                     ) : (
                         <>
                             <Sparkles className="w-5 h-5" />
-                            <span>🤖 LLM ile Akıllı Öneriler Al</span>
+                            <span>LLM ile Akıllı Öneriler Al</span>
                         </>
                     )}
                 </button>
@@ -120,7 +149,9 @@ export function ValidationReport({ report, onEnhanceWithLLM, onResetLLMSuggestio
                 <div className="flex items-center justify-between px-4 py-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30">
                     <div className="flex items-center gap-2">
                         <Sparkles className="w-4 h-4 text-cyan-400" />
-                        <span className="text-sm text-cyan-300">LLM önerileri yüklendi - sorunlara tıklayarak görüntüleyin</span>
+                        <span className="text-sm text-cyan-300">
+                            LLM önerileri yüklendi, sorunlara tıklayarak görüntüleyin
+                        </span>
                     </div>
                     {onResetLLMSuggestions && (
                         <button
@@ -134,7 +165,6 @@ export function ValidationReport({ report, onEnhanceWithLLM, onResetLLMSuggestio
                 </div>
             )}
 
-            {/* Critical issues */}
             {issuesBySeverity.critical.length > 0 && (
                 <IssueSection
                     title={severityConfig.critical.label}
@@ -143,7 +173,6 @@ export function ValidationReport({ report, onEnhanceWithLLM, onResetLLMSuggestio
                 />
             )}
 
-            {/* Warnings */}
             {issuesBySeverity.warning.length > 0 && (
                 <IssueSection
                     title={severityConfig.warning.label}
@@ -152,7 +181,6 @@ export function ValidationReport({ report, onEnhanceWithLLM, onResetLLMSuggestio
                 />
             )}
 
-            {/* Info */}
             {issuesBySeverity.info.length > 0 && (
                 <IssueSection
                     title={severityConfig.info.label}
@@ -161,9 +189,8 @@ export function ValidationReport({ report, onEnhanceWithLLM, onResetLLMSuggestio
                 />
             )}
 
-            {/* Note */}
             <p className="text-sm text-gray-500">
-                💡 Bu sorunlar bilgilendirme amaçlıdır. Düzeltme işlemleri &apos;Veri Ön İşleme&apos; modülünde yapılabilir.
+                Bu sorunlar bilgilendirme amaçlıdır. Düzeltme işlemleri &apos;Veri Ön İşleme&apos; modülünde yapılabilir.
             </p>
         </div>
     );

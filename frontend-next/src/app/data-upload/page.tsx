@@ -11,7 +11,6 @@ import {
 } from '@/components/data-upload';
 import { useDataUpload } from '@/hooks/useDataUpload';
 import * as api from '@/lib/api';
-import { RefreshCw } from 'lucide-react';
 import { theme } from '@/styles/theme';
 import { ValidationReport as ValidationReportType, ValidationIssue } from '@/types/data-upload';
 
@@ -80,7 +79,7 @@ export default function DataUploadPage() {
         }
     }, [setValidationReport]);
 
-    const handleReset = useCallback(async () => {
+    const handleDelete = useCallback(async () => {
         await reset();
         setHasLLMSuggestions(false);
     }, [reset]);
@@ -129,16 +128,6 @@ export default function DataUploadPage() {
                 />
 
                 <main className="p-6 space-y-8">
-                    <div className="flex justify-end">
-                        <button
-                            onClick={handleReset}
-                            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-gray-400 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
-                        >
-                            <RefreshCw className="w-4 h-4" />
-                            <span>Sıfırla</span>
-                        </button>
-                    </div>
-
                     {(status === 'idle' || status === 'error') && (
                         <>
                             <section
@@ -185,18 +174,6 @@ export default function DataUploadPage() {
 
                     {showResults && (
                         <>
-                            <div
-                                className="p-4 rounded-xl border"
-                                style={{
-                                    borderColor: `${theme.colors.status.success}50`,
-                                    background: `${theme.colors.status.success}10`,
-                                }}
-                            >
-                                <p className="text-green-400 font-medium">
-                                    Veri başarıyla yüklendi: {uploadedFile?.name || 'Hazır veri seti'}
-                                </p>
-                            </div>
-
                             <section
                                 className="p-6 rounded-2xl border border-white/10"
                                 style={{
@@ -218,6 +195,7 @@ export default function DataUploadPage() {
                                     report={validationReport}
                                     onEnhanceWithLLM={handleEnhanceWithLLM}
                                     onResetLLMSuggestions={handleResetLLMSuggestions}
+                                    onDelete={handleDelete}
                                     isEnhancing={isEnhancing}
                                     hasLLMSuggestions={hasLLMSuggestions}
                                 />
