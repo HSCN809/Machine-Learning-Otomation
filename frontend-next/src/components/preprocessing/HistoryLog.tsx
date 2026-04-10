@@ -8,6 +8,8 @@ interface HistoryLogProps {
     history: ProcessingHistory[];
     onUndo?: () => void;
     onClear?: () => void;
+    onUndoItem?: (historyId: string) => void;
+    onClearItem?: (historyId: string) => void;
     variant?: 'card' | 'timeline';
 }
 
@@ -42,7 +44,14 @@ const methodLabels: Record<string, string> = {
     quantile: 'Quantile',
 };
 
-export function HistoryLog({ history, onUndo, onClear, variant = 'card' }: HistoryLogProps) {
+export function HistoryLog({
+    history,
+    onUndo,
+    onClear,
+    onUndoItem,
+    onClearItem,
+    variant = 'card',
+}: HistoryLogProps) {
     const isTimeline = variant === 'timeline';
 
     if (history.length === 0) {
@@ -159,6 +168,30 @@ export function HistoryLog({ history, onUndo, onClear, variant = 'card' }: Histo
                                             })}
                                         </span>
                                     </div>
+                                    {(onUndoItem || onClearItem) && (
+                                        <div className="mt-4 flex items-center justify-end gap-2">
+                                            {onUndoItem && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onUndoItem(item.id)}
+                                                    className="flex cursor-pointer items-center gap-1 rounded-lg border border-white/10 px-3 py-2 text-xs text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
+                                                >
+                                                    <Undo2 className="h-3.5 w-3.5" />
+                                                    Geri Al
+                                                </button>
+                                            )}
+                                            {onClearItem && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onClearItem(item.id)}
+                                                    className="flex cursor-pointer items-center gap-1 rounded-lg border border-red-400/20 px-3 py-2 text-xs text-red-300 transition-colors hover:bg-red-500/10 hover:text-red-200"
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                    Temizle
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                             </>
                         ) : (

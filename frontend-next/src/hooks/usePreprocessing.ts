@@ -13,6 +13,65 @@ import {
 } from '@/types/preprocessing';
 import * as api from '@/lib/api';
 
+type ApiHistoryEntry = {
+    step?: string;
+    action?: string;
+    columns?: string[];
+    source_columns?: string[];
+    new_columns?: string[];
+    params?: Record<string, unknown>;
+    affected_rows?: number;
+    timestamp?: string;
+};
+
+const HISTORY_ACTION_BY_STEP: Record<string, string> = {
+    missing_values: 'fill_missing',
+    outliers: 'handle_outliers',
+    encoding: 'encode_categorical',
+    scaling: 'scale_numeric',
+    feature_engineering: 'create_feature',
+};
+
+function mapColumns(columnTypes: Awaited<ReturnType<typeof api.getColumnTypes>>['columns']): ColumnInfo[] {
+    return columnTypes.map(col => ({
+        name: col.name,
+        type: col.type,
+        dtype: col.dtype,
+        missingCount: col.null_count,
+        missingPercentage: col.null_percentage,
+        uniqueCount: col.unique_count,
+    }));
+}
+
+function mapHistoryEntry(entry: unknown, index: number): ProcessingHistory | null {
+    if (!entry || typeof entry !== 'object') {
+        return null;
+    }
+
+    const rawEntry = entry as ApiHistoryEntry;
+    const stepKey = rawEntry.step;
+    const method = rawEntry.action;
+
+    if (!stepKey || !method) {
+        return null;
+    }
+
+    const parsedTimestamp = rawEntry.timestamp ? new Date(rawEntry.timestamp) : new Date();
+    const timestamp = Number.isNaN(parsedTimestamp.getTime()) ? new Date() : parsedTimestamp;
+
+    return {
+        id: `${stepKey}-${rawEntry.timestamp ?? index}-${index}`,
+        stepKey,
+        action: HISTORY_ACTION_BY_STEP[stepKey] || method,
+        columns: rawEntry.columns ?? rawEntry.source_columns ?? [],
+        newColumns: rawEntry.new_columns,
+        method,
+        params: rawEntry.params,
+        timestamp,
+        affectedRows: rawEntry.affected_rows,
+    };
+}
+
 // Preprocessing steps definition
 export const PREPROCESSING_STEPS: PreprocessingStep[] = [
     { id: '1', name: 'Missing Values', icon: '❓', key: 'missing_values', description: 'Eksik değerleri işle' },
@@ -30,8 +89,42 @@ interface UsePreprocessingReturn {
     history: ProcessingHistory[];
     columns: ColumnInfo[];
     isLoading: boolean;
-    error: string | null;
+    error: string | null; /*
 
+            setError(err instanceof Error ? err.message : 'İşlem geçmişi yüklenirken hata oluştu');
+
+    /*
+    /*
+    const loadInitialData = useCallback(async () => {
+        try {
+            setIsLoading(true);
+            setError(null);
+
+            const [columnTypes, historyResponse] = await Promise.all([
+                api.getColumnTypes(),
+                api.getPreprocessingHistory(),
+            ]);
+
+            setColumns(mapColumns(columnTypes.columns));
+            const nextHistory = historyResponse.history
+                .map((entry, index) => mapHistoryEntry(entry, index))
+                .filter((entry): entry is ProcessingHistory => entry !== null);
+            setHistory(nextHistory);
+        } catch (err) {
+            if (api.isSessionRequiredError(err)) {
+                setColumns([]);
+                setHistory([]);
+                setError(null);
+                return;
+            }
+            console.error('Load preprocessing data error:', err);
+            setError(err instanceof Error ? err.message : 'Ön işleme verileri yüklenirken hata oluştu');
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
+    */
     // Navigation
     goToStep: (step: number) => void;
     nextStep: () => void;
@@ -40,13 +133,17 @@ interface UsePreprocessingReturn {
     canGoPrev: boolean;
 
     // Actions
+    loadInitialData: () => Promise<void>;
     loadColumns: () => Promise<void>;
+    loadHistory: () => Promise<void>;
     applyMissingValues: (config: MissingValueConfig) => Promise<void>;
     applyOutliers: (config: OutlierConfig) => Promise<void>;
     applyEncoding: (config: EncodingConfig) => Promise<void>;
     applyScaling: (config: ScalingConfig) => Promise<void>;
     applyFeatureEngineering: (config: FeatureConfig) => Promise<void>;
     undoLastAction: () => void;
+    undoToHistoryItem: (historyId: string) => void;
+    clearHistoryItem: (historyId: string) => void;
     resetAll: () => Promise<void>;
 
     // Helpers
@@ -92,6 +189,56 @@ export function usePreprocessing(): UsePreprocessingReturn {
         }
     }, []);
 
+    const loadHistory = useCallback(async () => {
+        try {
+            setIsLoading(true);
+            const historyResponse = await api.getPreprocessingHistory();
+            const nextHistory = historyResponse.history
+                .map((entry, index) => mapHistoryEntry(entry, index))
+                .filter((entry): entry is ProcessingHistory => entry !== null);
+            setHistory(nextHistory);
+        } catch (err) {
+            if (api.isSessionRequiredError(err)) {
+                setHistory([]);
+                setError(null);
+                return;
+            }
+            console.error('Load history error:', err);
+            setError(err instanceof Error ? err.message : 'İşlem geçmişi yüklenirken hata oluştu');
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
+    const loadInitialData = useCallback(async () => {
+        try {
+            setIsLoading(true);
+            setError(null);
+
+            const [columnTypes, historyResponse] = await Promise.all([
+                api.getColumnTypes(),
+                api.getPreprocessingHistory(),
+            ]);
+
+            setColumns(mapColumns(columnTypes.columns));
+            const nextHistory = historyResponse.history
+                .map((entry, index) => mapHistoryEntry(entry, index))
+                .filter((entry): entry is ProcessingHistory => entry !== null);
+            setHistory(nextHistory);
+        } catch (err) {
+            if (api.isSessionRequiredError(err)) {
+                setColumns([]);
+                setHistory([]);
+                setError(null);
+                return;
+            }
+            console.error('Load preprocessing data error:', err);
+            setError(err instanceof Error ? err.message : 'Ön işleme verileri yüklenirken hata oluştu');
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
     // Navigation
     const goToStep = useCallback((step: number) => {
         if (step >= 0 && step < PREPROCESSING_STEPS.length) {
@@ -117,14 +264,17 @@ export function usePreprocessing(): UsePreprocessingReturn {
     const canGoNext = currentStep < PREPROCESSING_STEPS.length - 1;
     const canGoPrev = currentStep > 0;
 
-    // Add to history helper
-    const addToHistory = useCallback((entry: Omit<ProcessingHistory, 'id' | 'timestamp'>) => {
-        const newEntry: ProcessingHistory = {
-            ...entry,
-            id: `${Date.now()}`,
-            timestamp: new Date(),
-        };
-        setHistory(prev => [...prev, newEntry]);
+    const refreshColumnsAndHistory = useCallback(async () => {
+        const [columnTypes, historyResponse] = await Promise.all([
+            api.getColumnTypes(),
+            api.getPreprocessingHistory(),
+        ]);
+
+        setColumns(mapColumns(columnTypes.columns));
+        const nextHistory = historyResponse.history
+            .map((entry, index) => mapHistoryEntry(entry, index))
+            .filter((entry): entry is ProcessingHistory => entry !== null);
+        setHistory(nextHistory);
     }, []);
 
     // Actions - connected to API
@@ -133,57 +283,38 @@ export function usePreprocessing(): UsePreprocessingReturn {
             setIsLoading(true);
             setError(null);
 
-            const result = await api.applyMissingValues(
+            await api.applyMissingValues(
                 config.method,
                 config.columns,
                 config.fillValue !== undefined ? String(config.fillValue) : undefined
             );
 
-            addToHistory({
-                stepKey: 'missing_values',
-                action: 'fill_missing',
-                columns: config.columns,
-                method: config.method,
-                params: config.fillValue ? { fillValue: config.fillValue } : undefined,
-                affectedRows: result.affected_rows || 0,
-            });
-
-            // Refresh columns
-            await loadColumns();
+            await refreshColumnsAndHistory();
         } catch (err) {
             setError(err instanceof Error ? err.message : 'İşlem sırasında hata oluştu');
         } finally {
             setIsLoading(false);
         }
-    }, [addToHistory, loadColumns]);
+    }, [refreshColumnsAndHistory]);
 
     const applyOutliers = useCallback(async (config: OutlierConfig) => {
         try {
             setIsLoading(true);
             setError(null);
 
-            const result = await api.applyOutliers(
+            await api.applyOutliers(
                 config.method,
                 config.columns,
                 config.threshold
             );
 
-            addToHistory({
-                stepKey: 'outliers',
-                action: 'handle_outliers',
-                columns: config.columns,
-                method: config.method,
-                params: config.threshold ? { threshold: config.threshold } : undefined,
-                affectedRows: result.affected_rows || 0,
-            });
-
-            await loadColumns();
+            await refreshColumnsAndHistory();
         } catch (err) {
             setError(err instanceof Error ? err.message : 'İşlem sırasında hata oluştu');
         } finally {
             setIsLoading(false);
         }
-    }, [addToHistory, loadColumns]);
+    }, [refreshColumnsAndHistory]);
 
     const applyEncoding = useCallback(async (config: EncodingConfig) => {
         try {
@@ -196,21 +327,13 @@ export function usePreprocessing(): UsePreprocessingReturn {
                 config.dropFirst
             );
 
-            addToHistory({
-                stepKey: 'encoding',
-                action: 'encode_categorical',
-                columns: config.columns,
-                method: config.method,
-                params: { dropFirst: config.dropFirst },
-            });
-
-            await loadColumns();
+            await refreshColumnsAndHistory();
         } catch (err) {
             setError(err instanceof Error ? err.message : 'İşlem sırasında hata oluştu');
         } finally {
             setIsLoading(false);
         }
-    }, [addToHistory, loadColumns]);
+    }, [refreshColumnsAndHistory]);
 
     const applyScaling = useCallback(async (config: ScalingConfig) => {
         try {
@@ -219,55 +342,49 @@ export function usePreprocessing(): UsePreprocessingReturn {
 
             await api.applyScaling(config.method, config.columns);
 
-            addToHistory({
-                stepKey: 'scaling',
-                action: 'scale_numeric',
-                columns: config.columns,
-                method: config.method,
-                params: config.featureRange ? { featureRange: config.featureRange } : undefined,
-            });
-
-            await loadColumns();
+            await refreshColumnsAndHistory();
         } catch (err) {
             setError(err instanceof Error ? err.message : 'İşlem sırasında hata oluştu');
         } finally {
             setIsLoading(false);
         }
-    }, [addToHistory, loadColumns]);
+    }, [refreshColumnsAndHistory]);
 
     const applyFeatureEngineering = useCallback(async (config: FeatureConfig) => {
         try {
             setIsLoading(true);
             setError(null);
 
-            const result = await api.applyFeatureEngineering(config);
+            await api.applyFeatureEngineering(config);
 
-            addToHistory({
-                stepKey: 'feature_engineering',
-                action: 'create_feature',
-                columns: config.sourceColumns,
-                method: config.operation,
-                column: config.newColumnName,
-                newColumns: result.new_columns,
-                params: {
-                    ...config.params,
-                    ...(config.expression ? { expression: config.expression } : {}),
-                },
-            });
-
-            await loadColumns();
+            await refreshColumnsAndHistory();
         } catch (err) {
             setError(err instanceof Error ? err.message : 'İşlem sırasında hata oluştu');
         } finally {
             setIsLoading(false);
         }
-    }, [addToHistory, loadColumns]);
+    }, [refreshColumnsAndHistory]);
 
     const undoLastAction = useCallback(() => {
         if (history.length > 0) {
             setHistory(prev => prev.slice(0, -1));
         }
     }, [history]);
+
+    const undoToHistoryItem = useCallback((historyId: string) => {
+        setHistory((prev) => {
+            const targetIndex = prev.findIndex((item) => item.id === historyId);
+            if (targetIndex === -1) {
+                return prev;
+            }
+
+            return prev.slice(0, targetIndex);
+        });
+    }, []);
+
+    const clearHistoryItem = useCallback((historyId: string) => {
+        setHistory((prev) => prev.filter((item) => item.id !== historyId));
+    }, []);
 
     const resetAll = useCallback(async () => {
         try {
@@ -307,13 +424,17 @@ export function usePreprocessing(): UsePreprocessingReturn {
         prevStep,
         canGoNext,
         canGoPrev,
+        loadInitialData,
         loadColumns,
+        loadHistory,
         applyMissingValues,
         applyOutliers,
         applyEncoding,
         applyScaling,
         applyFeatureEngineering,
         undoLastAction,
+        undoToHistoryItem,
+        clearHistoryItem,
         resetAll,
         numericColumns,
         categoricalColumns,

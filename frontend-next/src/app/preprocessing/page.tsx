@@ -58,13 +58,15 @@ export default function PreprocessingPage() {
         prevStep,
         canGoNext,
         canGoPrev,
-        loadColumns,
+        loadInitialData,
         applyMissingValues,
         applyOutliers,
         applyEncoding,
         applyScaling,
         applyFeatureEngineering,
         undoLastAction,
+        undoToHistoryItem,
+        clearHistoryItem,
         resetAll,
         numericColumns,
         categoricalColumns,
@@ -73,9 +75,9 @@ export default function PreprocessingPage() {
 
     useEffect(() => {
         if (hasSession) {
-            loadColumns();
+            void loadInitialData();
         }
-    }, [hasSession, loadColumns]);
+    }, [hasSession, loadInitialData]);
 
     const hasData = hasSession === true && columns.length > 0;
     const currentStepInfo = PREPROCESSING_STEPS[currentStep];
@@ -335,6 +337,8 @@ export default function PreprocessingPage() {
                                     history={history}
                                     onUndo={undoLastAction}
                                     onClear={resetAll}
+                                    onUndoItem={undoToHistoryItem}
+                                    onClearItem={clearHistoryItem}
                                     variant="timeline"
                                 />
                             </div>
