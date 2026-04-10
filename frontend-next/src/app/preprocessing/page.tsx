@@ -14,7 +14,7 @@ import {
     Scaling,
     Summary,
 } from '@/components/preprocessing';
-import { NoDataWarning, SessionPageSkeleton } from '@/components/common';
+import { ClickSpark, NoDataWarning, PixelTrail, SessionPageSkeleton } from '@/components/common';
 import { usePreprocessing, PREPROCESSING_STEPS } from '@/hooks/usePreprocessing';
 import { hasStoredSession } from '@/lib/api';
 import { theme } from '@/styles/theme';
@@ -36,6 +36,8 @@ export default function PreprocessingPage() {
             y: window.innerHeight - 120,
         };
     });
+    const [historyTrailPointer, setHistoryTrailPointer] = useState<{ x: number; y: number } | null>(null);
+    const [isHistoryButtonDragging, setIsHistoryButtonDragging] = useState(false);
     const hasSession = useSyncExternalStore(
         subscribeToSession,
         getSessionSnapshot,
@@ -83,6 +85,7 @@ export default function PreprocessingPage() {
         const rect = event.currentTarget.getBoundingClientRect();
         dragStartRef.current = { x: event.clientX, y: event.clientY };
         didDragRef.current = false;
+        setHistoryTrailPointer({ x: event.clientX, y: event.clientY });
         dragOffsetRef.current = {
             x: event.clientX - rect.left,
             y: event.clientY - rect.top,
@@ -95,7 +98,10 @@ export default function PreprocessingPage() {
                 Math.abs(moveEvent.clientY - dragStartRef.current.y) > 4
             ) {
                 didDragRef.current = true;
+                setIsHistoryButtonDragging(true);
             }
+
+            setHistoryTrailPointer({ x: moveEvent.clientX, y: moveEvent.clientY });
             const nextX = Math.min(
                 Math.max(16, moveEvent.clientX - dragOffsetRef.current.x),
                 window.innerWidth - buttonSize - 16
@@ -109,6 +115,7 @@ export default function PreprocessingPage() {
         };
 
         const handlePointerUp = () => {
+            setIsHistoryButtonDragging(false);
             window.removeEventListener('pointermove', handlePointerMove);
             window.removeEventListener('pointerup', handlePointerUp);
         };
@@ -195,65 +202,84 @@ export default function PreprocessingPage() {
                     subtitle="Adım adım verilerinizi model eğitimine hazırlayın."
                 />
 
-                <main className="p-6 space-y-6">
-                    {(hasSession === null || (hasSession === true && isLoading && !hasData)) && (
-                        <SessionPageSkeleton variant="wizard" />
-                    )}
+                <ClickSpark
+                    className="relative"
+                    sparkColor={theme.colors.primary.cyan}
+                    sparkSize={12}
+                    sparkRadius={20}
+                    sparkCount={10}
+                    duration={500}
+                    extraScale={1.15}
+                >
+                    <main className="p-6 space-y-6">
+                        {(hasSession === null || (hasSession === true && isLoading && !hasData)) && (
+                            <SessionPageSkeleton variant="wizard" />
+                        )}
 
-                    {hasSession !== null && !isLoading && !hasData && (
-                        <NoDataWarning
-                            title="Veri Yüklenmedi"
-                            description="Veri ön işleme yapabilmek için önce veri yüklemeniz gerekir."
-                        />
-                    )}
-
-                    {hasData && (
-                        <>
-                            <StepProgress
-                                steps={PREPROCESSING_STEPS}
-                                currentStep={currentStep}
-                                completedSteps={completedSteps}
-                                onStepClick={goToStep}
-                                showActiveLine={false}
+                        {hasSession !== null && !isLoading && !hasData && (
+                            <NoDataWarning
+                                title="Veri Yüklenmedi"
+                                description="Veri ön işleme yapabilmek için önce veri yüklemeniz gerekir."
                             />
+                        )}
 
-                            <div
-                                className="p-6 rounded-2xl border border-white/10"
-                                style={{
-                                    background:
-                                        'linear-gradient(135deg, rgba(17, 24, 39, 0.6) 0%, rgba(31, 41, 55, 0.4) 100%)',
-                                }}
-                            >
-                                <div className="flex items-center gap-3 mb-6 pb-4 border-b border-white/10">
-                                    <span className="text-3xl">{currentStepInfo?.icon}</span>
-                                    <div>
-                                        <h2 className="text-xl font-bold text-white">{currentStepInfo?.name}</h2>
-                                        <p className="text-sm text-gray-400">{currentStepInfo?.description}</p>
+                        {hasData && (
+                            <>
+                                <StepProgress
+                                    steps={PREPROCESSING_STEPS}
+                                    currentStep={currentStep}
+                                    completedSteps={completedSteps}
+                                    onStepClick={goToStep}
+                                    showActiveLine={false}
+                                />
+
+                                <div
+                                    className="p-6 rounded-2xl border border-white/10"
+                                    style={{
+                                        background:
+                                            'linear-gradient(135deg, rgba(17, 24, 39, 0.6) 0%, rgba(31, 41, 55, 0.4) 100%)',
+                                    }}
+                                >
+                                    <div className="flex items-center gap-3 mb-6 pb-4 border-b border-white/10">
+                                        <span className="text-3xl">{currentStepInfo?.icon}</span>
+                                        <div>
+                                            <h2 className="text-xl font-bold text-white">{currentStepInfo?.name}</h2>
+                                            <p className="text-sm text-gray-400">{currentStepInfo?.description}</p>
+                                        </div>
                                     </div>
+
+                                    {renderStepContent()}
+
+                                    {!isLastStep && (
+                                        <StepNavigation
+                                            onPrev={prevStep}
+                                            onNext={nextStep}
+                                            onSkip={nextStep}
+                                            onReset={resetAll}
+                                            canGoPrev={canGoPrev}
+                                            canGoNext={canGoNext}
+                                            isLastStep={isLastStep}
+                                            isLoading={isLoading}
+                                        />
+                                    )}
                                 </div>
-
-                                {renderStepContent()}
-
-                                {!isLastStep && (
-                                    <StepNavigation
-                                        onPrev={prevStep}
-                                        onNext={nextStep}
-                                        onSkip={nextStep}
-                                        onReset={resetAll}
-                                        canGoPrev={canGoPrev}
-                                        canGoNext={canGoNext}
-                                        isLastStep={isLastStep}
-                                        isLoading={isLoading}
-                                    />
-                                )}
-                            </div>
-                        </>
-                    )}
-                </main>
+                            </>
+                        )}
+                    </main>
+                </ClickSpark>
             </div>
 
             {hasData && (
                 <>
+                    <PixelTrail
+                        active={isHistoryButtonDragging}
+                        pointer={historyTrailPointer}
+                        color={theme.colors.primary.cyan}
+                        gridSize={22}
+                        trailSize={0.55}
+                        maxAge={320}
+                        interpolate={10}
+                    />
                     <button
                         type="button"
                         aria-label="İşlem geçmişini aç"
