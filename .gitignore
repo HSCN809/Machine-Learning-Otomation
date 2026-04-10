@@ -4,6 +4,7 @@ venv/
 .env
 .streamlit/
 .cursor/
+AGENTS.md
 
 # Proje Dokümanları
 Proje Başlatma Belgesi Hüseyin Berat Özen.docx
