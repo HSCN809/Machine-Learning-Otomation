@@ -61,6 +61,7 @@ function mapHistoryEntry(entry: unknown, index: number): ProcessingHistory | nul
 
     return {
         id: `${stepKey}-${rawEntry.timestamp ?? index}-${index}`,
+        historyIndex: index,
         stepKey,
         action: HISTORY_ACTION_BY_STEP[stepKey] || method,
         columns: rawEntry.columns ?? rawEntry.source_columns ?? [],
@@ -141,9 +142,8 @@ interface UsePreprocessingReturn {
     applyEncoding: (config: EncodingConfig) => Promise<void>;
     applyScaling: (config: ScalingConfig) => Promise<void>;
     applyFeatureEngineering: (config: FeatureConfig) => Promise<void>;
-    undoLastAction: () => void;
-    undoToHistoryItem: (historyId: string) => void;
-    clearHistoryItem: (historyId: string) => void;
+    undoLastAction: () => Promise<void>;
+    undoToHistoryItem: (historyIndex: number) => Promise<void>;
     resetAll: () => Promise<void>;
 
     // Helpers
@@ -365,26 +365,35 @@ export function usePreprocessing(): UsePreprocessingReturn {
         }
     }, [refreshColumnsAndHistory]);
 
-    const undoLastAction = useCallback(() => {
-        if (history.length > 0) {
-            setHistory(prev => prev.slice(0, -1));
+    const undoLastAction = useCallback(async () => {
+        if (history.length === 0) {
+            return;
         }
-    }, [history]);
 
-    const undoToHistoryItem = useCallback((historyId: string) => {
-        setHistory((prev) => {
-            const targetIndex = prev.findIndex((item) => item.id === historyId);
-            if (targetIndex === -1) {
-                return prev;
-            }
+        try {
+            setIsLoading(true);
+            setError(null);
+            await api.undoPreprocessing();
+            await refreshColumnsAndHistory();
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Geri alma sırasında hata oluştu');
+        } finally {
+            setIsLoading(false);
+        }
+    }, [history.length, refreshColumnsAndHistory]);
 
-            return prev.slice(0, targetIndex);
-        });
-    }, []);
-
-    const clearHistoryItem = useCallback((historyId: string) => {
-        setHistory((prev) => prev.filter((item) => item.id !== historyId));
-    }, []);
+    const undoToHistoryItem = useCallback(async (historyIndex: number) => {
+        try {
+            setIsLoading(true);
+            setError(null);
+            await api.undoPreprocessingTo(historyIndex);
+            await refreshColumnsAndHistory();
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Seçili işlem geri alınırken hata oluştu');
+        } finally {
+            setIsLoading(false);
+        }
+    }, [refreshColumnsAndHistory]);
 
     const resetAll = useCallback(async () => {
         try {
@@ -434,7 +443,6 @@ export function usePreprocessing(): UsePreprocessingReturn {
         applyFeatureEngineering,
         undoLastAction,
         undoToHistoryItem,
-        clearHistoryItem,
         resetAll,
         numericColumns,
         categoricalColumns,

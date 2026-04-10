@@ -57,6 +57,10 @@ class FeatureRequest(BaseModel):
     params: dict[str, Any] = Field(default_factory=dict)
 
 
+class UndoToHistoryRequest(BaseModel):
+    history_index: int = Field(ge=0)
+
+
 ALLOWED_EXPRESSION_NODES = (
     ast.Expression,
     ast.BinOp,
@@ -101,6 +105,7 @@ async def handle_missing_values(
         raise HTTPException(status_code=400, detail="No data loaded")
     
     try:
+        previous_df = df.copy(deep=True)
         affected_rows = 0
         
         for col in request.columns:
@@ -134,6 +139,7 @@ async def handle_missing_values(
             affected_rows += int(initial_nulls)
         
         session_manager.set_dataframe(session_id, df)
+        session_manager.add_history_snapshot(session_id, previous_df)
         session_manager.add_history(session_id, {
             "step": "missing_values",
             "action": request.method,
@@ -164,6 +170,7 @@ async def handle_outliers(
         raise HTTPException(status_code=400, detail="No data loaded")
     
     try:
+        previous_df = df.copy(deep=True)
         affected_rows = 0
         
         for col in request.columns:
@@ -194,6 +201,7 @@ async def handle_outliers(
                 df.loc[df[col] > upper, col] = upper
         
         session_manager.set_dataframe(session_id, df)
+        session_manager.add_history_snapshot(session_id, previous_df)
         session_manager.add_history(session_id, {
             "step": "outliers",
             "action": request.method,
@@ -225,6 +233,7 @@ async def handle_encoding(
         raise HTTPException(status_code=400, detail="No data loaded")
     
     try:
+        previous_df = df.copy(deep=True)
         new_columns = []
         
         for col in request.columns:
@@ -245,6 +254,7 @@ async def handle_encoding(
                 df[col] = df[col].map(freq_map)
         
         session_manager.set_dataframe(session_id, df)
+        session_manager.add_history_snapshot(session_id, previous_df)
         session_manager.add_history(session_id, {
             "step": "encoding",
             "action": request.method,
@@ -275,6 +285,7 @@ async def handle_scaling(
         raise HTTPException(status_code=400, detail="No data loaded")
     
     try:
+        previous_df = df.copy(deep=True)
         for col in request.columns:
             if col not in df.columns or not np.issubdtype(df[col].dtype, np.number):
                 continue
@@ -298,6 +309,7 @@ async def handle_scaling(
                     df[col] = (df[col] - median) / iqr
         
         session_manager.set_dataframe(session_id, df)
+        session_manager.add_history_snapshot(session_id, previous_df)
         session_manager.add_history(session_id, {
             "step": "scaling",
             "action": request.method,
@@ -325,6 +337,7 @@ async def handle_feature_engineering(
         raise HTTPException(status_code=400, detail="No data loaded")
     
     try:
+        previous_df = df.copy(deep=True)
         params = request.params or {}
         new_columns: List[str] = []
         history_payload: dict[str, Any] = {
@@ -405,6 +418,7 @@ async def handle_feature_engineering(
             raise HTTPException(status_code=400, detail=f"Unsupported feature engineering operation: {request.operation}")
 
         session_manager.set_dataframe(session_id, df)
+        session_manager.add_history_snapshot(session_id, previous_df)
         history_payload["new_columns"] = new_columns
         session_manager.add_history(session_id, history_payload)
 
@@ -428,6 +442,44 @@ async def get_history(session_id: str = Depends(require_session)):
     return {"history": history}
 
 
+@router.post("/undo")
+async def undo_last_preprocessing(session_id: str = Depends(require_session)):
+    """Undo the last preprocessing action"""
+    undone_action = session_manager.undo_last_history_action(session_id)
+    current_df = session_manager.get_dataframe(session_id)
+    if current_df is None:
+        raise HTTPException(status_code=400, detail="No data loaded")
+
+    return {
+        "success": True,
+        "message": "Last preprocessing action was undone",
+        "undone_action": undone_action,
+        "rows": len(current_df),
+        "columns": len(current_df.columns),
+    }
+
+
+@router.post("/undo-to")
+async def undo_to_history_item(
+    request: UndoToHistoryRequest,
+    session_id: str = Depends(require_session)
+):
+    """Undo the selected preprocessing action and all newer actions"""
+    undo_result = session_manager.undo_to_history_index(session_id, request.history_index)
+    current_df = session_manager.get_dataframe(session_id)
+    if current_df is None:
+        raise HTTPException(status_code=400, detail="No data loaded")
+
+    return {
+        "success": True,
+        "message": "Selected preprocessing history was undone",
+        "undone_count": len(undo_result["undone_actions"]),
+        "remaining_history_count": undo_result["remaining_history_count"],
+        "rows": len(current_df),
+        "columns": len(current_df.columns),
+    }
+
+
 @router.post("/reset")
 async def reset_data(session_id: str = Depends(require_session)):
     """Reset to original data"""
@@ -439,6 +491,7 @@ async def reset_data(session_id: str = Depends(require_session)):
     session = session_manager.get_session(session_id)
     if session:
         session["history"] = []
+        session["history_snapshots"] = []
     
     return {
         "success": True,

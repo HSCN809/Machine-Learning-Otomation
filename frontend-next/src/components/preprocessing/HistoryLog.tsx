@@ -1,15 +1,14 @@
 'use client';
 
-import { Clock, Undo2, Trash2 } from 'lucide-react';
+import { Clock, Undo2 } from 'lucide-react';
 import { ProcessingHistory } from '@/types/preprocessing';
 import { theme } from '@/styles/theme';
 
 interface HistoryLogProps {
     history: ProcessingHistory[];
-    onUndo?: () => void;
-    onClear?: () => void;
-    onUndoItem?: (historyId: string) => void;
-    onClearItem?: (historyId: string) => void;
+    onUndo?: () => void | Promise<void>;
+    onUndoItem?: (historyIndex: number) => void | Promise<void>;
+    isLoading?: boolean;
     variant?: 'card' | 'timeline';
 }
 
@@ -47,9 +46,8 @@ const methodLabels: Record<string, string> = {
 export function HistoryLog({
     history,
     onUndo,
-    onClear,
     onUndoItem,
-    onClearItem,
+    isLoading = false,
     variant = 'card',
 }: HistoryLogProps) {
     const isTimeline = variant === 'timeline';
@@ -87,19 +85,15 @@ export function HistoryLog({
                     {onUndo && history.length > 0 && (
                         <button
                             onClick={onUndo}
-                            className="cursor-pointer flex items-center gap-1 px-2 py-1 rounded text-xs text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+                            disabled={isLoading}
+                            className={`flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors ${
+                                isLoading
+                                    ? 'cursor-not-allowed text-gray-500'
+                                    : 'cursor-pointer text-gray-400 hover:bg-white/10 hover:text-white'
+                            }`}
                         >
                             <Undo2 className="w-3 h-3" />
                             Geri Al
-                        </button>
-                    )}
-                    {onClear && history.length > 0 && (
-                        <button
-                            onClick={onClear}
-                            className="cursor-pointer flex items-center gap-1 px-2 py-1 rounded text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors"
-                        >
-                            <Trash2 className="w-3 h-3" />
-                            Temizle
                         </button>
                     )}
                 </div>
@@ -168,28 +162,21 @@ export function HistoryLog({
                                             })}
                                         </span>
                                     </div>
-                                    {(onUndoItem || onClearItem) && (
+                                    {onUndoItem && (
                                         <div className="mt-4 flex items-center justify-end gap-2">
-                                            {onUndoItem && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => onUndoItem(item.id)}
-                                                    className="flex cursor-pointer items-center gap-1 rounded-lg border border-white/10 px-3 py-2 text-xs text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
-                                                >
-                                                    <Undo2 className="h-3.5 w-3.5" />
-                                                    Geri Al
-                                                </button>
-                                            )}
-                                            {onClearItem && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => onClearItem(item.id)}
-                                                    className="flex cursor-pointer items-center gap-1 rounded-lg border border-red-400/20 px-3 py-2 text-xs text-red-300 transition-colors hover:bg-red-500/10 hover:text-red-200"
-                                                >
-                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                    Temizle
-                                                </button>
-                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => onUndoItem(item.historyIndex)}
+                                                disabled={isLoading}
+                                                className={`flex items-center gap-1 rounded-lg border px-3 py-2 text-xs transition-colors ${
+                                                    isLoading
+                                                        ? 'cursor-not-allowed border-white/10 text-gray-500'
+                                                        : 'cursor-pointer border-white/10 text-gray-300 hover:bg-white/10 hover:text-white'
+                                                }`}
+                                            >
+                                                <Undo2 className="h-3.5 w-3.5" />
+                                                Geri Al
+                                            </button>
                                         </div>
                                     )}
                                 </div>

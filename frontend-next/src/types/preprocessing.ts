@@ -10,6 +10,7 @@ export interface PreprocessingStep {
 
 export interface ProcessingHistory {
     id: string;
+    historyIndex: number;
     stepKey: string;
     action: string;
     column?: string;

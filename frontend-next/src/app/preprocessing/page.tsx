@@ -66,7 +66,6 @@ export default function PreprocessingPage() {
         applyFeatureEngineering,
         undoLastAction,
         undoToHistoryItem,
-        clearHistoryItem,
         resetAll,
         numericColumns,
         categoricalColumns,
@@ -336,9 +335,8 @@ export default function PreprocessingPage() {
                                 <HistoryLog
                                     history={history}
                                     onUndo={undoLastAction}
-                                    onClear={resetAll}
                                     onUndoItem={undoToHistoryItem}
-                                    onClearItem={clearHistoryItem}
+                                    isLoading={isLoading}
                                     variant="timeline"
                                 />
                             </div>

@@ -396,6 +396,18 @@ export async function getPreprocessingHistory(): Promise<{ history: unknown[] }>
     return apiFetch('/api/preprocessing/history');
 }
 
+export async function undoPreprocessing(): Promise<{ success: boolean; message: string }> {
+    return apiFetch('/api/preprocessing/undo', { method: 'POST' });
+}
+
+export async function undoPreprocessingTo(historyIndex: number): Promise<{ success: boolean; message: string }> {
+    return apiFetch('/api/preprocessing/undo-to', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ history_index: historyIndex }),
+    });
+}
+
 export async function resetPreprocessing(): Promise<{ success: boolean; message: string }> {
     return apiFetch('/api/preprocessing/reset', { method: 'POST' });
 }

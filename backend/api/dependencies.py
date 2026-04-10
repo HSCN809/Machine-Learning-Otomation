@@ -28,6 +28,7 @@ class SessionManager:
             "data": None,
             "original_data": None,
             "history": [],
+            "history_snapshots": [],
             "metadata": {},
         }
         logger.info(f"Created new session: {session_id}")
@@ -49,6 +50,8 @@ class SessionManager:
         session["data"] = df
         if is_original:
             session["original_data"] = df.copy()
+            session["history"] = []
+            session["history_snapshots"] = []
         
         logger.info(f"Session {session_id}: DataFrame set with shape {df.shape}")
     
@@ -72,11 +75,56 @@ class SessionManager:
         if session:
             action["timestamp"] = datetime.now().isoformat()
             session["history"].append(action)
+
+    def add_history_snapshot(self, session_id: str, df: pd.DataFrame):
+        """Store pre-action snapshot for undo operations"""
+        session = self.get_session(session_id)
+        if session:
+            session["history_snapshots"].append(df.copy(deep=True))
     
     def get_history(self, session_id: str) -> list:
         """Get session history"""
         session = self.get_session(session_id)
         return session.get("history", []) if session else []
+
+    def undo_last_history_action(self, session_id: str) -> Dict[str, Any]:
+        """Restore the dataframe snapshot before the last preprocessing action"""
+        session = self.get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        history = session.get("history", [])
+        snapshots = session.get("history_snapshots", [])
+        if not history or not snapshots:
+            raise HTTPException(status_code=400, detail="No preprocessing action to undo")
+
+        restored_df = snapshots.pop()
+        undone_action = history.pop()
+        session["data"] = restored_df.copy(deep=True)
+        return undone_action
+
+    def undo_to_history_index(self, session_id: str, history_index: int) -> Dict[str, Any]:
+        """Restore the dataframe snapshot before the selected history item and trim newer actions"""
+        session = self.get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        history = session.get("history", [])
+        snapshots = session.get("history_snapshots", [])
+        if not history or not snapshots:
+            raise HTTPException(status_code=400, detail="No preprocessing action to undo")
+        if history_index < 0 or history_index >= len(history):
+            raise HTTPException(status_code=400, detail="Invalid history index")
+
+        restored_df = snapshots[history_index].copy(deep=True)
+        undone_actions = history[history_index:]
+        session["data"] = restored_df
+        del history[history_index:]
+        del snapshots[history_index:]
+        return {
+            "undone_actions": undone_actions,
+            "remaining_history_count": len(history),
+        }
     
     def set_metadata(self, session_id: str, key: str, value: Any):
         """Set metadata in session"""
