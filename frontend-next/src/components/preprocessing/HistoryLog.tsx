@@ -8,6 +8,7 @@ interface HistoryLogProps {
     history: ProcessingHistory[];
     onUndo?: () => void;
     onClear?: () => void;
+    variant?: 'card' | 'timeline';
 }
 
 const stepLabels: Record<string, string> = {
@@ -41,20 +42,31 @@ const methodLabels: Record<string, string> = {
     quantile: 'Quantile',
 };
 
-export function HistoryLog({ history, onUndo, onClear }: HistoryLogProps) {
+export function HistoryLog({ history, onUndo, onClear, variant = 'card' }: HistoryLogProps) {
+    const isTimeline = variant === 'timeline';
+
     if (history.length === 0) {
         return (
-            <div className="p-4 rounded-xl border border-white/10 bg-white/5 text-center">
-                <Clock className="w-8 h-8 text-gray-500 mx-auto mb-2" />
-                <p className="text-gray-400 text-sm">Henüz işlem yapılmadı</p>
+            <div
+                className={isTimeline ? 'rounded-2xl border border-white/10 bg-white/5 p-5 text-left' : 'p-4 rounded-xl border border-white/10 bg-white/5 text-center'}
+            >
+                <Clock className={`${isTimeline ? 'mb-3 h-8 w-8 text-cyan-400' : 'w-8 h-8 text-gray-500 mx-auto mb-2'}`} />
+                <p className={`${isTimeline ? 'text-sm text-gray-300' : 'text-gray-400 text-sm'}`}>Henüz işlem yapılmadı</p>
+                {isTimeline && (
+                    <p className="mt-1 text-xs text-gray-500">
+                        Uyguladığınız preprocessing işlemleri burada zaman akışıyla listelenecek.
+                    </p>
+                )}
             </div>
         );
     }
 
+    const orderedHistory = isTimeline ? history : history.slice().reverse();
+
     return (
-        <div className="rounded-xl border border-white/10 overflow-hidden">
+        <div className={`overflow-hidden border border-white/10 ${isTimeline ? 'rounded-2xl bg-white/5' : 'rounded-xl'}`}>
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 bg-white/5 border-b border-white/10">
+            <div className="flex items-center justify-between border-b border-white/10 bg-white/5 px-4 py-3">
                 <div className="flex items-center gap-2">
                     <Clock className="w-4 h-4 text-cyan-400" />
                     <span className="font-medium text-white">İşlem Geçmişi</span>
@@ -85,52 +97,114 @@ export function HistoryLog({ history, onUndo, onClear }: HistoryLogProps) {
             </div>
 
             {/* History items */}
-            <div className="max-h-64 overflow-y-auto">
-                {history.slice().reverse().map((item) => (
+            <div className={isTimeline ? 'max-h-[70vh] overflow-y-auto px-5 py-4' : 'max-h-64 overflow-y-auto'}>
+                {orderedHistory.map((item, index) => (
                     <div
                         key={item.id}
-                        className="flex items-start gap-3 p-3 border-b border-white/5 last:border-0 hover:bg-white/5"
+                        className={
+                            isTimeline
+                                ? 'relative pl-8 pb-6 last:pb-0'
+                                : 'flex items-start gap-3 border-b border-white/5 p-3 last:border-0 hover:bg-white/5'
+                        }
                     >
-                        <div
-                            className="w-2 h-2 rounded-full mt-2 flex-shrink-0"
-                            style={{ background: theme.colors.primary.cyan }}
-                        />
-                        <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium text-white">
-                                    {actionLabels[item.action] || item.action}
+                        {isTimeline ? (
+                            <>
+                                {index < orderedHistory.length - 1 && (
+                                    <div className="absolute bottom-0 left-[0.4375rem] top-3 w-px bg-white/10" />
+                                )}
+                                <div
+                                    className="absolute left-0 top-2 h-3.5 w-3.5 rounded-full border-2"
+                                    style={{
+                                        background: theme.colors.background.elevated,
+                                        borderColor: theme.colors.primary.cyan,
+                                        boxShadow: theme.glow.cyan,
+                                    }}
+                                />
+                                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <span className="text-sm font-medium text-white">
+                                                    {actionLabels[item.action] || item.action}
+                                                </span>
+                                                <span className="rounded bg-white/10 px-1.5 py-0.5 text-xs text-gray-400">
+                                                    {stepLabels[item.stepKey] || item.stepKey}
+                                                </span>
+                                            </div>
+                                            <p className="mt-1 text-sm text-gray-400">
+                                                {item.columns?.length
+                                                    ? `Sütunlar: ${item.columns.join(', ')}`
+                                                    : item.column
+                                                        ? `Sütun: ${item.column}`
+                                                        : ''
+                                                }
+                                                {item.method && ` • Yöntem: ${item.method}`}
+                                            </p>
+                                            {(item.newColumns?.length || item.method) && (
+                                                <p className="mt-1 text-xs text-gray-500">
+                                                    {item.newColumns?.length ? `Yeni sütunlar: ${item.newColumns.join(', ')}` : ''}
+                                                    {item.method ? `${item.newColumns?.length ? ' • ' : ''}Yöntem etiketi: ${methodLabels[item.method] || item.method}` : ''}
+                                                </p>
+                                            )}
+                                            {item.affectedRows ? (
+                                                <p className="mt-1 text-xs text-gray-500">
+                                                    {item.affectedRows} satır etkilendi
+                                                </p>
+                                            ) : null}
+                                        </div>
+                                        <span className="shrink-0 text-xs text-gray-500">
+                                            {new Date(item.timestamp).toLocaleTimeString('tr-TR', {
+                                                hour: '2-digit',
+                                                minute: '2-digit',
+                                            })}
+                                        </span>
+                                    </div>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div
+                                    className="mt-2 h-2 w-2 flex-shrink-0 rounded-full"
+                                    style={{ background: theme.colors.primary.cyan }}
+                                />
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm font-medium text-white">
+                                            {actionLabels[item.action] || item.action}
+                                        </span>
+                                        <span className="text-xs px-1.5 py-0.5 rounded bg-white/10 text-gray-400">
+                                            {stepLabels[item.stepKey] || item.stepKey}
+                                        </span>
+                                    </div>
+                                    <p className="text-sm text-gray-400 mt-0.5">
+                                        {item.columns?.length
+                                            ? `Sütunlar: ${item.columns.join(', ')}`
+                                            : item.column
+                                                ? `Sütun: ${item.column}`
+                                                : ''
+                                        }
+                                        {item.method && ` • Yöntem: ${item.method}`}
+                                    </p>
+                                    {(item.newColumns?.length || item.method) && (
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            {item.newColumns?.length ? `Yeni sütunlar: ${item.newColumns.join(', ')}` : ''}
+                                            {item.method ? `${item.newColumns?.length ? ' • ' : ''}Yöntem etiketi: ${methodLabels[item.method] || item.method}` : ''}
+                                        </p>
+                                    )}
+                                    {item.affectedRows && (
+                                        <p className="text-xs text-gray-500 mt-0.5">
+                                            {item.affectedRows} satır etkilendi
+                                        </p>
+                                    )}
+                                </div>
+                                <span className="text-xs text-gray-500 flex-shrink-0">
+                                    {new Date(item.timestamp).toLocaleTimeString('tr-TR', {
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                    })}
                                 </span>
-                                <span className="text-xs px-1.5 py-0.5 rounded bg-white/10 text-gray-400">
-                                    {stepLabels[item.stepKey] || item.stepKey}
-                                </span>
-                            </div>
-                            <p className="text-sm text-gray-400 mt-0.5">
-                                {item.columns?.length
-                                    ? `Sütunlar: ${item.columns.join(', ')}`
-                                    : item.column
-                                        ? `Sütun: ${item.column}`
-                                        : ''
-                                }
-                                {item.method && ` • Yöntem: ${item.method}`}
-                            </p>
-                            {(item.newColumns?.length || item.method) && (
-                                <p className="text-xs text-gray-500 mt-1">
-                                    {item.newColumns?.length ? `Yeni sütunlar: ${item.newColumns.join(', ')}` : ''}
-                                    {item.method ? `${item.newColumns?.length ? ' • ' : ''}Yöntem etiketi: ${methodLabels[item.method] || item.method}` : ''}
-                                </p>
-                            )}
-                            {item.affectedRows && (
-                                <p className="text-xs text-gray-500 mt-0.5">
-                                    {item.affectedRows} satır etkilendi
-                                </p>
-                            )}
-                        </div>
-                        <span className="text-xs text-gray-500 flex-shrink-0">
-                            {new Date(item.timestamp).toLocaleTimeString('tr-TR', {
-                                hour: '2-digit',
-                                minute: '2-digit',
-                            })}
-                        </span>
+                            </>
+                        )}
                     </div>
                 ))}
             </div>
