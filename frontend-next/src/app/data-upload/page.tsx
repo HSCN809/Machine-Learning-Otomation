@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Sidebar, Header } from '@/components/layout';
 import {
     FileDropzone,
@@ -12,14 +12,14 @@ import {
 import { SessionPageSkeleton } from '@/components/common';
 import { useDataUpload } from '@/hooks/useDataUpload';
 import * as api from '@/lib/api';
-import { theme } from '@/styles/theme';
 import { ValidationReport as ValidationReportType, ValidationIssue } from '@/types/data-upload';
 
 export default function DataUploadPage() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [isEnhancing, setIsEnhancing] = useState(false);
     const [hasLLMSuggestions, setHasLLMSuggestions] = useState(false);
-    const [hasSession, setHasSession] = useState<boolean | null>(null);
+    const [isBootstrapping, setIsBootstrapping] = useState(true);
+    const bootstrapStartedRef = useRef(false);
 
     const {
         status,
@@ -28,7 +28,6 @@ export default function DataUploadPage() {
         uploadedFile,
         dataSummary,
         validationReport,
-        isInitializing,
         setValidationReport,
         uploadFile,
         loadSampleDataset,
@@ -37,13 +36,34 @@ export default function DataUploadPage() {
     } = useDataUpload();
 
     useEffect(() => {
-        const sessionExists = api.hasStoredSession();
-        setHasSession(sessionExists);
-
-        if (sessionExists && !dataSummary && !validationReport && status === 'idle' && !isInitializing) {
-            hydrateSession();
+        if (bootstrapStartedRef.current) {
+            return;
         }
-    }, [dataSummary, hydrateSession, isInitializing, status, validationReport]);
+
+        bootstrapStartedRef.current = true;
+        let cancelled = false;
+
+        const bootstrap = async () => {
+            try {
+                const hasContextData = Boolean(dataSummary && validationReport);
+                const hasStoredSession = api.hasStoredSession();
+
+                if (!hasContextData && hasStoredSession && status === 'idle') {
+                    await hydrateSession();
+                }
+            } finally {
+                if (!cancelled) {
+                    setIsBootstrapping(false);
+                }
+            }
+        };
+
+        bootstrap();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [dataSummary, hydrateSession, status, validationReport]);
 
     const handleEnhanceWithLLM = useCallback(async () => {
         try {
@@ -121,7 +141,7 @@ export default function DataUploadPage() {
 
     const isLoading = status === 'uploading' || status === 'validating';
     const showResults = status === 'success' && dataSummary && validationReport;
-    const showSessionSkeleton = hasSession === true && (isInitializing || isLoading) && !showResults;
+    const showSessionSkeleton = isBootstrapping;
 
     return (
         <div className="min-h-screen">
