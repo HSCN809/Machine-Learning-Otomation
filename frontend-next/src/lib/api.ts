@@ -3,6 +3,8 @@
  */
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const SESSION_REQUIRED_MESSAGE = 'Valid session ID required. Upload data first.';
+const SESSION_ERROR_MESSAGES = new Set([SESSION_REQUIRED_MESSAGE, 'Session not found']);
 
 // Session ID management
 let sessionId: string | null = null;
@@ -21,8 +23,26 @@ function setSessionId(id: string): void {
     }
 }
 
+export function clearStoredSession(): void {
+    sessionId = null;
+    if (typeof window !== 'undefined') {
+        localStorage.removeItem('ml_session_id');
+    }
+}
+
 export function hasStoredSession(): boolean {
     return Boolean(getSessionId());
+}
+
+export class SessionRequiredError extends Error {
+    constructor(message: string = SESSION_REQUIRED_MESSAGE) {
+        super(message);
+        this.name = 'SessionRequiredError';
+    }
+}
+
+export function isSessionRequiredError(error: unknown): error is SessionRequiredError {
+    return error instanceof SessionRequiredError;
 }
 
 // Base fetch with session header
@@ -46,7 +66,14 @@ async function apiFetch<T>(
 
     if (!response.ok) {
         const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-        throw new Error(error.detail || `HTTP ${response.status}`);
+        const detail = typeof error.detail === 'string' ? error.detail : `HTTP ${response.status}`;
+
+        if (SESSION_ERROR_MESSAGES.has(detail)) {
+            clearStoredSession();
+            throw new SessionRequiredError();
+        }
+
+        throw new Error(detail);
     }
 
     return response.json();

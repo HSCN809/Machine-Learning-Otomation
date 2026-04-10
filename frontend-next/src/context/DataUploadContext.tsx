@@ -230,9 +230,17 @@ export function DataUploadProvider({ children }: { children: ReactNode }) {
             setValidationReport(buildValidationReport(validation));
             setStatus('success');
         } catch (err) {
-            console.error('Session hydration error:', err);
-            setError(err instanceof Error ? err.message : 'Oturum verisi yuklenirken hata olustu');
-            setStatus('error');
+            if (api.isSessionRequiredError(err)) {
+                setError(null);
+                setUploadedFile(null);
+                setDataSummary(null);
+                setValidationReport(null);
+                setStatus('idle');
+            } else {
+                console.error('Session hydration error:', err);
+                setError(err instanceof Error ? err.message : 'Oturum verisi yuklenirken hata olustu');
+                setStatus('error');
+            }
         } finally {
             setIsInitializing(false);
         }

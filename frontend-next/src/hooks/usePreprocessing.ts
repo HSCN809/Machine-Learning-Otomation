@@ -80,6 +80,11 @@ export function usePreprocessing(): UsePreprocessingReturn {
 
             setColumns(cols);
         } catch (err) {
+            if (api.isSessionRequiredError(err)) {
+                setColumns([]);
+                setError(null);
+                return;
+            }
             console.error('Load columns error:', err);
             setError(err instanceof Error ? err.message : 'Sütunlar yüklenirken hata oluştu');
         } finally {

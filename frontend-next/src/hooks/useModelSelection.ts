@@ -68,6 +68,12 @@ export function useModelSelection(): UseModelSelectionReturn {
 
             setColumns(cols);
         } catch (err) {
+            if (api.isSessionRequiredError(err)) {
+                setColumns([]);
+                setError(null);
+                return;
+            }
+
             console.error('Load columns error:', err);
             setError(err instanceof Error ? err.message : 'Sutunlar yuklenirken hata olustu');
         } finally {

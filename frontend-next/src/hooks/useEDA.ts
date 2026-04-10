@@ -141,6 +141,20 @@ export function useEDA(): UseEDAReturn {
                 setSelectedCategoricalColumn(filteredCategoricalColumns[0]);
             }
         } catch (err) {
+            if (api.isSessionRequiredError(err)) {
+                setEdaData(null);
+                setError(null);
+                setSelectedNumericColumn(null);
+                setSelectedCategoricalColumn(null);
+                setScatterXColumn(null);
+                setScatterYColumn(null);
+                setHistogramData([]);
+                setBoxPlotData(null);
+                setCategoryData([]);
+                setScatterData([]);
+                return;
+            }
+
             console.error('EDA Error:', err);
             setError(err instanceof Error ? err.message : 'EDA verisi yüklenirken hata oluştu');
         } finally {
@@ -160,7 +174,14 @@ export function useEDA(): UseEDAReturn {
                     percentage: d.percentage,
                 })));
             })
-            .catch(console.error);
+            .catch(err => {
+                if (api.isSessionRequiredError(err)) {
+                    setHistogramData([]);
+                    return;
+                }
+
+                console.error(err);
+            });
     }, [selectedNumericColumn]);
 
     // Load box plot when numeric column changes
@@ -169,7 +190,14 @@ export function useEDA(): UseEDAReturn {
 
         api.getBoxPlot(selectedNumericColumn)
             .then(result => setBoxPlotData(result))
-            .catch(console.error);
+            .catch(err => {
+                if (api.isSessionRequiredError(err)) {
+                    setBoxPlotData(null);
+                    return;
+                }
+
+                console.error(err);
+            });
     }, [selectedNumericColumn]);
 
     // Load category distribution when categorical column changes
@@ -184,7 +212,14 @@ export function useEDA(): UseEDAReturn {
                     percentage: d.percentage,
                 })));
             })
-            .catch(console.error);
+            .catch(err => {
+                if (api.isSessionRequiredError(err)) {
+                    setCategoryData([]);
+                    return;
+                }
+
+                console.error(err);
+            });
     }, [selectedCategoricalColumn]);
 
     const setScatterColumns = useCallback((x: string, y: string) => {
@@ -211,7 +246,14 @@ export function useEDA(): UseEDAReturn {
             .then(result => {
                 setScatterData(result.data);
             })
-            .catch(console.error);
+            .catch(err => {
+                if (api.isSessionRequiredError(err)) {
+                    setScatterData([]);
+                    return;
+                }
+
+                console.error(err);
+            });
     }, [scatterXColumn, scatterYColumn]);
 
     return {
