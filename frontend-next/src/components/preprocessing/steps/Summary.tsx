@@ -18,12 +18,14 @@ export function Summary({ history, columns, originalColumnCount }: SummaryProps)
     }, {} as Record<string, number>);
 
     const stepLabels: Record<string, string> = {
+        missing_values: 'Missing Values',
+        outliers: 'Outliers',
         feature_engineering: 'Feature Engineering',
-        missing_values: 'Eksik Değerler',
-        outliers: 'Aykırı Değerler',
         encoding: 'Encoding',
         scaling: 'Scaling',
     };
+    const orderedStepKeys = ['missing_values', 'outliers', 'feature_engineering', 'encoding', 'scaling'];
+    const appliedStepKeys = orderedStepKeys.filter((stepKey) => stepCounts[stepKey]);
 
     const newColumnsCount = columns.length - originalColumnCount;
     const totalAffectedRows = history.reduce((sum, h) => sum + (h.affectedRows || 0), 0);
@@ -80,18 +82,18 @@ export function Summary({ history, columns, originalColumnCount }: SummaryProps)
                     <h3 className="font-medium text-white">Uygulanan Adımlar</h3>
                 </div>
                 <div className="divide-y divide-white/5">
-                    {Object.entries(stepCounts).map(([stepKey, count]) => (
+                    {appliedStepKeys.map((stepKey) => (
                         <div
                             key={stepKey}
                             className="flex items-center justify-between px-4 py-3"
                         >
                             <span className="text-gray-300">{stepLabels[stepKey] || stepKey}</span>
                             <span className="px-2 py-1 rounded-full text-xs bg-cyan-500/20 text-cyan-400">
-                                {count} işlem
+                                {stepCounts[stepKey]} işlem
                             </span>
                         </div>
                     ))}
-                    {Object.keys(stepCounts).length === 0 && (
+                    {appliedStepKeys.length === 0 && (
                         <div className="px-4 py-6 text-center text-gray-500">
                             Henüz işlem yapılmadı
                         </div>

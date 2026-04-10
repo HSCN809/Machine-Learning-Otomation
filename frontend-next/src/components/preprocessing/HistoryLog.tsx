@@ -11,9 +11,9 @@ interface HistoryLogProps {
 }
 
 const stepLabels: Record<string, string> = {
+    missing_values: 'Missing Values',
+    outliers: 'Outliers',
     feature_engineering: 'Feature Engineering',
-    missing_values: 'Eksik Değerler',
-    outliers: 'Aykırı Değerler',
     encoding: 'Encoding',
     scaling: 'Scaling',
 };

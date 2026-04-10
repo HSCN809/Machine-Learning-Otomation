@@ -15,9 +15,9 @@ import * as api from '@/lib/api';
 
 // Preprocessing steps definition
 export const PREPROCESSING_STEPS: PreprocessingStep[] = [
-    { id: '1', name: 'Feature Engineering', icon: '🛠️', key: 'feature_engineering', description: 'Yeni özellikler oluştur' },
-    { id: '2', name: 'Missing Values', icon: '❓', key: 'missing_values', description: 'Eksik değerleri işle' },
-    { id: '3', name: 'Outliers', icon: '📊', key: 'outliers', description: 'Aykırı değerleri tespit et ve işle' },
+    { id: '1', name: 'Missing Values', icon: '❓', key: 'missing_values', description: 'Eksik değerleri işle' },
+    { id: '2', name: 'Outliers', icon: '📊', key: 'outliers', description: 'Aykırı değerleri tespit et ve işle' },
+    { id: '3', name: 'Feature Engineering', icon: '🛠️', key: 'feature_engineering', description: 'Yeni özellikler oluştur' },
     { id: '4', name: 'Encoding', icon: '🔤', key: 'encoding', description: 'Kategorik değişkenleri kodla' },
     { id: '5', name: 'Scaling', icon: '📏', key: 'scaling', description: 'Sayısal değişkenleri ölçeklendir' },
     { id: '6', name: 'Summary', icon: '📋', key: 'summary', description: 'İşlemleri gözden geçir' },

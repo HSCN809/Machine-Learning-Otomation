@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Sidebar, Header } from '@/components/layout';
 import {
     StepProgress,
@@ -17,9 +17,17 @@ import { NoDataWarning, SessionPageSkeleton } from '@/components/common';
 import { usePreprocessing, PREPROCESSING_STEPS } from '@/hooks/usePreprocessing';
 import { hasStoredSession } from '@/lib/api';
 
+const subscribeToSession = () => () => {};
+const getSessionSnapshot = () => hasStoredSession();
+const getServerSessionSnapshot = (): boolean | null => null;
+
 export default function PreprocessingPage() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-    const [hasSession, setHasSession] = useState<boolean | null>(null);
+    const hasSession = useSyncExternalStore(
+        subscribeToSession,
+        getSessionSnapshot,
+        getServerSessionSnapshot
+    );
 
     const {
         currentStep,
@@ -46,12 +54,10 @@ export default function PreprocessingPage() {
     } = usePreprocessing();
 
     useEffect(() => {
-        const sessionExists = hasStoredSession();
-        setHasSession(sessionExists);
-        if (sessionExists) {
+        if (hasSession) {
             loadColumns();
         }
-    }, [loadColumns]);
+    }, [hasSession, loadColumns]);
 
     const hasData = hasSession === true && columns.length > 0;
     const currentStepInfo = PREPROCESSING_STEPS[currentStep];
@@ -59,15 +65,6 @@ export default function PreprocessingPage() {
 
     const renderStepContent = () => {
         switch (currentStepInfo?.key) {
-            case 'feature_engineering':
-                return (
-                    <FeatureEngineering
-                        columns={columns}
-                        numericColumns={numericColumns}
-                        onApply={applyFeatureEngineering}
-                        isLoading={isLoading}
-                    />
-                );
             case 'missing_values':
                 return (
                     <MissingValues
@@ -82,6 +79,15 @@ export default function PreprocessingPage() {
                     <Outliers
                         numericColumns={numericColumns}
                         onApply={applyOutliers}
+                        isLoading={isLoading}
+                    />
+                );
+            case 'feature_engineering':
+                return (
+                    <FeatureEngineering
+                        columns={columns}
+                        numericColumns={numericColumns}
+                        onApply={applyFeatureEngineering}
                         isLoading={isLoading}
                     />
                 );
@@ -127,12 +133,14 @@ export default function PreprocessingPage() {
                 />
 
                 <main className="p-6 space-y-6">
-                    {hasSession === true && isLoading && !hasData && <SessionPageSkeleton variant="wizard" />}
+                    {(hasSession === null || (hasSession === true && isLoading && !hasData)) && (
+                        <SessionPageSkeleton variant="wizard" />
+                    )}
 
-                    {!isLoading && hasSession !== null && !hasData && (
+                    {hasSession !== null && !isLoading && !hasData && (
                         <NoDataWarning
                             title="Veri Yüklenmedi"
-                            description="Veri ön işleme yapabilmek için önce veri yüklemeniz gerekmektedir."
+                            description="Veri ön işleme yapabilmek için önce veri yüklemeniz gerekir."
                         />
                     )}
 
