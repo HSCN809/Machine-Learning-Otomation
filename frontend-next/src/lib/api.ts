@@ -2,6 +2,8 @@
  * API Client for FastAPI Backend
  */
 
+import type { FeatureConfig } from '@/types/preprocessing';
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const SESSION_REQUIRED_MESSAGE = 'Valid session ID required. Upload data first.';
 const SESSION_ERROR_MESSAGES = new Set([SESSION_REQUIRED_MESSAGE, 'Session not found']);
@@ -316,12 +318,14 @@ export async function getScatterData(xColumn: string, yColumn: string, sampleSiz
 
 export interface PreprocessingResponse {
     success: boolean;
-    method: string;
-    columns: string[];
+    method?: string;
+    operation?: string;
+    columns?: string[];
     affected_rows?: number;
     remaining_nulls?: number;
     remaining_rows?: number;
     new_columns?: string[];
+    new_column?: string;
     total_columns?: number;
 }
 
@@ -369,6 +373,22 @@ export async function applyScaling(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ method, columns }),
+    });
+}
+
+export async function applyFeatureEngineering(
+    config: FeatureConfig
+): Promise<PreprocessingResponse> {
+    return apiFetch('/api/preprocessing/feature-engineering', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            operation: config.operation,
+            source_columns: config.sourceColumns,
+            new_column_name: config.newColumnName,
+            expression: config.expression,
+            params: config.params,
+        }),
     });
 }
 

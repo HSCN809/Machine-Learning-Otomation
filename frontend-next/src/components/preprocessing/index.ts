@@ -4,6 +4,7 @@ export { StepNavigation } from './StepNavigation';
 export { MethodSelector } from './MethodSelector';
 export { ColumnSelector } from './ColumnSelector';
 export { HistoryLog } from './HistoryLog';
+export { PreprocessingTabs } from './PreprocessingTabs';
 
 // Step components
 export { FeatureEngineering } from './steps/FeatureEngineering';

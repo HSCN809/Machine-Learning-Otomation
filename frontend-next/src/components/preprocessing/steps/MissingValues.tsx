@@ -110,7 +110,9 @@ export function MissingValues({ columns, columnsWithMissing, onApply, isLoading 
             <button
                 onClick={handleApply}
                 disabled={!canApply || isLoading}
-                className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-medium text-white transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                className={`w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-medium text-white transition-all duration-200 ${
+                    !canApply || isLoading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+                }`}
                 style={{
                     background: canApply && !isLoading ? theme.gradients.primary : 'rgba(255,255,255,0.1)',
                     boxShadow: canApply && !isLoading ? theme.glow.cyan : undefined,

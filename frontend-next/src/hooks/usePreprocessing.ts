@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import {
     PreprocessingStep,
     ProcessingHistory,
@@ -71,7 +71,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
 
             const cols: ColumnInfo[] = columnTypes.columns.map(col => ({
                 name: col.name,
-                type: col.type === 'numeric' ? 'numeric' : 'categorical',
+                type: col.type,
                 dtype: col.dtype,
                 missingCount: col.null_count,
                 missingPercentage: col.null_percentage,
@@ -190,7 +190,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
             setIsLoading(true);
             setError(null);
 
-            const result = await api.applyEncoding(
+            await api.applyEncoding(
                 config.method,
                 config.columns,
                 config.dropFirst
@@ -240,14 +240,19 @@ export function usePreprocessing(): UsePreprocessingReturn {
             setIsLoading(true);
             setError(null);
 
-            // For now, just add to history - API doesn't have full feature engineering yet
+            const result = await api.applyFeatureEngineering(config);
+
             addToHistory({
                 stepKey: 'feature_engineering',
                 action: 'create_feature',
-                column: config.newColumnName,
                 columns: config.sourceColumns,
                 method: config.operation,
-                params: { expression: config.expression },
+                column: config.newColumnName,
+                newColumns: result.new_columns,
+                params: {
+                    ...config.params,
+                    ...(config.expression ? { expression: config.expression } : {}),
+                },
             });
 
             await loadColumns();

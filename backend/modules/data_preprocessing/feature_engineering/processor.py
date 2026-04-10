@@ -4,6 +4,8 @@ import pandas as pd
 import numpy as np
 from typing import List, Optional, Dict
 import logging
+from typing import Literal
+
 
 logger = logging.getLogger(__name__)
 
@@ -228,6 +230,42 @@ def create_categorical_combination(df: pd.DataFrame, columns: List[str], new_col
     except Exception as e:
         logger.error(f"❌ [FEATURE ENGINEERING PROCESSOR] Error creating categorical combination: {e}", exc_info=True)
     
+    return df
+
+
+def create_binned_feature(
+    df: pd.DataFrame,
+    column: str,
+    new_column_name: str,
+    strategy: Literal['equal_width', 'quantile'] = 'equal_width',
+    bin_count: int = 5,
+) -> pd.DataFrame:
+    """Create a categorical binning feature from a numeric column."""
+    df = df.copy()
+
+    if column not in df.columns:
+        logger.error("Column not found: %s", column)
+        return df
+
+    if not np.issubdtype(df[column].dtype, np.number):
+        logger.error("Column is not numeric: %s", column)
+        return df
+
+    valid_bin_count = max(2, int(bin_count))
+
+    try:
+        if strategy == 'quantile':
+            df[new_column_name] = pd.qcut(df[column], q=valid_bin_count, duplicates='drop')
+        elif strategy == 'equal_width':
+            df[new_column_name] = pd.cut(df[column], bins=valid_bin_count)
+        else:
+            logger.error("Unknown binning strategy: %s", strategy)
+            return df
+
+        df[new_column_name] = df[new_column_name].astype(str)
+    except Exception as e:
+        logger.error("Error creating binned feature: %s", e, exc_info=True)
+
     return df
 
 

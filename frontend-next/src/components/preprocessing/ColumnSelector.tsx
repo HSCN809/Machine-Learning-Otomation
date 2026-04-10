@@ -75,7 +75,7 @@ export function ColumnSelector({
                         <button
                             onClick={selectAll}
                             disabled={disabled}
-                            className="text-cyan-400 hover:underline disabled:opacity-50"
+                            className={`text-cyan-400 hover:underline ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
                         >
                             Tümünü Seç
                         </button>
@@ -83,7 +83,7 @@ export function ColumnSelector({
                         <button
                             onClick={clearAll}
                             disabled={disabled}
-                            className="text-gray-400 hover:underline disabled:opacity-50"
+                            className={`text-gray-400 hover:underline ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
                         >
                             Temizle
                         </button>
@@ -125,7 +125,7 @@ export function ColumnSelector({
                                     className={cn(
                                         'w-full flex items-center gap-3 p-3 text-left transition-colors',
                                         isSelected ? 'bg-cyan-500/10' : 'hover:bg-white/5',
-                                        disabled && 'cursor-not-allowed'
+                                        disabled ? 'cursor-not-allowed' : 'cursor-pointer'
                                     )}
                                 >
                                     {/* Checkbox */}

@@ -2,17 +2,25 @@
 Preprocessing Router - Data preprocessing endpoints
 """
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
-from typing import List, Optional
-import pandas as pd
-import numpy as np
-import sys
+import ast
 import os
+import sys
+from typing import Any, List, Optional
+
+import numpy as np
+import pandas as pd
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
 from ..dependencies import session_manager, require_session
+from backend.modules.data_preprocessing.feature_engineering.processor import (
+    create_binned_feature,
+    create_categorical_combination,
+    create_datetime_feature,
+    create_numeric_feature,
+)
 
 router = APIRouter()
 
@@ -42,10 +50,44 @@ class ScalingRequest(BaseModel):
 
 
 class FeatureRequest(BaseModel):
-    operation: str  # create_numeric, polynomial
+    operation: str  # create_numeric, polynomial, binning, create_datetime, create_categorical
     source_columns: List[str]
-    new_column_name: str
+    new_column_name: Optional[str] = None
     expression: Optional[str] = None
+    params: dict[str, Any] = Field(default_factory=dict)
+
+
+ALLOWED_EXPRESSION_NODES = (
+    ast.Expression,
+    ast.BinOp,
+    ast.UnaryOp,
+    ast.Name,
+    ast.Load,
+    ast.Add,
+    ast.Sub,
+    ast.Mult,
+    ast.Div,
+    ast.Pow,
+    ast.Mod,
+    ast.USub,
+    ast.UAdd,
+    ast.Constant,
+)
+
+
+def _validate_expression(expression: str, allowed_names: set[str]) -> ast.Expression:
+    try:
+        tree = ast.parse(expression, mode='eval')
+    except SyntaxError as exc:
+        raise HTTPException(status_code=400, detail='Invalid numeric expression') from exc
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ALLOWED_EXPRESSION_NODES):
+            raise HTTPException(status_code=400, detail='Only basic arithmetic expressions are allowed')
+        if isinstance(node, ast.Name) and node.id not in allowed_names:
+            raise HTTPException(status_code=400, detail=f'Unknown column in expression: {node.id}')
+
+    return tree
 
 
 @router.post("/missing-values")
@@ -283,30 +325,98 @@ async def handle_feature_engineering(
         raise HTTPException(status_code=400, detail="No data loaded")
     
     try:
-        if request.operation == "polynomial":
-            for col in request.source_columns:
-                if col in df.columns and np.issubdtype(df[col].dtype, np.number):
-                    df[f"{col}_squared"] = df[col] ** 2
-        elif request.operation == "create_numeric" and request.expression:
-            # Simple expression evaluation (be careful with security)
-            # Only allow basic math operations
-            df[request.new_column_name] = eval(request.expression, {"__builtins__": {}}, df.to_dict('series'))
-        
-        session_manager.set_dataframe(session_id, df)
-        session_manager.add_history(session_id, {
+        params = request.params or {}
+        new_columns: List[str] = []
+        history_payload: dict[str, Any] = {
             "step": "feature_engineering",
             "action": request.operation,
             "source_columns": request.source_columns,
-            "new_column": request.new_column_name,
-        })
-        
+            "params": params,
+        }
+
+        if request.operation == "polynomial":
+            for col in request.source_columns:
+                if col in df.columns and np.issubdtype(df[col].dtype, np.number):
+                    generated_column = f"{col}_squared"
+                    df[generated_column] = df[col] ** 2
+                    new_columns.append(generated_column)
+        elif request.operation == "create_numeric":
+            new_column_name = (request.new_column_name or "").strip()
+            if not new_column_name:
+                raise HTTPException(status_code=400, detail="New column name is required")
+
+            numeric_operation = params.get("numericOperation")
+            if numeric_operation == "custom":
+                expression = (request.expression or "").strip()
+                if not expression:
+                    raise HTTPException(status_code=400, detail="Expression is required for custom numeric operation")
+
+                _validate_expression(expression, set(request.source_columns))
+                safe_scope = {col: df[col] for col in request.source_columns if col in df.columns}
+                df[new_column_name] = eval(expression, {"__builtins__": {}}, safe_scope)
+            else:
+                if numeric_operation not in {"add", "subtract", "multiply", "divide"}:
+                    raise HTTPException(status_code=400, detail="Invalid numeric operation")
+                df = create_numeric_feature(df, numeric_operation, request.source_columns, new_column_name)
+
+            new_columns.append(new_column_name)
+        elif request.operation == "binning":
+            new_column_name = (request.new_column_name or "").strip()
+            if not new_column_name:
+                raise HTTPException(status_code=400, detail="New column name is required")
+            if len(request.source_columns) != 1:
+                raise HTTPException(status_code=400, detail="Binning requires exactly one source column")
+
+            df = create_binned_feature(
+                df,
+                request.source_columns[0],
+                new_column_name,
+                str(params.get("strategy", "equal_width")),
+                int(params.get("binCount", 5)),
+            )
+            new_columns.append(new_column_name)
+        elif request.operation == "create_datetime":
+            new_column_name = (request.new_column_name or "").strip()
+            if not new_column_name:
+                raise HTTPException(status_code=400, detail="New column name is required")
+            if len(request.source_columns) != 1:
+                raise HTTPException(status_code=400, detail="Datetime feature requires exactly one source column")
+
+            df = create_datetime_feature(
+                df,
+                request.source_columns[0],
+                str(params.get("datetimePart", "year")),
+                new_column_name,
+            )
+            new_columns.append(new_column_name)
+        elif request.operation == "create_categorical":
+            new_column_name = (request.new_column_name or "").strip()
+            if not new_column_name:
+                raise HTTPException(status_code=400, detail="New column name is required")
+
+            df = create_categorical_combination(
+                df,
+                request.source_columns,
+                new_column_name,
+                str(params.get("separator", "_")),
+            )
+            new_columns.append(new_column_name)
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported feature engineering operation: {request.operation}")
+
+        session_manager.set_dataframe(session_id, df)
+        history_payload["new_columns"] = new_columns
+        session_manager.add_history(session_id, history_payload)
+
         return {
             "success": True,
             "operation": request.operation,
-            "new_column": request.new_column_name,
+            "new_columns": new_columns,
             "total_columns": len(df.columns),
         }
-        
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

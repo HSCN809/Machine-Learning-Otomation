@@ -35,7 +35,7 @@ export function MethodSelector({ label, options, value, onChange, disabled = fal
                                 isSelected
                                     ? 'border-cyan-500/50 bg-cyan-500/10'
                                     : 'border-white/10 bg-white/5 hover:border-cyan-500/30 hover:bg-white/10',
-                                disabled && 'opacity-50 cursor-not-allowed'
+                                disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
                             )}
                             style={
                                 isSelected

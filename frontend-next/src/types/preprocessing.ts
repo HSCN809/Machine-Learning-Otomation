@@ -14,6 +14,7 @@ export interface ProcessingHistory {
     action: string;
     column?: string;
     columns?: string[];
+    newColumns?: string[];
     method: string;
     params?: Record<string, unknown>;
     timestamp: Date;
@@ -89,12 +90,38 @@ export type FeatureOperation =
     | 'polynomial'
     | 'binning';
 
+export type NumericFeatureOperation =
+    | 'add'
+    | 'subtract'
+    | 'multiply'
+    | 'divide'
+    | 'custom';
+
+export type BinningStrategy = 'equal_width' | 'quantile';
+
+export type DatetimeFeaturePart =
+    | 'year'
+    | 'month'
+    | 'day'
+    | 'weekday'
+    | 'hour'
+    | 'minute'
+    | 'second';
+
+export interface FeatureParams {
+    numericOperation?: NumericFeatureOperation;
+    strategy?: BinningStrategy;
+    binCount?: number;
+    datetimePart?: DatetimeFeaturePart;
+    separator?: string;
+}
+
 export interface FeatureConfig {
     operation: FeatureOperation;
     sourceColumns: string[];
-    newColumnName: string;
+    newColumnName?: string;
     expression?: string;
-    params?: Record<string, unknown>;
+    params?: FeatureParams;
 }
 
 // Step status

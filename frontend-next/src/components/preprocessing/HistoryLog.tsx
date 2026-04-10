@@ -26,6 +26,21 @@ const actionLabels: Record<string, string> = {
     create_feature: 'Özellik oluşturma',
 };
 
+const methodLabels: Record<string, string> = {
+    create_numeric: 'Sayısal İşlem',
+    polynomial: 'Polinom Özellik',
+    binning: 'Binning',
+    create_datetime: 'Tarih/Zaman',
+    create_categorical: 'Kategorik Kombinasyon',
+    add: 'Toplama',
+    subtract: 'Çıkarma',
+    multiply: 'Çarpma',
+    divide: 'Bölme',
+    custom: 'Özel İfade',
+    equal_width: 'Equal Width',
+    quantile: 'Quantile',
+};
+
 export function HistoryLog({ history, onUndo, onClear }: HistoryLogProps) {
     if (history.length === 0) {
         return (
@@ -51,7 +66,7 @@ export function HistoryLog({ history, onUndo, onClear }: HistoryLogProps) {
                     {onUndo && history.length > 0 && (
                         <button
                             onClick={onUndo}
-                            className="flex items-center gap-1 px-2 py-1 rounded text-xs text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+                            className="cursor-pointer flex items-center gap-1 px-2 py-1 rounded text-xs text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
                         >
                             <Undo2 className="w-3 h-3" />
                             Geri Al
@@ -60,7 +75,7 @@ export function HistoryLog({ history, onUndo, onClear }: HistoryLogProps) {
                     {onClear && history.length > 0 && (
                         <button
                             onClick={onClear}
-                            className="flex items-center gap-1 px-2 py-1 rounded text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors"
+                            className="cursor-pointer flex items-center gap-1 px-2 py-1 rounded text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors"
                         >
                             <Trash2 className="w-3 h-3" />
                             Temizle
@@ -71,7 +86,7 @@ export function HistoryLog({ history, onUndo, onClear }: HistoryLogProps) {
 
             {/* History items */}
             <div className="max-h-64 overflow-y-auto">
-                {history.slice().reverse().map((item, index) => (
+                {history.slice().reverse().map((item) => (
                     <div
                         key={item.id}
                         className="flex items-start gap-3 p-3 border-b border-white/5 last:border-0 hover:bg-white/5"
@@ -98,6 +113,12 @@ export function HistoryLog({ history, onUndo, onClear }: HistoryLogProps) {
                                 }
                                 {item.method && ` • Yöntem: ${item.method}`}
                             </p>
+                            {(item.newColumns?.length || item.method) && (
+                                <p className="text-xs text-gray-500 mt-1">
+                                    {item.newColumns?.length ? `Yeni sütunlar: ${item.newColumns.join(', ')}` : ''}
+                                    {item.method ? `${item.newColumns?.length ? ' • ' : ''}Yöntem etiketi: ${methodLabels[item.method] || item.method}` : ''}
+                                </p>
+                            )}
                             {item.affectedRows && (
                                 <p className="text-xs text-gray-500 mt-0.5">
                                     {item.affectedRows} satır etkilendi

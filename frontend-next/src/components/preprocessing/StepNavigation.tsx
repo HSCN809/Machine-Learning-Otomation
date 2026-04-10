@@ -35,7 +35,7 @@ export function StepNavigation({
                     className={cn(
                         'flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 transition-all duration-200',
                         canGoPrev && !isLoading
-                            ? 'text-white hover:bg-white/5'
+                            ? 'cursor-pointer text-white hover:bg-white/5'
                             : 'text-gray-500 cursor-not-allowed opacity-50'
                     )}
                 >
@@ -48,7 +48,7 @@ export function StepNavigation({
                     <button
                         onClick={onReset}
                         disabled={isLoading}
-                        className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-gray-400 hover:text-white hover:bg-white/5 transition-all duration-200"
+                        className={`flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-gray-400 hover:text-white hover:bg-white/5 transition-all duration-200 ${isLoading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
                     >
                         <RotateCcw className="w-4 h-4" />
                         <span className="hidden sm:inline">Sıfırla</span>
@@ -62,7 +62,7 @@ export function StepNavigation({
                     <button
                         onClick={onSkip}
                         disabled={isLoading}
-                        className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-gray-400 hover:text-white hover:bg-white/5 transition-all duration-200"
+                        className={`flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-gray-400 hover:text-white hover:bg-white/5 transition-all duration-200 ${isLoading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
                     >
                         <span>Atla</span>
                         <SkipForward className="w-4 h-4" />
@@ -76,7 +76,7 @@ export function StepNavigation({
                     className={cn(
                         'flex items-center gap-2 px-6 py-2 rounded-xl font-medium transition-all duration-200',
                         (canGoNext || isLastStep) && !isLoading
-                            ? 'text-white hover:scale-105'
+                            ? 'cursor-pointer text-white hover:scale-105'
                             : 'text-gray-500 cursor-not-allowed opacity-50'
                     )}
                     style={

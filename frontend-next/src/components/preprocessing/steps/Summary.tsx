@@ -102,7 +102,7 @@ export function Summary({ history, columns, originalColumnCount }: SummaryProps)
             {/* Actions */}
             <div className="flex flex-col sm:flex-row gap-4">
                 <button
-                    className="flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-xl border border-white/20 text-white hover:bg-white/5 transition-all"
+                    className="cursor-pointer flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-xl border border-white/20 text-white hover:bg-white/5 transition-all"
                 >
                     <Download className="w-5 h-5" />
                     İşlenmiş Veriyi İndir
