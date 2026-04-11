@@ -109,8 +109,13 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
         void run();
     }, [method, threshold, numericColumns, numericColumnsByName]);
 
+    const isRowBasedMethod = method === 'isolation_forest' || method === 'lof';
+
     const handleApply = async () => {
-        if (selectedColumns.length === 0) return;
+        const columnsToApply = isRowBasedMethod
+            ? numericColumns.map((column) => column.name)
+            : selectedColumns;
+        if (columnsToApply.length === 0) return;
 
         const parsedThreshold = method.startsWith('iqr') || method.startsWith('zscore')
             ? parseFloat(threshold) || undefined
@@ -118,16 +123,17 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
 
         await onApply({
             method,
-            columns: selectedColumns,
+            columns: columnsToApply,
             threshold: parsedThreshold,
         });
 
         setSelectedColumns([]);
     };
 
-    const canApply = selectedColumns.length > 0 && !isAnalyzing;
+    const canApply = isRowBasedMethod
+        ? detectedColumns.length > 0 && !isAnalyzing
+        : selectedColumns.length > 0 && !isAnalyzing;
     const showThreshold = method.startsWith('iqr') || method.startsWith('zscore');
-    const isRowBasedMethod = method === 'isolation_forest' || method === 'lof';
 
     const handleMethodChange = (value: string) => {
         const nextMethod = value as OutlierMethod;
@@ -178,21 +184,30 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
                 </div>
             )}
 
-            {/* Column selector */}
-            <ColumnSelector
-                columns={detectedColumns}
-                selectedColumns={selectedColumns}
-                onChange={setSelectedColumns}
-                label="Uygulanacak Sayısal Sütunlar"
-                showMissing={false}
-                showOutliers={!isRowBasedMethod}
-                disabled={isLoading || isAnalyzing}
-            />
+            {!isRowBasedMethod && (
+                <ColumnSelector
+                    columns={detectedColumns}
+                    selectedColumns={selectedColumns}
+                    onChange={setSelectedColumns}
+                    label="Uygulanacak Sayısal Sütunlar"
+                    showMissing={false}
+                    showOutliers
+                    disabled={isLoading || isAnalyzing}
+                />
+            )}
             {!analysisError && !isAnalyzing && isRowBasedMethod && analysisSummary && (
-                <p className="text-xs text-cyan-300">
-                    Global anomalik satır oranı: %{analysisSummary.outlierRowPercentage.toFixed(2)}
-                    {' '}({analysisSummary.outlierRowCount}/{analysisSummary.totalRows})
-                </p>
+                <div
+                    className="rounded-xl border p-4"
+                    style={{
+                        borderColor: 'rgba(34, 211, 238, 0.35)',
+                        background: 'rgba(6, 182, 212, 0.08)',
+                    }}
+                >
+                    <p className="text-sm font-medium text-cyan-300">Global anomalik satır oranı</p>
+                    <p className="mt-1 text-base text-cyan-200">
+                        %{analysisSummary.outlierRowPercentage.toFixed(2)} ({analysisSummary.outlierRowCount}/{analysisSummary.totalRows})
+                    </p>
+                </div>
             )}
 
             {analysisError && (
