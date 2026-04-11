@@ -14,6 +14,7 @@ interface ColumnSelectorProps {
     multiSelect?: boolean;
     showType?: boolean;
     showMissing?: boolean;
+    showOutliers?: boolean;
     disabled?: boolean;
 }
 
@@ -25,6 +26,7 @@ export function ColumnSelector({
     multiSelect = true,
     showType = true,
     showMissing = true,
+    showOutliers = false,
     disabled = false,
 }: ColumnSelectorProps) {
     const [search, setSearch] = useState('');
@@ -163,6 +165,11 @@ export function ColumnSelector({
                                             {showMissing && column.missingCount > 0 && (
                                                 <span className="text-xs text-yellow-400">
                                                     {column.missingPercentage.toFixed(1)}% eksik
+                                                </span>
+                                            )}
+                                            {showOutliers && (column.outlierCount ?? 0) > 0 && (
+                                                <span className="text-xs text-rose-400">
+                                                    {(column.outlierPercentage ?? 0).toFixed(1)}% aykırı
                                                 </span>
                                             )}
                                         </div>

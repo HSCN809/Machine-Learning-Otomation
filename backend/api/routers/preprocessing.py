@@ -26,6 +26,8 @@ from backend.modules.data_preprocessing.missing_values.processor import (
     fill_missing_values_knn,
     fill_missing_values_regression,
 )
+from backend.modules.data_preprocessing.outlier.analyzer import analyze_outliers
+from backend.modules.data_preprocessing.outlier.processor import apply_outlier_method
 
 router = APIRouter()
 
@@ -37,9 +39,15 @@ class MissingValuesRequest(BaseModel):
 
 
 class OutliersRequest(BaseModel):
-    method: str  # iqr_remove, iqr_cap, zscore_remove, zscore_cap
+    method: str  # iqr_remove, iqr_cap, zscore_remove, zscore_cap, isolation_forest, lof
     columns: List[str]
-    threshold: Optional[float] = 1.5
+    threshold: Optional[float] = None
+
+
+class OutlierAnalysisRequest(BaseModel):
+    method: str
+    columns: Optional[List[str]] = None
+    threshold: Optional[float] = None
 
 
 class EncodingRequest(BaseModel):
@@ -93,6 +101,96 @@ SUPPORTED_MISSING_VALUE_METHODS = {
     "fill_bfill",
     "drop_columns",
 }
+
+
+def _parse_outlier_method(method: str) -> tuple[str, str]:
+    normalized = (method or "").strip().lower()
+
+    if normalized in {"iqr_remove", "iqr_cap"}:
+        return "iqr", normalized.split("_", 1)[1]
+    if normalized in {"zscore_remove", "zscore_cap"}:
+        return "zscore", normalized.split("_", 1)[1]
+    if normalized in {"isolation_forest", "isolation_forest_remove"}:
+        return "isolation_forest", "remove"
+    if normalized in {"lof", "lof_remove"}:
+        return "lof", "remove"
+
+    if normalized in {"isolation_forest_cap", "lof_cap"}:
+        raise HTTPException(status_code=400, detail=f"Method does not support capping: {method}")
+
+    raise HTTPException(status_code=400, detail=f"Unsupported outlier method: {method}")
+
+
+def _analyze_outliers_for_columns(
+    df: pd.DataFrame,
+    method: str,
+    requested_columns: Optional[List[str]],
+    threshold: Optional[float],
+) -> dict[str, Any]:
+    detection_method, _ = _parse_outlier_method(method)
+    source_columns = requested_columns or df.columns.tolist()
+    numeric_columns = [
+        col for col in source_columns if col in df.columns and np.issubdtype(df[col].dtype, np.number)
+    ]
+
+    if not numeric_columns:
+        return {
+            "detection_method": detection_method,
+            "numeric_columns": [],
+            "detected_columns": [],
+            "column_stats": [],
+            "total_outliers": 0,
+        }
+
+    analysis_kwargs: dict[str, Any] = {}
+    resolved_threshold: Optional[float] = threshold
+
+    if detection_method == "iqr":
+        resolved_threshold = 1.5 if resolved_threshold is None else resolved_threshold
+        analysis_kwargs["factor"] = resolved_threshold
+    elif detection_method == "zscore":
+        resolved_threshold = 3.0 if resolved_threshold is None else resolved_threshold
+        analysis_kwargs["threshold"] = resolved_threshold
+    elif detection_method in {"isolation_forest", "lof"}:
+        resolved_threshold = 0.1 if resolved_threshold is None else resolved_threshold
+        if resolved_threshold <= 0 or resolved_threshold >= 0.5:
+            raise HTTPException(status_code=400, detail="Threshold must be between 0 and 0.5 for this method")
+        analysis_kwargs["contamination"] = resolved_threshold
+
+    analysis_result = analyze_outliers(
+        df,
+        columns=numeric_columns,
+        method=detection_method,
+        **analysis_kwargs,
+    )
+    outliers_by_column = analysis_result.get("outliers_by_column", {})
+
+    column_stats: list[dict[str, Any]] = []
+    detected_columns: list[str] = []
+    for col in numeric_columns:
+        info = outliers_by_column.get(col, {})
+        outlier_count = int(info.get("count", 0))
+        outlier_percentage = round(float(info.get("percentage", 0.0)), 2)
+        if outlier_count <= 0:
+            continue
+
+        detected_columns.append(col)
+        column_stats.append(
+            {
+                "column": col,
+                "outlier_count": outlier_count,
+                "outlier_percentage": outlier_percentage,
+            }
+        )
+
+    return {
+        "detection_method": detection_method,
+        "numeric_columns": numeric_columns,
+        "detected_columns": detected_columns,
+        "column_stats": column_stats,
+        "total_outliers": int(analysis_result.get("total_outliers", 0)),
+        "resolved_threshold": resolved_threshold,
+    }
 
 
 def _validate_expression(expression: str, allowed_names: set[str]) -> ast.Expression:
@@ -194,53 +292,102 @@ async def handle_outliers(
     
     try:
         previous_df = df.copy(deep=True)
-        affected_rows = 0
-        
-        for col in request.columns:
-            if col not in df.columns or not np.issubdtype(df[col].dtype, np.number):
-                continue
-            
-            if "iqr" in request.method:
-                q1 = df[col].quantile(0.25)
-                q3 = df[col].quantile(0.75)
-                iqr = q3 - q1
-                lower = q1 - request.threshold * iqr
-                upper = q3 + request.threshold * iqr
-            elif "zscore" in request.method:
-                mean = df[col].mean()
-                std = df[col].std()
-                lower = mean - request.threshold * std
-                upper = mean + request.threshold * std
-            else:
-                continue
-            
-            outlier_mask = (df[col] < lower) | (df[col] > upper)
-            affected_rows += int(outlier_mask.sum())
-            
-            if "remove" in request.method:
-                df = df[~outlier_mask]
-            elif "cap" in request.method:
-                df.loc[df[col] < lower, col] = lower
-                df.loc[df[col] > upper, col] = upper
-        
-        session_manager.set_dataframe(session_id, df)
+        analysis = _analyze_outliers_for_columns(
+            df=df,
+            method=request.method,
+            requested_columns=request.columns,
+            threshold=request.threshold,
+        )
+        detection_method, action = _parse_outlier_method(request.method)
+        detected_columns = analysis["detected_columns"]
+
+        if not detected_columns:
+            return {
+                "success": True,
+                "method": request.method,
+                "columns": [],
+                "requested_columns": request.columns,
+                "affected_rows": 0,
+                "remaining_rows": len(df),
+            }
+
+        process_kwargs: dict[str, Any] = {}
+        resolved_threshold = analysis.get("resolved_threshold")
+        if detection_method == "iqr" and resolved_threshold is not None:
+            process_kwargs["factor"] = resolved_threshold
+        elif detection_method == "zscore" and resolved_threshold is not None:
+            process_kwargs["threshold"] = resolved_threshold
+        elif detection_method in {"isolation_forest", "lof"} and resolved_threshold is not None:
+            process_kwargs["contamination"] = resolved_threshold
+
+        processed_df = apply_outlier_method(
+            df,
+            detected_columns,
+            method=detection_method,
+            action=action,
+            **process_kwargs,
+        )
+
+        if action == "remove":
+            affected_rows = int(len(df) - len(processed_df))
+        else:
+            affected_rows = int(analysis.get("total_outliers", 0))
+
+        session_manager.set_dataframe(session_id, processed_df)
         session_manager.add_history_snapshot(session_id, previous_df)
         session_manager.add_history(session_id, {
             "step": "outliers",
             "action": request.method,
-            "columns": request.columns,
-            "threshold": request.threshold,
+            "columns": detected_columns,
+            "requested_columns": request.columns,
+            "threshold": resolved_threshold,
             "affected_rows": affected_rows,
         })
         
         return {
             "success": True,
             "method": request.method,
-            "columns": request.columns,
+            "columns": detected_columns,
+            "requested_columns": request.columns,
             "affected_rows": affected_rows,
-            "remaining_rows": len(df),
+            "remaining_rows": len(processed_df),
         }
         
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/outliers/analyze")
+async def analyze_outlier_columns(
+    request: OutlierAnalysisRequest,
+    session_id: str = Depends(require_session)
+):
+    """Analyze outliers for requested method and return only columns with outliers."""
+    df = session_manager.get_dataframe(session_id)
+    if df is None:
+        raise HTTPException(status_code=400, detail="No data loaded")
+
+    try:
+        analysis = _analyze_outliers_for_columns(
+            df=df,
+            method=request.method,
+            requested_columns=request.columns,
+            threshold=request.threshold,
+        )
+
+        return {
+            "success": True,
+            "method": request.method,
+            "detection_method": analysis["detection_method"],
+            "threshold": analysis.get("resolved_threshold"),
+            "detected_columns": analysis["detected_columns"],
+            "columns": analysis["column_stats"],
+            "total_outliers": analysis["total_outliers"],
+        }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

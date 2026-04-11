@@ -321,6 +321,7 @@ export interface PreprocessingResponse {
     method?: string;
     operation?: string;
     columns?: string[];
+    requested_columns?: string[];
     affected_rows?: number;
     remaining_nulls?: number;
     remaining_rows?: number;
@@ -346,6 +347,34 @@ export async function applyOutliers(
     threshold?: number
 ): Promise<PreprocessingResponse> {
     return apiFetch('/api/preprocessing/outliers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ method, columns, threshold }),
+    });
+}
+
+export interface OutlierColumnAnalysis {
+    column: string;
+    outlier_count: number;
+    outlier_percentage: number;
+}
+
+export interface OutlierAnalysisResponse {
+    success: boolean;
+    method: string;
+    detection_method: string;
+    threshold?: number;
+    detected_columns: string[];
+    columns: OutlierColumnAnalysis[];
+    total_outliers: number;
+}
+
+export async function analyzeOutliers(
+    method: string,
+    columns?: string[],
+    threshold?: number
+): Promise<OutlierAnalysisResponse> {
+    return apiFetch('/api/preprocessing/outliers/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ method, columns, threshold }),

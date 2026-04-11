@@ -145,4 +145,6 @@ export interface ColumnInfo {
     missingCount: number;
     missingPercentage: number;
     uniqueCount: number;
+    outlierCount?: number;
+    outlierPercentage?: number;
 }
