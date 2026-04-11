@@ -49,15 +49,15 @@ const METHOD_BADGES: Record<
 > = {
     fill_mean: { label: 'Sayısal', tone: 'numeric' },
     fill_median: { label: 'Sayısal', tone: 'numeric' },
-    fill_mode: { label: 'Her ikisi', tone: 'mixed' },
+    fill_mode: { label: 'Kategorik', tone: 'categorical' },
     fill_knn: { label: 'Sayısal', tone: 'numeric' },
     fill_interpolation: { label: 'Sayısal', tone: 'numeric' },
     fill_regression: { label: 'Sayısal', tone: 'numeric' },
-    fill_constant: { label: 'Her ikisi', tone: 'mixed' },
-    fill_ffill: { label: 'Her ikisi', tone: 'mixed' },
-    fill_bfill: { label: 'Her ikisi', tone: 'mixed' },
-    drop_rows: { label: 'Her ikisi', tone: 'mixed' },
-    drop_columns: { label: 'Her ikisi', tone: 'mixed' },
+    fill_constant: { label: 'Ortak', tone: 'mixed' },
+    fill_ffill: { label: 'Ortak', tone: 'mixed' },
+    fill_bfill: { label: 'Ortak', tone: 'mixed' },
+    drop_rows: { label: 'Ortak', tone: 'mixed' },
+    drop_columns: { label: 'Ortak', tone: 'mixed' },
 };
 
 const METHOD_DETAILS_MARKDOWN: Record<MissingValueMethod, string> = {
