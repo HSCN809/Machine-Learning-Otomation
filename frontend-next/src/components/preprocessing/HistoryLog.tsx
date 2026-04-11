@@ -124,8 +124,9 @@ export function HistoryLog({
                                     }}
                                 />
                                 <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                                    <div className="flex items-start justify-between gap-3">
-                                        <div className="min-w-0">
+                                    <div className="flex flex-col gap-4">
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0">
                                             <div className="flex flex-wrap items-center gap-2">
                                                 <span className="text-sm font-medium text-white">
                                                     {actionLabels[item.action] || item.action}
@@ -155,30 +156,31 @@ export function HistoryLog({
                                                 </p>
                                             ) : null}
                                         </div>
-                                        <span className="shrink-0 text-xs text-gray-500">
-                                            {new Date(item.timestamp).toLocaleTimeString('tr-TR', {
-                                                hour: '2-digit',
-                                                minute: '2-digit',
-                                            })}
-                                        </span>
+                                            <span className="shrink-0 text-xs text-gray-500">
+                                                {new Date(item.timestamp).toLocaleTimeString('tr-TR', {
+                                                    hour: '2-digit',
+                                                    minute: '2-digit',
+                                                })}
+                                            </span>
+                                            </div>
+                                        {onUndoItem && (
+                                            <div className="flex items-center justify-end gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onUndoItem(item.historyIndex)}
+                                                    disabled={isLoading}
+                                                    className={`flex items-center gap-1 rounded-lg border px-3 py-2 text-xs transition-colors ${
+                                                        isLoading
+                                                            ? 'cursor-not-allowed border-white/10 text-gray-500'
+                                                            : 'cursor-pointer border-white/10 text-gray-300 hover:bg-white/10 hover:text-white'
+                                                    }`}
+                                                >
+                                                    <Undo2 className="h-3.5 w-3.5" />
+                                                    Geri Al
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
-                                    {onUndoItem && (
-                                        <div className="mt-4 flex items-center justify-end gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => onUndoItem(item.historyIndex)}
-                                                disabled={isLoading}
-                                                className={`flex items-center gap-1 rounded-lg border px-3 py-2 text-xs transition-colors ${
-                                                    isLoading
-                                                        ? 'cursor-not-allowed border-white/10 text-gray-500'
-                                                        : 'cursor-pointer border-white/10 text-gray-300 hover:bg-white/10 hover:text-white'
-                                                }`}
-                                            >
-                                                <Undo2 className="h-3.5 w-3.5" />
-                                                Geri Al
-                                            </button>
-                                        </div>
-                                    )}
                                 </div>
                             </>
                         ) : (
