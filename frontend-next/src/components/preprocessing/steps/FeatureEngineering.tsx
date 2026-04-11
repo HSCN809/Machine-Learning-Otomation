@@ -424,11 +424,23 @@ export function FeatureEngineering({ columns, numericColumns, onApply, isLoading
                             {NUMERIC_OPTIONS.map((option) => {
                                 const isSelected = numericOperation === option.value;
                                 return (
-                                    <button
+                                    <div
                                         key={option.value}
-                                        type="button"
-                                        onClick={() => setNumericOperation(option.value)}
-                                        disabled={isLoading}
+                                        role="button"
+                                        tabIndex={isLoading ? -1 : 0}
+                                        onClick={() => {
+                                            if (!isLoading) {
+                                                setNumericOperation(option.value);
+                                            }
+                                        }}
+                                        onKeyDown={(event) => {
+                                            if (isLoading) return;
+                                            if (event.key === 'Enter' || event.key === ' ') {
+                                                event.preventDefault();
+                                                setNumericOperation(option.value);
+                                            }
+                                        }}
+                                        aria-disabled={isLoading}
                                         className={`rounded-xl border p-4 text-left transition-all ${
                                             isSelected
                                                 ? 'border-cyan-500/60 bg-cyan-500/10 text-cyan-400'
@@ -464,7 +476,7 @@ export function FeatureEngineering({ columns, numericColumns, onApply, isLoading
                                             </div>
                                         </div>
                                         <p className="mt-1 text-xs text-gray-400">{option.description}</p>
-                                    </button>
+                                    </div>
                                 );
                             })}
                         </div>
@@ -553,11 +565,23 @@ export function FeatureEngineering({ columns, numericColumns, onApply, isLoading
                             {BINNING_OPTIONS.map((option) => {
                                 const isSelected = binningStrategy === option.value;
                                 return (
-                                    <button
+                                    <div
                                         key={option.value}
-                                        type="button"
-                                        onClick={() => setBinningStrategy(option.value)}
-                                        disabled={isLoading}
+                                        role="button"
+                                        tabIndex={isLoading ? -1 : 0}
+                                        onClick={() => {
+                                            if (!isLoading) {
+                                                setBinningStrategy(option.value);
+                                            }
+                                        }}
+                                        onKeyDown={(event) => {
+                                            if (isLoading) return;
+                                            if (event.key === 'Enter' || event.key === ' ') {
+                                                event.preventDefault();
+                                                setBinningStrategy(option.value);
+                                            }
+                                        }}
+                                        aria-disabled={isLoading}
                                         className={`rounded-xl border p-4 text-left transition-all ${
                                             isSelected
                                                 ? 'border-cyan-500/60 bg-cyan-500/10 text-cyan-400'
@@ -593,7 +617,7 @@ export function FeatureEngineering({ columns, numericColumns, onApply, isLoading
                                             </div>
                                         </div>
                                         <p className="mt-1 text-xs text-gray-400">{option.description}</p>
-                                    </button>
+                                    </div>
                                 );
                             })}
                         </div>
