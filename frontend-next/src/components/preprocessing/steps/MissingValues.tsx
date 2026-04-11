@@ -7,7 +7,7 @@ import { ColumnInfo, MissingValueConfig, MissingValueMethod } from '@/types/prep
 import { Loader2 } from 'lucide-react';
 import { theme } from '@/styles/theme';
 
-type MethodCategory = 'numeric' | 'categorical';
+type MethodCategory = 'numeric' | 'categorical' | 'mixed';
 
 interface MissingValuesProps {
     columnsWithMissing: ColumnInfo[];
@@ -85,10 +85,13 @@ export function MissingValues({ columnsWithMissing, onApply, isLoading }: Missin
             METHODS.filter((option) => {
                 const tone = METHOD_BADGES[option.value as MissingValueMethod].tone;
                 if (activeCategory === 'numeric') {
-                    return tone === 'numeric' || tone === 'mixed';
+                    return tone === 'numeric';
+                }
+                if (activeCategory === 'categorical') {
+                    return tone === 'categorical';
                 }
 
-                return tone === 'categorical' || tone === 'mixed';
+                return tone === 'mixed';
             }),
         [activeCategory]
     );
@@ -115,19 +118,23 @@ export function MissingValues({ columnsWithMissing, onApply, isLoading }: Missin
             <MethodSelector
                 label="Doldurma Yöntemi"
                 headerContent={
-                    <div className="mt-1 flex items-center gap-6 overflow-x-auto border-b border-white/10 pb-1">
+                    <div className="flex w-fit items-center gap-6 border-b border-white/10 pb-0">
                         {[
                             { key: 'numeric' as const, label: 'Sayısal' },
                             { key: 'categorical' as const, label: 'Kategorik' },
+                            { key: 'mixed' as const, label: 'Ortak' },
                         ].map((category) => {
                             const isActive = activeCategory === category.key;
                             const categoryMethods = METHODS.filter((option) => {
                                 const tone = METHOD_BADGES[option.value as MissingValueMethod].tone;
                                 if (category.key === 'numeric') {
-                                    return tone === 'numeric' || tone === 'mixed';
+                                    return tone === 'numeric';
+                                }
+                                if (category.key === 'categorical') {
+                                    return tone === 'categorical';
                                 }
 
-                                return tone === 'categorical' || tone === 'mixed';
+                                return tone === 'mixed';
                             });
 
                             return (
@@ -147,7 +154,7 @@ export function MissingValues({ columnsWithMissing, onApply, isLoading }: Missin
                                 >
                                     {category.label}
                                     <span
-                                        className={`absolute inset-x-0 -bottom-[9px] h-0.5 rounded-full transition-opacity duration-200 ${
+                                        className={`absolute inset-x-0 -bottom-px z-10 h-0.5 rounded-full transition-opacity duration-200 ${
                                             isActive ? 'opacity-100' : 'opacity-0'
                                         }`}
                                         style={{

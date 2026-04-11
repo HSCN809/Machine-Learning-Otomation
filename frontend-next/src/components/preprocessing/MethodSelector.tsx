@@ -60,8 +60,8 @@ export function MethodSelector({
 
     return (
         <>
-            <div className="space-y-3">
-                <label className="text-lg font-semibold text-white">{label}</label>
+            <div className="space-y-2">
+                <label className="block text-lg font-semibold text-white">{label}</label>
                 {headerContent}
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {options.map((option) => {
