@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from 'react';
 import { ColumnSelector } from '../ColumnSelector';
-import { PreprocessingTabs } from '../PreprocessingTabs';
 import {
     BinningStrategy,
     ColumnInfo,
@@ -30,19 +29,6 @@ const FEATURE_TABS: { id: FeatureTab; label: string; icon: string; description: 
     { id: 'datetime', label: 'Tarih/Zaman', icon: '🕒', description: 'Tarih sütunlarından parçalar çıkar.' },
     { id: 'categorical', label: 'Kategorik Kombinasyon', icon: '🔗', description: 'Birden çok kategorik sütunu birleştir.' },
 ];
-
-const FEATURE_TAB_DETAILS_MARKDOWN: Record<FeatureTab, string> = {
-    numeric:
-        '**Ne yapar?** Seçili sayısal sütunlar üzerinde toplama/çıkarma/çarpma/bölme veya özel ifade ile yeni sütun üretir.\n\n**Ne zaman uygundur?** Alan bilgisini matematiksel kombinasyonlarla modele taşımak istediğinizde kullanılır.',
-    polynomial:
-        '**Ne yapar?** Seçilen sayısal sütunlar için karesel (`x²`) türev sütunlar üretir.\n\n**Ne zaman uygundur?** Doğrusal olmayan etkileri basit şekilde modele eklemek istediğinizde tercih edilir.',
-    binning:
-        '**Ne yapar?** Tek bir sayısal sütunu belirli aralıklara bölerek kategorik hale getirir.\n\n**Ne zaman uygundur?** Sürekli değişkeni segmentlere ayırıp yorumlanabilirlik artırılmak istendiğinde faydalıdır.',
-    datetime:
-        '**Ne yapar?** Tarih/zaman sütunundan yıl, ay, gün, saat gibi parçalar çıkarır.\n\n**Ne zaman uygundur?** Zamana bağlı döngüsel veya dönemsel etkileri modele dahil etmek için kullanılır.',
-    categorical:
-        '**Ne yapar?** Birden çok kategorik sütunu birleştirerek yeni bir birleşik kategori üretir.\n\n**Ne zaman uygundur?** Özellik etkileşimlerini tek bir alanda temsil etmek istediğinizde uygundur.',
-};
 
 const NUMERIC_OPTIONS: { value: NumericFeatureOperation; label: string; description: string }[] = [
     { value: 'add', label: 'Toplama', description: '2 veya daha fazla sütunu topla.' },
@@ -399,15 +385,36 @@ export function FeatureEngineering({ columns, numericColumns, onApply, isLoading
     return (
         <div className="space-y-6">
 
-            <PreprocessingTabs
-                tabs={FEATURE_TABS.map((tab) => ({
-                    ...tab,
-                    details: FEATURE_TAB_DETAILS_MARKDOWN[tab.id],
-                }))}
-                value={activeTab}
-                onChange={setActiveTab}
-                disabled={isLoading}
-            />
+            <div className="space-y-2">
+                <label className="block text-lg font-semibold text-white">Özellik Yöntemi</label>
+                <div className="flex w-full items-center gap-6 overflow-x-auto border-b border-white/10 pb-0">
+                    {FEATURE_TABS.map((tab) => {
+                        const isActive = activeTab === tab.id;
+                        return (
+                            <button
+                                key={tab.id}
+                                type="button"
+                                onClick={() => setActiveTab(tab.id)}
+                                disabled={isLoading}
+                                className={`relative shrink-0 pb-1 text-sm font-medium transition-colors duration-200 ${
+                                    isLoading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+                                } ${isActive ? 'text-white' : 'text-gray-400 hover:text-gray-200'}`}
+                            >
+                                {tab.label}
+                                <span
+                                    className={`absolute inset-x-0 -bottom-px z-10 h-0.5 rounded-full transition-opacity duration-200 ${
+                                        isActive ? 'opacity-100' : 'opacity-0'
+                                    }`}
+                                    style={{
+                                        background: theme.gradients.primary,
+                                        boxShadow: isActive ? theme.glow.cyan : undefined,
+                                    }}
+                                />
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
 
             {activeTab === 'numeric' && (
                 <div className="space-y-6">
