@@ -139,7 +139,6 @@ export default function PreprocessingPage() {
             case 'missing_values':
                 return (
                     <MissingValues
-                        columns={columns}
                         columnsWithMissing={columnsWithMissing}
                         onApply={applyMissingValues}
                         isLoading={isLoading}

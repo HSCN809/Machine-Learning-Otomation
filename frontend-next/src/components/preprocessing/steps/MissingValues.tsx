@@ -8,7 +8,6 @@ import { Loader2 } from 'lucide-react';
 import { theme } from '@/styles/theme';
 
 interface MissingValuesProps {
-    columns: ColumnInfo[];
     columnsWithMissing: ColumnInfo[];
     onApply: (config: MissingValueConfig) => Promise<void>;
     isLoading: boolean;
@@ -25,7 +24,7 @@ const METHODS = [
     { value: 'drop_columns', label: 'Sütunları Sil', icon: '❌', description: 'Eksik değerli sütunları kaldır' },
 ];
 
-export function MissingValues({ columns, columnsWithMissing, onApply, isLoading }: MissingValuesProps) {
+export function MissingValues({ columnsWithMissing, onApply, isLoading }: MissingValuesProps) {
     const [method, setMethod] = useState<MissingValueMethod>('fill_mean');
     const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
     const [fillValue, setFillValue] = useState<string>('');
@@ -99,7 +98,7 @@ export function MissingValues({ columns, columnsWithMissing, onApply, isLoading 
 
             {/* Column selector */}
             <ColumnSelector
-                columns={method.includes('drop') ? columnsWithMissing : columns}
+                columns={columnsWithMissing}
                 selectedColumns={selectedColumns}
                 onChange={setSelectedColumns}
                 label="Uygulanacak Sütunları Seç"
