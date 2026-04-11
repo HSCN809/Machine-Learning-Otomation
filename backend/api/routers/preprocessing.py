@@ -21,13 +21,18 @@ from backend.modules.data_preprocessing.feature_engineering.processor import (
     create_datetime_feature,
     create_numeric_feature,
 )
+from backend.modules.data_preprocessing.missing_values.processor import (
+    fill_missing_values_interpolation,
+    fill_missing_values_knn,
+    fill_missing_values_regression,
+)
 
 router = APIRouter()
 
 
 # Request schemas
 class MissingValuesRequest(BaseModel):
-    method: str  # fill_mean, fill_median, fill_mode, fill_constant, drop_rows, drop_columns
+    method: str  # fill_mean, fill_median, fill_mode, fill_knn, fill_interpolation, fill_regression, fill_constant, drop_rows, drop_columns
     columns: List[str]
     fill_value: Optional[str] = None
 
@@ -124,6 +129,12 @@ async def handle_missing_values(
                 mode_val = df[col].mode()
                 if len(mode_val) > 0:
                     df[col] = df[col].fillna(mode_val.iloc[0])
+            elif request.method == "fill_knn":
+                df = fill_missing_values_knn(df, [col])
+            elif request.method == "fill_interpolation":
+                df = fill_missing_values_interpolation(df, [col], method="linear")
+            elif request.method == "fill_regression":
+                df = fill_missing_values_regression(df, [col])
             elif request.method == "fill_constant":
                 df[col] = df[col].fillna(request.fill_value)
             elif request.method == "fill_ffill":

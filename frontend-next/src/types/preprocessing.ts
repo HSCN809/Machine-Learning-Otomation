@@ -29,6 +29,9 @@ export type MissingValueMethod =
     | 'fill_mean'
     | 'fill_median'
     | 'fill_mode'
+    | 'fill_knn'
+    | 'fill_interpolation'
+    | 'fill_regression'
     | 'fill_constant'
     | 'fill_ffill'
     | 'fill_bfill';

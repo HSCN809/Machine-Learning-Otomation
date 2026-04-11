@@ -3,6 +3,8 @@
 import pandas as pd
 import numpy as np
 from typing import List
+from sklearn.experimental import enable_iterative_imputer  # noqa: F401
+from sklearn.impute import IterativeImputer
 from sklearn.impute import KNNImputer
 import logging
 
@@ -379,6 +381,54 @@ def fill_missing_values_knn(df: pd.DataFrame, columns: List[str], n_neighbors: i
     
     logger.info(f"✅ KNN imputation completed successfully for columns: {target_cols}")
     return df
+
+
+def fill_missing_values_regression(df: pd.DataFrame, columns: List[str], max_iter: int = 10) -> pd.DataFrame:
+    """Fill missing values using regression-based iterative imputation."""
+    df = df.copy()
+
+    all_numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    target_cols = [col for col in columns if col in all_numeric_cols]
+
+    if not target_cols:
+        logger.warning("No numeric target columns for regression imputation")
+        return df
+
+    if len(all_numeric_cols) < 2:
+        logger.warning("Regression imputation requires at least 2 numeric columns, falling back to mean")
+        return fill_missing_values_mean(df, target_cols)
+
+    valid_numeric_cols = [col for col in all_numeric_cols if df[col].notna().sum() > 0]
+    if len(valid_numeric_cols) < 2:
+        logger.warning("Not enough valid numeric columns for regression imputation, falling back to mean")
+        return fill_missing_values_mean(df, target_cols)
+
+    try:
+        original_df = df.copy()
+        imputer = IterativeImputer(
+            max_iter=max_iter,
+            random_state=42,
+            sample_posterior=False,
+            skip_complete=True,
+        )
+
+        imputed_data = imputer.fit_transform(df[valid_numeric_cols])
+        df_imputed = pd.DataFrame(imputed_data, columns=valid_numeric_cols, index=df.index)
+
+        for col in target_cols:
+            missing_mask = df[col].isnull()
+            if missing_mask.any():
+                df.loc[missing_mask, col] = df_imputed.loc[missing_mask, col]
+
+        for col in valid_numeric_cols:
+            if col not in target_cols:
+                df[col] = original_df[col]
+
+        return df
+    except Exception as exc:
+        logger.error(f"Error in regression imputation: {exc}", exc_info=True)
+        logger.info("Falling back to mean imputation")
+        return fill_missing_values_mean(df, target_cols)
 
 
 def fill_missing_values_drop(df: pd.DataFrame, columns: List[str]) -> pd.DataFrame:
