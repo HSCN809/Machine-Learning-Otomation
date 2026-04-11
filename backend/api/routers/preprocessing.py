@@ -39,7 +39,7 @@ class MissingValuesRequest(BaseModel):
 
 
 class OutliersRequest(BaseModel):
-    method: str  # iqr_remove, iqr_cap, zscore_remove, zscore_cap, isolation_forest, lof
+    method: str  # iqr_cap, zscore_cap, isolation_forest, lof
     columns: List[str]
     threshold: Optional[float] = None
 
@@ -106,17 +106,14 @@ SUPPORTED_MISSING_VALUE_METHODS = {
 def _parse_outlier_method(method: str) -> tuple[str, str]:
     normalized = (method or "").strip().lower()
 
-    if normalized in {"iqr_remove", "iqr_cap"}:
-        return "iqr", normalized.split("_", 1)[1]
-    if normalized in {"zscore_remove", "zscore_cap"}:
-        return "zscore", normalized.split("_", 1)[1]
-    if normalized in {"isolation_forest", "isolation_forest_remove"}:
+    if normalized == "iqr_cap":
+        return "iqr", "cap"
+    if normalized == "zscore_cap":
+        return "zscore", "cap"
+    if normalized == "isolation_forest":
         return "isolation_forest", "remove"
-    if normalized in {"lof", "lof_remove"}:
+    if normalized == "lof":
         return "lof", "remove"
-
-    if normalized in {"isolation_forest_cap", "lof_cap"}:
-        raise HTTPException(status_code=400, detail=f"Method does not support capping: {method}")
 
     raise HTTPException(status_code=400, detail=f"Unsupported outlier method: {method}")
 

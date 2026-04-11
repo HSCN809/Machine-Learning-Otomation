@@ -15,16 +15,14 @@ interface OutliersProps {
 }
 
 const METHODS = [
-    { value: 'iqr_remove', label: 'IQR - Kaldır', icon: '📦', description: 'IQR yöntemi ile aykırı değerleri kaldır' },
     { value: 'iqr_cap', label: 'IQR - Sınırla', icon: '📦', description: 'IQR yöntemi ile aykırı değerleri sınırla' },
-    { value: 'zscore_remove', label: 'Z-Score - Kaldır', icon: '📊', description: 'Z-Score ile aykırı değerleri kaldır' },
     { value: 'zscore_cap', label: 'Z-Score - Sınırla', icon: '📊', description: 'Z-Score ile aykırı değerleri sınırla' },
     { value: 'isolation_forest', label: 'Isolation Forest', icon: '🌲', description: 'ML tabanlı aykırı değer tespiti' },
     { value: 'lof', label: 'LOF', icon: '🎯', description: 'Local Outlier Factor algoritması' },
 ];
 
 export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) {
-    const [method, setMethod] = useState<OutlierMethod>('iqr_remove');
+    const [method, setMethod] = useState<OutlierMethod>('iqr_cap');
     const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
     const [threshold, setThreshold] = useState<string>('1.5');
     const [detectedColumns, setDetectedColumns] = useState<ColumnInfo[]>([]);
