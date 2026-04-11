@@ -297,11 +297,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
             setIsLoading(true);
             setError(null);
 
-            await api.applyMissingValues(
-                config.method,
-                config.columns,
-                config.fillValue !== undefined ? String(config.fillValue) : undefined
-            );
+            await api.applyMissingValues(config.method, config.columns);
 
             await refreshColumnsAndHistory();
         } catch (err) {

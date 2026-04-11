@@ -331,13 +331,12 @@ export interface PreprocessingResponse {
 
 export async function applyMissingValues(
     method: string,
-    columns: string[],
-    fillValue?: string
+    columns: string[]
 ): Promise<PreprocessingResponse> {
     return apiFetch('/api/preprocessing/missing-values', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ method, columns, fill_value: fillValue }),
+        body: JSON.stringify({ method, columns }),
     });
 }
 

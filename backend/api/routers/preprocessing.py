@@ -32,9 +32,8 @@ router = APIRouter()
 
 # Request schemas
 class MissingValuesRequest(BaseModel):
-    method: str  # fill_mean, fill_median, fill_mode, fill_knn, fill_interpolation, fill_regression, fill_constant, drop_rows, drop_columns
+    method: str  # fill_mean, fill_median, fill_mode, fill_knn, fill_interpolation, fill_regression, fill_ffill, fill_bfill, drop_columns
     columns: List[str]
-    fill_value: Optional[str] = None
 
 
 class OutliersRequest(BaseModel):
@@ -83,6 +82,18 @@ ALLOWED_EXPRESSION_NODES = (
     ast.Constant,
 )
 
+SUPPORTED_MISSING_VALUE_METHODS = {
+    "fill_mean",
+    "fill_median",
+    "fill_mode",
+    "fill_knn",
+    "fill_interpolation",
+    "fill_regression",
+    "fill_ffill",
+    "fill_bfill",
+    "drop_columns",
+}
+
 
 def _validate_expression(expression: str, allowed_names: set[str]) -> ast.Expression:
     try:
@@ -112,6 +123,9 @@ async def handle_missing_values(
     try:
         previous_df = df.copy(deep=True)
         affected_rows = 0
+
+        if request.method not in SUPPORTED_MISSING_VALUE_METHODS:
+            raise HTTPException(status_code=400, detail=f"Unsupported missing values method: {request.method}")
         
         for col in request.columns:
             if col not in df.columns:
@@ -135,14 +149,10 @@ async def handle_missing_values(
                 df = fill_missing_values_interpolation(df, [col], method="linear")
             elif request.method == "fill_regression":
                 df = fill_missing_values_regression(df, [col])
-            elif request.method == "fill_constant":
-                df[col] = df[col].fillna(request.fill_value)
             elif request.method == "fill_ffill":
                 df[col] = df[col].ffill()
             elif request.method == "fill_bfill":
                 df[col] = df[col].bfill()
-            elif request.method == "drop_rows":
-                df = df.dropna(subset=[col])
             elif request.method == "drop_columns":
                 if df[col].isnull().sum() > 0:
                     df = df.drop(columns=[col])
@@ -165,7 +175,9 @@ async def handle_missing_values(
             "affected_rows": affected_rows,
             "remaining_nulls": int(df.isnull().sum().sum()),
         }
-        
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

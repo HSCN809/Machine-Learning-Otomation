@@ -24,7 +24,6 @@ export interface ProcessingHistory {
 
 // Missing Values
 export type MissingValueMethod =
-    | 'drop_rows'
     | 'drop_columns'
     | 'fill_mean'
     | 'fill_median'
@@ -32,14 +31,12 @@ export type MissingValueMethod =
     | 'fill_knn'
     | 'fill_interpolation'
     | 'fill_regression'
-    | 'fill_constant'
     | 'fill_ffill'
     | 'fill_bfill';
 
 export interface MissingValueConfig {
     method: MissingValueMethod;
     columns: string[];
-    fillValue?: string | number;
 }
 
 // Outliers
