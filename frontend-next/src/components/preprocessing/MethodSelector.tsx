@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { Info, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { theme } from '@/styles/theme';
@@ -21,6 +21,7 @@ interface MethodSelectorProps {
     value: string;
     onChange: (value: string) => void;
     disabled?: boolean;
+    headerContent?: ReactNode;
 }
 
 function renderInlineMarkdown(text: string) {
@@ -47,13 +48,21 @@ function renderMarkdown(content: string) {
     ));
 }
 
-export function MethodSelector({ label, options, value, onChange, disabled = false }: MethodSelectorProps) {
+export function MethodSelector({
+    label,
+    options,
+    value,
+    onChange,
+    disabled = false,
+    headerContent,
+}: MethodSelectorProps) {
     const [activeInfo, setActiveInfo] = useState<MethodOption | null>(null);
 
     return (
         <>
             <div className="space-y-3">
                 <label className="text-sm font-medium text-gray-300">{label}</label>
+                {headerContent}
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {options.map((option) => {
                     const isSelected = value === option.value;

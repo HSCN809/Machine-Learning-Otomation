@@ -1,11 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { MethodSelector } from '../MethodSelector';
 import { ColumnSelector } from '../ColumnSelector';
 import { ColumnInfo, MissingValueConfig, MissingValueMethod } from '@/types/preprocessing';
 import { Loader2 } from 'lucide-react';
 import { theme } from '@/styles/theme';
+
+type MethodCategory = 'numeric' | 'categorical';
 
 interface MissingValuesProps {
     columnsWithMissing: ColumnInfo[];
@@ -76,6 +78,20 @@ export function MissingValues({ columnsWithMissing, onApply, isLoading }: Missin
     const [method, setMethod] = useState<MissingValueMethod>('fill_mean');
     const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
     const [fillValue, setFillValue] = useState<string>('');
+    const [activeCategory, setActiveCategory] = useState<MethodCategory>('numeric');
+
+    const filteredMethods = useMemo(
+        () =>
+            METHODS.filter((option) => {
+                const tone = METHOD_BADGES[option.value as MissingValueMethod].tone;
+                if (activeCategory === 'numeric') {
+                    return tone === 'numeric' || tone === 'mixed';
+                }
+
+                return tone === 'categorical' || tone === 'mixed';
+            }),
+        [activeCategory]
+    );
 
     const handleApply = async () => {
         if (selectedColumns.length === 0) return;
@@ -123,7 +139,53 @@ export function MissingValues({ columnsWithMissing, onApply, isLoading }: Missin
             {/* Method selector */}
             <MethodSelector
                 label="Doldurma Yöntemi"
-                options={METHODS.map((option) => ({
+                headerContent={
+                    <div className="flex items-center gap-6 overflow-x-auto border-b border-white/10 pb-2">
+                        {[
+                            { key: 'numeric' as const, label: 'Sayısal' },
+                            { key: 'categorical' as const, label: 'Kategorik' },
+                        ].map((category) => {
+                            const isActive = activeCategory === category.key;
+                            const categoryMethods = METHODS.filter((option) => {
+                                const tone = METHOD_BADGES[option.value as MissingValueMethod].tone;
+                                if (category.key === 'numeric') {
+                                    return tone === 'numeric' || tone === 'mixed';
+                                }
+
+                                return tone === 'categorical' || tone === 'mixed';
+                            });
+
+                            return (
+                                <button
+                                    key={category.key}
+                                    type="button"
+                                    onClick={() => {
+                                        setActiveCategory(category.key);
+                                        if (!categoryMethods.some((option) => option.value === method) && categoryMethods.length > 0) {
+                                            setMethod(categoryMethods[0].value as MissingValueMethod);
+                                        }
+                                    }}
+                                    disabled={isLoading}
+                                    className={`relative shrink-0 pb-2 text-sm font-medium transition-colors duration-200 ${
+                                        isLoading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+                                    } ${isActive ? 'text-white' : 'text-gray-400 hover:text-gray-200'}`}
+                                >
+                                    {category.label}
+                                    <span
+                                        className={`absolute inset-x-0 -bottom-[9px] h-0.5 rounded-full transition-opacity duration-200 ${
+                                            isActive ? 'opacity-100' : 'opacity-0'
+                                        }`}
+                                        style={{
+                                            background: theme.gradients.primary,
+                                            boxShadow: isActive ? theme.glow.cyan : undefined,
+                                        }}
+                                    />
+                                </button>
+                            );
+                        })}
+                    </div>
+                }
+                options={filteredMethods.map((option) => ({
                     ...option,
                     badgeLabel: METHOD_BADGES[option.value as MissingValueMethod].label,
                     badgeTone: METHOD_BADGES[option.value as MissingValueMethod].tone,
