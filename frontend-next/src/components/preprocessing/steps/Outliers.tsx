@@ -17,7 +17,6 @@ interface OutliersProps {
 const METHODS = [
     { value: 'iqr_cap', label: 'IQR - Sınırla', icon: '📦', description: 'IQR yöntemi ile aykırı değerleri sınırla' },
     { value: 'zscore_cap', label: 'Z-Score - Sınırla', icon: '📊', description: 'Z-Score ile aykırı değerleri sınırla' },
-    { value: 'isolation_forest', label: 'Isolation Forest', icon: '🌲', description: 'ML tabanlı aykırı değer tespiti' },
     { value: 'lof', label: 'LOF', icon: '🎯', description: 'Local Outlier Factor algoritması' },
 ];
 
@@ -109,7 +108,7 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
         void run();
     }, [method, threshold, numericColumns, numericColumnsByName]);
 
-    const isRowBasedMethod = method === 'isolation_forest' || method === 'lof';
+    const isRowBasedMethod = method === 'lof';
 
     const handleApply = async () => {
         const columnsToApply = isRowBasedMethod

@@ -3,7 +3,6 @@
 import pandas as pd
 import numpy as np
 from typing import List, Dict, Any
-from sklearn.ensemble import IsolationForest
 from sklearn.neighbors import LocalOutlierFactor
 import logging
 
@@ -127,25 +126,6 @@ def cap_outliers_zscore(df: pd.DataFrame, columns: List[str], threshold: float =
     return df
 
 
-def remove_outliers_isolation_forest(df: pd.DataFrame, columns: List[str], contamination: float = 0.1) -> pd.DataFrame:
-    """Remove outliers using Isolation Forest."""
-    df = df.copy()
-    numeric_cols = [col for col in columns if col in df.columns and pd.api.types.is_numeric_dtype(df[col])]
-    
-    if not numeric_cols:
-        return df
-    
-    try:
-        iso_forest = IsolationForest(contamination=contamination, random_state=42)
-        outliers = iso_forest.fit_predict(df[numeric_cols])
-        mask = outliers == 1
-        
-        return df[mask].reset_index(drop=True)
-    except Exception as e:
-        logger.error(f"Error removing outliers with Isolation Forest: {e}", exc_info=True)
-        return df
-
-
 def remove_outliers_lof(df: pd.DataFrame, columns: List[str], contamination: float = 0.1, n_neighbors: int = 20) -> pd.DataFrame:
     """Remove outliers using Local Outlier Factor."""
     df = df.copy()
@@ -178,12 +158,12 @@ def apply_outlier_method(
     Args:
         df: Input DataFrame
         columns: List of column names to process
-        method: Detection method ('iqr', 'zscore', 'isolation_forest', 'lof')
+        method: Detection method ('iqr', 'zscore', 'lof')
         action: Action to take ('remove' or 'cap')
         **kwargs: Additional parameters for the method
             - factor: For IQR method (default: 1.5)
             - threshold: For Z-score method (default: 3.0)
-            - contamination: For Isolation Forest and LOF (default: 0.1)
+            - contamination: For LOF (default: 0.1)
             - n_neighbors: For LOF method (default: 20)
     
     Returns:
@@ -210,13 +190,6 @@ def apply_outlier_method(
             else:
                 raise ValueError(f"Unknown action: {action}. Must be 'remove' or 'cap'")
         
-        elif method == 'isolation_forest':
-            contamination = kwargs.get('contamination', 0.1)
-            if action == 'remove':
-                return remove_outliers_isolation_forest(df, columns, contamination)
-            else:
-                raise ValueError(f"Action 'cap' is not supported for isolation_forest method. Use 'remove'.")
-        
         elif method == 'lof':
             contamination = kwargs.get('contamination', 0.1)
             n_neighbors = kwargs.get('n_neighbors', 20)
@@ -226,7 +199,7 @@ def apply_outlier_method(
                 raise ValueError(f"Action 'cap' is not supported for lof method. Use 'remove'.")
         
         else:
-            raise ValueError(f"Unknown method: {method}. Must be 'iqr', 'zscore', 'isolation_forest', or 'lof'")
+            raise ValueError(f"Unknown method: {method}. Must be 'iqr', 'zscore', or 'lof'")
     
     except Exception as e:
         logger.error(f"❌ Error applying outlier method {method} with action {action}: {e}", exc_info=True)

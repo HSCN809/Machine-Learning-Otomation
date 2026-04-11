@@ -403,7 +403,6 @@ KRİTİK KURALLAR - MUTLAKA UYULMALI:
             method_names = {
                 'iqr': 'IQR (Interquartile Range)',
                 'zscore': 'Z-Score',
-                'isolation_forest': 'Isolation Forest',
                 'lof': 'LOF (Local Outlier Factor)'
             }
             method_name = method_names.get(detection_method, detection_method.upper())
@@ -417,23 +416,21 @@ Aykırı değer içeren sütunlar ({len(columns_with_outliers)} adet): {', '.joi
 1. METHOD ALANI İÇİN SADECE ŞU DEĞERLERİ KULLAN (BAŞKA HİÇBİR ŞEY DEĞİL):
    - "iqr_remove" veya "iqr_cap" (Interquartile Range - IQR yöntemi)
    - "zscore_remove" veya "zscore_cap" (Z-Score yöntemi)
-   - "isolation_forest_remove" (Isolation Forest algoritması - sadece remove)
    - "lof_remove" (Local Outlier Factor algoritması - sadece remove)
 
 2. YÖNTEM SEÇİMİ KURALLARI:
    - Basit ve hızlı için: "iqr_remove", "iqr_cap", "zscore_remove", "zscore_cap"
-   - Çok değişkenli ve karmaşık veriler için: "isolation_forest_remove" veya "lof_remove"
+   - Çok değişkenli ve karmaşık veriler için: "lof_remove"
    - IQR: Normal dağılımlı veriler için uygun, hızlı
    - Z-score: Normal dağılımlı veriler için uygun, ortalama ve standart sapma kullanır
-   - Isolation Forest: Çok değişkenli veriler için, aykırı değer oranını belirleyebilirsin
    - LOF: Yerel yoğunluk tabanlı, komşu noktalara göre aykırı değer tespit eder
    {f"- ⚠️ ÖNEMLİ: Şu anda {detection_method} yöntemi kullanılıyor. Önerilerinde SADECE {detection_method}_remove veya {detection_method}_cap kullanmalısın!" if detection_method and detection_method in ['iqr', 'zscore'] else f"- ⚠️ ÖNEMLİ: Şu anda {detection_method} yöntemi kullanılıyor. Önerilerinde SADECE {detection_method}_remove kullanmalısın (cap desteklenmez)!" if detection_method else ""}
 
 3. İŞLEM TİPİ (ACTION) - METHOD İÇİNDE BELİRTİLMELİ:
    - "_remove": Aykırı değerleri içeren satırları sil (aykırı değer yüzdesi düşükse)
    - "_cap": Aykırı değerleri sınırlara çek (aykırı değer yüzdesi yüksekse veya veri kaybı istenmiyorsa)
-   - NOT: isolation_forest ve lof yöntemleri için sadece "_remove" kullanılabilir (cap desteklenmez)
-   - ÖRNEK: "iqr_remove", "iqr_cap", "zscore_remove", "zscore_cap", "isolation_forest_remove", "lof_remove"
+   - NOT: lof yöntemi için sadece "_remove" kullanılabilir (cap desteklenmez)
+   - ÖRNEK: "iqr_remove", "iqr_cap", "zscore_remove", "zscore_cap", "lof_remove"
 
 4. ÖNCELİK HESAPLAMA:
    - Aykırı değer yüzdesi >20% ise "yüksek"
@@ -534,14 +531,13 @@ Sütunlar: {', '.join(columns_with_outliers)}
 SENİN GÖREVİN: Bu {len(columns_with_outliers)} aykırı değer içeren sütunun HER BİRİ için TEKER TEKER AYRI öneri oluşturmak!
 
 ZORUNLU FORMAT - HER SÜTUN İÇİN AYRI ÖNERİ:
-{chr(10).join(f"- Öneri {i+1}: {{\"columns\": [\"{col}\"], \"method\": \"iqr_remove\" veya \"iqr_cap\" veya \"zscore_remove\" veya \"zscore_cap\" veya \"isolation_forest_remove\" veya \"lof_remove\", ...}}  ← SADECE {col} sütunu" for i, col in enumerate(columns_with_outliers)) if columns_with_outliers else "- Aykırı değer içeren sütun yok"}
+{chr(10).join(f"- Öneri {i+1}: {{\"columns\": [\"{col}\"], \"method\": \"iqr_remove\" veya \"iqr_cap\" veya \"zscore_remove\" veya \"zscore_cap\" veya \"lof_remove\", ...}}  ← SADECE {col} sütunu" for i, col in enumerate(columns_with_outliers)) if columns_with_outliers else "- Aykırı değer içeren sütun yok"}
 
 ÖNEMLİ NOTLAR:
 - Her sütun için TAM 1 öneri oluştur (her öneride columns array'inde SADECE 1 sütun)
 - Method: MUTLAKA "detection_method_action" formatında olmalı:
   * "iqr_remove" veya "iqr_cap"
   * "zscore_remove" veya "zscore_cap"
-  * "isolation_forest_remove" (sadece remove)
   * "lof_remove" (sadece remove)
 - SADECE "iqr", "zscore" gibi formatlar KULLANMA! MUTLAKA "_remove" veya "_cap" ekle!
 - Eksik sütun bırakma, hepsini kapsa!
