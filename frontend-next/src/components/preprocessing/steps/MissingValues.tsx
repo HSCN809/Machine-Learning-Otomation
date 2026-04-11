@@ -111,36 +111,11 @@ export function MissingValues({ columnsWithMissing, onApply, isLoading }: Missin
 
     return (
         <div className="space-y-6">
-            {/* Info */}
-            {columnsWithMissing.length === 0 ? (
-                <div
-                    className="p-4 rounded-xl border"
-                    style={{
-                        borderColor: `${theme.colors.status.success}50`,
-                        background: `${theme.colors.status.success}10`,
-                    }}
-                >
-                    <p className="text-green-400">✅ Veri setinde eksik değer bulunmuyor!</p>
-                </div>
-            ) : (
-                <div
-                    className="p-4 rounded-xl border"
-                    style={{
-                        borderColor: `${theme.colors.status.warning}50`,
-                        background: `${theme.colors.status.warning}10`,
-                    }}
-                >
-                    <p className="text-yellow-400">
-                        ⚠️ {columnsWithMissing.length} sütunda eksik değer tespit edildi.
-                    </p>
-                </div>
-            )}
-
             {/* Method selector */}
             <MethodSelector
                 label="Doldurma Yöntemi"
                 headerContent={
-                    <div className="flex items-center gap-6 overflow-x-auto border-b border-white/10 pb-2">
+                    <div className="mt-1 flex items-center gap-6 overflow-x-auto border-b border-white/10 pb-1">
                         {[
                             { key: 'numeric' as const, label: 'Sayısal' },
                             { key: 'categorical' as const, label: 'Kategorik' },
@@ -166,7 +141,7 @@ export function MissingValues({ columnsWithMissing, onApply, isLoading }: Missin
                                         }
                                     }}
                                     disabled={isLoading}
-                                    className={`relative shrink-0 pb-2 text-sm font-medium transition-colors duration-200 ${
+                                    className={`relative shrink-0 pb-1 text-sm font-medium transition-colors duration-200 ${
                                         isLoading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
                                     } ${isActive ? 'text-white' : 'text-gray-400 hover:text-gray-200'}`}
                                 >
