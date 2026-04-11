@@ -11,6 +11,8 @@ interface MethodOption {
     description?: string;
     icon?: string;
     details?: string;
+    badgeLabel?: string;
+    badgeTone?: 'numeric' | 'categorical' | 'mixed';
 }
 
 interface MethodSelectorProps {
@@ -55,6 +57,12 @@ export function MethodSelector({ label, options, value, onChange, disabled = fal
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {options.map((option) => {
                     const isSelected = value === option.value;
+                    const badgeClassName =
+                        option.badgeTone === 'numeric'
+                            ? 'border-cyan-400/30 bg-cyan-400/10 text-cyan-200'
+                            : option.badgeTone === 'categorical'
+                              ? 'border-violet-400/30 bg-violet-400/10 text-violet-200'
+                              : 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200';
                     return (
                         <div
                             key={option.value}
@@ -74,11 +82,12 @@ export function MethodSelector({ label, options, value, onChange, disabled = fal
                             }}
                             aria-disabled={disabled}
                             className={cn(
-                                'relative p-4 rounded-xl border text-left transition-all duration-200',
+                                'relative rounded-xl border p-4 text-left transition-all duration-200',
                                 isSelected
                                     ? 'border-cyan-500/50 bg-cyan-500/10'
                                     : 'border-white/10 bg-white/5 hover:border-cyan-500/30 hover:bg-white/10',
-                                disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                                disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
+                                option.badgeLabel ? 'pr-24' : undefined
                             )}
                             style={
                                 isSelected
@@ -86,6 +95,16 @@ export function MethodSelector({ label, options, value, onChange, disabled = fal
                                     : undefined
                             }
                         >
+                            {option.badgeLabel && (
+                                <span
+                                    className={cn(
+                                        'absolute right-3 top-3 rounded-full border px-2.5 py-1 text-[11px] font-medium tracking-[0.02em]',
+                                        badgeClassName
+                                    )}
+                                >
+                                    {option.badgeLabel}
+                                </span>
+                            )}
                             <div className="flex items-start gap-3">
                                 {option.icon && (
                                     <span className="text-xl">{option.icon}</span>
@@ -98,6 +117,14 @@ export function MethodSelector({ label, options, value, onChange, disabled = fal
                                         )}>
                                             {option.label}
                                         </p>
+                                        {isSelected && (
+                                            <span
+                                                className="flex h-5 w-5 items-center justify-center rounded-full text-xs text-white"
+                                                style={{ background: theme.colors.primary.cyan }}
+                                            >
+                                                ✓
+                                            </span>
+                                        )}
                                         {option.details && (
                                             <div className="group relative flex items-center">
                                                 <button
@@ -130,7 +157,7 @@ export function MethodSelector({ label, options, value, onChange, disabled = fal
                                 </div>
                                 {isSelected && (
                                     <div
-                                        className="w-5 h-5 rounded-full flex items-center justify-center"
+                                        className="hidden"
                                         style={{ background: theme.colors.primary.cyan }}
                                     >
                                         <span className="text-xs text-white">✓</span>

@@ -35,6 +35,20 @@ const METHOD_DETAILS: Record<MissingValueMethod, string> = {
     drop_columns: 'Sütun silme, eksik değer içeren özellikleri tamamen kaldırır. Bilgi değeri düşük veya eksik oranı çok yüksek alanlarda modeli sadeleştirmek için kullanılabilir.',
 };
 
+const METHOD_BADGES: Record<
+    MissingValueMethod,
+    { label: string; tone: 'numeric' | 'categorical' | 'mixed' }
+> = {
+    fill_mean: { label: 'Sayısal', tone: 'numeric' },
+    fill_median: { label: 'Sayısal', tone: 'numeric' },
+    fill_mode: { label: 'Her ikisi', tone: 'mixed' },
+    fill_constant: { label: 'Her ikisi', tone: 'mixed' },
+    fill_ffill: { label: 'Her ikisi', tone: 'mixed' },
+    fill_bfill: { label: 'Her ikisi', tone: 'mixed' },
+    drop_rows: { label: 'Her ikisi', tone: 'mixed' },
+    drop_columns: { label: 'Her ikisi', tone: 'mixed' },
+};
+
 const METHOD_DETAILS_MARKDOWN: Record<MissingValueMethod, string> = {
     fill_mean: '**Ne yapar?** Eksik sayısal gözlemleri sütunun aritmetik ortalamasıyla tamamlar.\n\n**Ne zaman uygundur?** Dağılımı çok bozuk olmayan verilerde pratik ve hızlı bir yaklaşımdır.',
     fill_median: '**Ne yapar?** Eksik değerleri ortadaki temsil değeriyle tamamlar.\n\n**Ne zaman uygundur?** Aykırı değerlerin etkisini ortalamaya göre daha iyi sınırladığı için dayanıklı bir seçenektir.',
@@ -99,6 +113,8 @@ export function MissingValues({ columnsWithMissing, onApply, isLoading }: Missin
                 label="Doldurma Yöntemi"
                 options={METHODS.map((option) => ({
                     ...option,
+                    badgeLabel: METHOD_BADGES[option.value as MissingValueMethod].label,
+                    badgeTone: METHOD_BADGES[option.value as MissingValueMethod].tone,
                     details:
                         METHOD_DETAILS_MARKDOWN[option.value as MissingValueMethod]
                         ?? METHOD_DETAILS[option.value as MissingValueMethod],
