@@ -413,19 +413,19 @@ KRİTİK KURAL: SADECE aykırı değer içeren sütunlar için TEKER TEKER AYRI 
 Aykırı değer içeren sütunlar ({len(columns_with_outliers)} adet): {', '.join(columns_with_outliers) if columns_with_outliers else 'Yok'}
 
 1. METHOD ALANI İÇİN SADECE ŞU DEĞERLERİ KULLAN (BAŞKA HİÇBİR ŞEY DEĞİL):
-   - "iqr_remove" veya "iqr_cap" (Interquartile Range - IQR yöntemi)
-   - "zscore_remove" veya "zscore_cap" (Z-Score yöntemi)
+   - "iqr_cap" (Interquartile Range - IQR yöntemi)
+   - "zscore_cap" (Z-Score yöntemi)
 
 2. YÖNTEM SEÇİMİ KURALLARI:
-   - Basit ve hızlı için: "iqr_remove", "iqr_cap", "zscore_remove", "zscore_cap"
+   - Basit ve hızlı için: "iqr_cap", "zscore_cap"
    - IQR: Normal dağılımlı veriler için uygun, hızlı
    - Z-score: Normal dağılımlı veriler için uygun, ortalama ve standart sapma kullanır
-   {f"- ⚠️ ÖNEMLİ: Şu anda {detection_method} yöntemi kullanılıyor. Önerilerinde SADECE {detection_method}_remove veya {detection_method}_cap kullanmalısın!" if detection_method else ""}
+   {f"- ⚠️ ÖNEMLİ: Şu anda {detection_method} yöntemi kullanılıyor. Önerilerinde SADECE {detection_method}_cap kullanmalısın!" if detection_method else ""}
 
 3. İŞLEM TİPİ (ACTION) - METHOD İÇİNDE BELİRTİLMELİ:
-   - "_remove": Aykırı değerleri içeren satırları sil (aykırı değer yüzdesi düşükse)
-   - "_cap": Aykırı değerleri sınırlara çek (aykırı değer yüzdesi yüksekse veya veri kaybı istenmiyorsa)
-   - ÖRNEK: "iqr_remove", "iqr_cap", "zscore_remove", "zscore_cap"
+   - Sadece "_cap" desteklenir
+   - "_cap": Aykırı değerleri sınırlara çek (veri kaybı olmadan)
+   - ÖRNEK: "iqr_cap", "zscore_cap"
 
 4. ÖNCELİK HESAPLAMA:
    - Aykırı değer yüzdesi >20% ise "yüksek"
@@ -439,7 +439,7 @@ Aykırı değer içeren sütunlar ({len(columns_with_outliers)} adet): {', '.joi
    - Bir öneride birden fazla sütun BİRLİKTE olmamalı
 
 ÖRNEK FORMAT ({len(columns_with_outliers)} aykırı değer içeren sütun varsa):
-{chr(10).join(f"- Öneri {i+1}: {{\"columns\": [\"{col}\"], \"method\": \"iqr_remove\" veya \"iqr_cap\", ...}}  ← Sadece {col}" for i, col in enumerate(columns_with_outliers[:3])) if columns_with_outliers else "- Aykırı değer içeren sütun yok"}
+{chr(10).join(f"- Öneri {i+1}: {{\"columns\": [\"{col}\"], \"method\": \"iqr_cap\" veya \"zscore_cap\", ...}}  ← Sadece {col}" for i, col in enumerate(columns_with_outliers[:3])) if columns_with_outliers else "- Aykırı değer içeren sütun yok"}
 """
     elif step_type == 'feature_engineering':
         # Feature engineering LLM prompts removed - will be added back later if needed
@@ -526,14 +526,13 @@ Sütunlar: {', '.join(columns_with_outliers)}
 SENİN GÖREVİN: Bu {len(columns_with_outliers)} aykırı değer içeren sütunun HER BİRİ için TEKER TEKER AYRI öneri oluşturmak!
 
 ZORUNLU FORMAT - HER SÜTUN İÇİN AYRI ÖNERİ:
-{chr(10).join(f"- Öneri {i+1}: {{\"columns\": [\"{col}\"], \"method\": \"iqr_remove\" veya \"iqr_cap\" veya \"zscore_remove\" veya \"zscore_cap\", ...}}  ← SADECE {col} sütunu" for i, col in enumerate(columns_with_outliers)) if columns_with_outliers else "- Aykırı değer içeren sütun yok"}
+{chr(10).join(f"- Öneri {i+1}: {{\"columns\": [\"{col}\"], \"method\": \"iqr_cap\" veya \"zscore_cap\", ...}}  ← SADECE {col} sütunu" for i, col in enumerate(columns_with_outliers)) if columns_with_outliers else "- Aykırı değer içeren sütun yok"}
 
 ÖNEMLİ NOTLAR:
 - Her sütun için TAM 1 öneri oluştur (her öneride columns array'inde SADECE 1 sütun)
 - Method: MUTLAKA "detection_method_action" formatında olmalı:
-  * "iqr_remove" veya "iqr_cap"
-  * "zscore_remove" veya "zscore_cap"
-- SADECE "iqr", "zscore" gibi formatlar KULLANMA! MUTLAKA "_remove" veya "_cap" ekle!
+  * "iqr_cap" veya "zscore_cap"
+- SADECE "iqr", "zscore" gibi formatlar KULLANMA! MUTLAKA "_cap" ekle!
 - Eksik sütun bırakma, hepsini kapsa!
 - Bir öneride birden fazla sütun BİRLİKTE olmamalı
 

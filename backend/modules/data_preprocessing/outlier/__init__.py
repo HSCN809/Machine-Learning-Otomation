@@ -1,9 +1,7 @@
 """Outlier handling module for data preprocessing."""
 
 # Import processor functions
-from .processor import remove_outliers_iqr
 from .processor import cap_outliers_iqr
-from .processor import remove_outliers_zscore
 from .processor import cap_outliers_zscore
 from .processor import apply_outlier_method
 
@@ -17,9 +15,7 @@ from .analyzer import get_all_outlier_info
 
 __all__ = [
     # Processor functions
-    'remove_outliers_iqr',
     'cap_outliers_iqr',
-    'remove_outliers_zscore',
     'cap_outliers_zscore',
     'apply_outlier_method',
     # Analyzer functions

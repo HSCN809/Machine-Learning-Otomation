@@ -103,13 +103,13 @@ SUPPORTED_MISSING_VALUE_METHODS = {
 }
 
 
-def _parse_outlier_method(method: str) -> tuple[str, str]:
+def _parse_outlier_method(method: str) -> str:
     normalized = (method or "").strip().lower()
 
     if normalized == "iqr_cap":
-        return "iqr", "cap"
+        return "iqr"
     if normalized == "zscore_cap":
-        return "zscore", "cap"
+        return "zscore"
     raise HTTPException(status_code=400, detail=f"Unsupported outlier method: {method}")
 
 
@@ -119,7 +119,7 @@ def _analyze_outliers_for_columns(
     requested_columns: Optional[List[str]],
     threshold: Optional[float],
 ) -> dict[str, Any]:
-    detection_method, _ = _parse_outlier_method(method)
+    detection_method = _parse_outlier_method(method)
     source_columns = requested_columns or df.columns.tolist()
     numeric_columns = [
         col for col in source_columns if col in df.columns and np.issubdtype(df[col].dtype, np.number)
@@ -300,7 +300,7 @@ async def handle_outliers(
             requested_columns=request.columns,
             threshold=request.threshold,
         )
-        detection_method, action = _parse_outlier_method(request.method)
+        detection_method = _parse_outlier_method(request.method)
         detected_columns = analysis["detected_columns"]
 
         if not detected_columns:
@@ -324,14 +324,10 @@ async def handle_outliers(
             df,
             detected_columns,
             method=detection_method,
-            action=action,
             **process_kwargs,
         )
 
-        if action == "remove":
-            affected_rows = int(len(df) - len(processed_df))
-        else:
-            affected_rows = int(analysis.get("total_outliers", 0))
+        affected_rows = int(analysis.get("total_outliers", 0))
 
         session_manager.set_dataframe(session_id, processed_df)
         session_manager.add_history_snapshot(session_id, previous_df)
