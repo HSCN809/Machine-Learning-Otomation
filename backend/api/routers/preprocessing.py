@@ -39,15 +39,17 @@ class MissingValuesRequest(BaseModel):
 
 
 class OutliersRequest(BaseModel):
-    method: str  # iqr_cap
+    method: str  # iqr_cap, iqr_winsorize
     columns: List[str]
     threshold: Optional[float] = None
+    winsorize_percent: Optional[float] = Field(default=None, ge=0.1, le=49.9)
 
 
 class OutlierAnalysisRequest(BaseModel):
     method: str
     columns: Optional[List[str]] = None
     threshold: Optional[float] = None
+    winsorize_percent: Optional[float] = Field(default=None, ge=0.1, le=49.9)
 
 
 class EncodingRequest(BaseModel):
@@ -106,8 +108,10 @@ SUPPORTED_MISSING_VALUE_METHODS = {
 def _parse_outlier_method(method: str) -> str:
     normalized = (method or "").strip().lower()
 
-    if normalized == "iqr_cap":
-        return "iqr"
+    if normalized == "iqr":
+        return "iqr_cap"
+    if normalized in {"iqr_cap", "iqr_winsorize"}:
+        return normalized
     raise HTTPException(status_code=400, detail=f"Unsupported outlier method: {method}")
 
 
@@ -117,7 +121,7 @@ def _analyze_outliers_for_columns(
     requested_columns: Optional[List[str]],
     threshold: Optional[float],
 ) -> dict[str, Any]:
-    detection_method = _parse_outlier_method(method)
+    parsed_method = _parse_outlier_method(method)
     source_columns = requested_columns or df.columns.tolist()
     numeric_columns = [
         col for col in source_columns if col in df.columns and np.issubdtype(df[col].dtype, np.number)
@@ -125,7 +129,8 @@ def _analyze_outliers_for_columns(
 
     if not numeric_columns:
         return {
-            "detection_method": detection_method,
+            "detection_method": "iqr",
+            "outlier_method": parsed_method,
             "numeric_columns": [],
             "detected_columns": [],
             "column_stats": [],
@@ -138,14 +143,14 @@ def _analyze_outliers_for_columns(
     analysis_kwargs: dict[str, Any] = {}
     resolved_threshold: Optional[float] = threshold
 
-    if detection_method == "iqr":
+    if parsed_method in {"iqr_cap", "iqr_winsorize"}:
         resolved_threshold = 1.5 if resolved_threshold is None else resolved_threshold
         analysis_kwargs["factor"] = resolved_threshold
 
     analysis_result = analyze_outliers(
         df,
         columns=numeric_columns,
-        method=detection_method,
+        method="iqr",
         **analysis_kwargs,
     )
     outliers_by_column = analysis_result.get("outliers_by_column", {})
@@ -178,7 +183,8 @@ def _analyze_outliers_for_columns(
         )
 
     return {
-        "detection_method": detection_method,
+        "detection_method": "iqr",
+        "outlier_method": parsed_method,
         "numeric_columns": numeric_columns,
         "detected_columns": detected_columns,
         "column_stats": column_stats,
@@ -295,7 +301,7 @@ async def handle_outliers(
             requested_columns=request.columns,
             threshold=request.threshold,
         )
-        detection_method = _parse_outlier_method(request.method)
+        outlier_method = _parse_outlier_method(request.method)
         detected_columns = analysis["detected_columns"]
 
         if not detected_columns:
@@ -310,13 +316,17 @@ async def handle_outliers(
 
         process_kwargs: dict[str, Any] = {}
         resolved_threshold = analysis.get("resolved_threshold")
-        if detection_method == "iqr" and resolved_threshold is not None:
+        if outlier_method in {"iqr_cap", "iqr_winsorize"} and resolved_threshold is not None:
             process_kwargs["factor"] = resolved_threshold
+        if outlier_method == "iqr_winsorize":
+            process_kwargs["tail_percent"] = (
+                request.winsorize_percent if request.winsorize_percent is not None else 5.0
+            )
 
         processed_df = apply_outlier_method(
             df,
             detected_columns,
-            method=detection_method,
+            method=outlier_method,
             **process_kwargs,
         )
 
@@ -330,6 +340,7 @@ async def handle_outliers(
             "columns": detected_columns,
             "requested_columns": request.columns,
             "threshold": resolved_threshold,
+            "winsorize_percent": request.winsorize_percent if outlier_method == "iqr_winsorize" else None,
             "affected_rows": affected_rows,
         })
         
@@ -340,6 +351,7 @@ async def handle_outliers(
             "requested_columns": request.columns,
             "affected_rows": affected_rows,
             "remaining_rows": len(processed_df),
+            "winsorize_percent": request.winsorize_percent if outlier_method == "iqr_winsorize" else None,
         }
         
     except HTTPException:
@@ -370,6 +382,7 @@ async def analyze_outlier_columns(
             "success": True,
             "method": request.method,
             "detection_method": analysis["detection_method"],
+            "outlier_method": analysis["outlier_method"],
             "threshold": analysis.get("resolved_threshold"),
             "detected_columns": analysis["detected_columns"],
             "columns": analysis["column_stats"],

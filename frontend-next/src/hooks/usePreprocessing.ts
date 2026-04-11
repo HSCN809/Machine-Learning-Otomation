@@ -315,7 +315,8 @@ export function usePreprocessing(): UsePreprocessingReturn {
             await api.applyOutliers(
                 config.method,
                 config.columns,
-                config.threshold
+                config.threshold,
+                config.winsorizePercent
             );
 
             await refreshColumnsAndHistory();

@@ -328,6 +328,7 @@ export interface PreprocessingResponse {
     new_columns?: string[];
     new_column?: string;
     total_columns?: number;
+    winsorize_percent?: number;
 }
 
 export async function applyMissingValues(
@@ -344,12 +345,18 @@ export async function applyMissingValues(
 export async function applyOutliers(
     method: string,
     columns: string[],
-    threshold?: number
+    threshold?: number,
+    winsorizePercent?: number
 ): Promise<PreprocessingResponse> {
     return apiFetch('/api/preprocessing/outliers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ method, columns, threshold }),
+        body: JSON.stringify({
+            method,
+            columns,
+            threshold,
+            winsorize_percent: winsorizePercent,
+        }),
     });
 }
 
@@ -363,6 +370,7 @@ export interface OutlierAnalysisResponse {
     success: boolean;
     method: string;
     detection_method: string;
+    outlier_method: string;
     threshold?: number;
     detected_columns: string[];
     columns: OutlierColumnAnalysis[];
@@ -375,12 +383,18 @@ export interface OutlierAnalysisResponse {
 export async function analyzeOutliers(
     method: string,
     columns?: string[],
-    threshold?: number
+    threshold?: number,
+    winsorizePercent?: number
 ): Promise<OutlierAnalysisResponse> {
     return apiFetch('/api/preprocessing/outliers/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ method, columns, threshold }),
+        body: JSON.stringify({
+            method,
+            columns,
+            threshold,
+            winsorize_percent: winsorizePercent,
+        }),
     });
 }
 

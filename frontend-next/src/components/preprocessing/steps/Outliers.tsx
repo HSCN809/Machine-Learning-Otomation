@@ -15,13 +15,15 @@ interface OutliersProps {
 }
 
 const METHODS = [
-    { value: 'iqr_cap', label: 'IQR - Sınırla', icon: '📦', description: 'IQR yöntemi ile aykırı değerleri sınırla' },
+    { value: 'iqr_cap', label: 'IQR - Cap', icon: '📦', description: 'IQR sınırlarının dışındaki değerleri doğrudan IQR sınırına çek' },
+    { value: 'iqr_winsorize', label: 'IQR - Winsorize', icon: '📉', description: 'IQR ile aykırıyı tespit et, seçilen yüzdelik sınıra çek' },
 ];
 
 export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) {
     const [method, setMethod] = useState<OutlierMethod>('iqr_cap');
     const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
     const [threshold, setThreshold] = useState<string>('1.5');
+    const [winsorizePercent, setWinsorizePercent] = useState<string>('5');
     const [detectedColumns, setDetectedColumns] = useState<ColumnInfo[]>([]);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisError, setAnalysisError] = useState<string | null>(null);
@@ -45,11 +47,10 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
 
                 const thresholdValue = parseFloat(threshold) || undefined;
 
-                const result = await analyzeOutliers(
-                    method,
-                    numericColumns.map((column) => column.name),
-                    thresholdValue
-                );
+                const winsorizePercentValue =
+                    method === 'iqr_winsorize' ? parseFloat(winsorizePercent) || undefined : undefined;
+
+                const result = await analyzeOutliers(method, numericColumns.map((column) => column.name), thresholdValue, winsorizePercentValue);
 
                 const nextDetected: ColumnInfo[] = [];
                 for (const item of result.columns) {
@@ -89,18 +90,21 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
         };
 
         void run();
-    }, [method, threshold, numericColumns, numericColumnsByName]);
+    }, [method, threshold, winsorizePercent, numericColumns, numericColumnsByName]);
 
     const handleApply = async () => {
         const columnsToApply = selectedColumns;
         if (columnsToApply.length === 0) return;
 
         const parsedThreshold = parseFloat(threshold) || undefined;
+        const parsedWinsorizePercent =
+            method === 'iqr_winsorize' ? parseFloat(winsorizePercent) || undefined : undefined;
 
         await onApply({
             method,
             columns: columnsToApply,
             threshold: parsedThreshold,
+            winsorizePercent: parsedWinsorizePercent,
         });
 
         setSelectedColumns([]);
@@ -108,6 +112,7 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
 
     const canApply = selectedColumns.length > 0 && !isAnalyzing;
     const showThreshold = method.startsWith('iqr');
+    const showWinsorizePercent = method === 'iqr_winsorize';
     const showNoOutlierCard = !analysisError && !isAnalyzing && detectedColumns.length === 0;
 
     const handleMethodChange = (value: string) => {
@@ -117,6 +122,9 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
 
         if (nextMethod.startsWith('iqr')) {
             setThreshold('1.5');
+        }
+        if (nextMethod === 'iqr_winsorize') {
+            setWinsorizePercent('5');
         }
     };
 
@@ -150,6 +158,34 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
                     />
                     <p className="text-xs text-gray-500">
                         Varsayılan: 1.5 (standart IQR kuralı)
+                    </p>
+                </div>
+            )}
+
+            {showWinsorizePercent && (
+                <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-300">
+                        Winsorize Yüzdesi (iki kuyruk, %)
+                    </label>
+                    <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-3">
+                        <input
+                            type="range"
+                            min="1"
+                            max="20"
+                            step="1"
+                            value={winsorizePercent}
+                            onChange={(e) => setWinsorizePercent(e.target.value)}
+                            disabled={isLoading || isAnalyzing}
+                            className="h-2 w-full cursor-pointer accent-cyan-400"
+                        />
+                        <div className="mt-2 flex items-center justify-between text-xs text-gray-400">
+                            <span>%1</span>
+                            <span className="font-medium text-cyan-300">%{winsorizePercent} / kuyruk</span>
+                            <span>%20</span>
+                        </div>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                        Örnek: %5 seçilirse alt %5 ve üst %5 değerler winsorize edilir.
                     </p>
                 </div>
             )}

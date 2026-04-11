@@ -41,12 +41,14 @@ export interface MissingValueConfig {
 
 // Outliers
 export type OutlierMethod =
-    | 'iqr_cap';
+    | 'iqr_cap'
+    | 'iqr_winsorize';
 
 export interface OutlierConfig {
     method: OutlierMethod;
     columns: string[];
     threshold?: number;
+    winsorizePercent?: number;
 }
 
 // Encoding
