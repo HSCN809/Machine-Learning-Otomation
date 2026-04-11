@@ -107,7 +107,7 @@ def suggest_outlier_steps(
         numeric_columns: List of numeric column names
         categorical_columns: List of categorical column names
         analysis_level: Analysis level ('Temel', 'Orta', 'Gelişmiş')
-        detection_method: Detection method ('iqr', 'zscore')
+        detection_method: Detection method ('iqr')
         
     Returns:
         Dictionary with outlier handling suggestions

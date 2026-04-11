@@ -39,7 +39,7 @@ class MissingValuesRequest(BaseModel):
 
 
 class OutliersRequest(BaseModel):
-    method: str  # iqr_cap, zscore_cap
+    method: str  # iqr_cap
     columns: List[str]
     threshold: Optional[float] = None
 
@@ -108,8 +108,6 @@ def _parse_outlier_method(method: str) -> str:
 
     if normalized == "iqr_cap":
         return "iqr"
-    if normalized == "zscore_cap":
-        return "zscore"
     raise HTTPException(status_code=400, detail=f"Unsupported outlier method: {method}")
 
 
@@ -143,9 +141,6 @@ def _analyze_outliers_for_columns(
     if detection_method == "iqr":
         resolved_threshold = 1.5 if resolved_threshold is None else resolved_threshold
         analysis_kwargs["factor"] = resolved_threshold
-    elif detection_method == "zscore":
-        resolved_threshold = 3.0 if resolved_threshold is None else resolved_threshold
-        analysis_kwargs["threshold"] = resolved_threshold
 
     analysis_result = analyze_outliers(
         df,
@@ -317,8 +312,6 @@ async def handle_outliers(
         resolved_threshold = analysis.get("resolved_threshold")
         if detection_method == "iqr" and resolved_threshold is not None:
             process_kwargs["factor"] = resolved_threshold
-        elif detection_method == "zscore" and resolved_threshold is not None:
-            process_kwargs["threshold"] = resolved_threshold
 
         processed_df = apply_outlier_method(
             df,

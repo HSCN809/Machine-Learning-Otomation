@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useMemo, useState } from 'react';
 import { MethodSelector } from '../MethodSelector';
@@ -16,7 +16,6 @@ interface OutliersProps {
 
 const METHODS = [
     { value: 'iqr_cap', label: 'IQR - Sınırla', icon: '📦', description: 'IQR yöntemi ile aykırı değerleri sınırla' },
-    { value: 'zscore_cap', label: 'Z-Score - Sınırla', icon: '📊', description: 'Z-Score ile aykırı değerleri sınırla' },
 ];
 
 export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) {
@@ -44,9 +43,7 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
                 setIsAnalyzing(true);
                 setAnalysisError(null);
 
-                const thresholdValue = method.startsWith('iqr') || method.startsWith('zscore')
-                    ? parseFloat(threshold) || undefined
-                    : undefined;
+                const thresholdValue = parseFloat(threshold) || undefined;
 
                 const result = await analyzeOutliers(
                     method,
@@ -98,9 +95,7 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
         const columnsToApply = selectedColumns;
         if (columnsToApply.length === 0) return;
 
-        const parsedThreshold = method.startsWith('iqr') || method.startsWith('zscore')
-            ? parseFloat(threshold) || undefined
-            : undefined;
+        const parsedThreshold = parseFloat(threshold) || undefined;
 
         await onApply({
             method,
@@ -112,7 +107,7 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
     };
 
     const canApply = selectedColumns.length > 0 && !isAnalyzing;
-    const showThreshold = method.startsWith('iqr') || method.startsWith('zscore');
+    const showThreshold = method.startsWith('iqr');
     const showNoOutlierCard = !analysisError && !isAnalyzing && detectedColumns.length === 0;
 
     const handleMethodChange = (value: string) => {
@@ -122,8 +117,6 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
 
         if (nextMethod.startsWith('iqr')) {
             setThreshold('1.5');
-        } else if (nextMethod.startsWith('zscore')) {
-            setThreshold('3');
         }
     };
 
@@ -143,7 +136,7 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
             {showThreshold && (
                 <div className="space-y-2">
                     <label className="text-sm font-medium text-gray-300">
-                        Eşik Değeri {method.startsWith('iqr') ? '(IQR çarpanı)' : '(σ sayısı)'}
+                        Eşik Değeri (IQR çarpanı)
                     </label>
                     <input
                         type="number"
@@ -156,10 +149,7 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
                         className="w-full px-4 py-2 rounded-lg border border-white/10 bg-white/5 text-white placeholder:text-gray-500 outline-none focus:border-cyan-500/50"
                     />
                     <p className="text-xs text-gray-500">
-                        {method.startsWith('iqr')
-                            ? 'Varsayılan: 1.5 (standart IQR kuralı)'
-                            : 'Varsayılan: 3 (3 sigma kuralı)'
-                        }
+                        Varsayılan: 1.5 (standart IQR kuralı)
                     </p>
                 </div>
             )}
@@ -195,7 +185,7 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
                     }}
                 >
                     <p className="text-sm font-medium text-gray-200">Bilgi</p>
-                    <p className="mt-1 text-sm text-gray-300">Secilen yontemde aykiri deger tespit edilmedi.</p>
+                    <p className="mt-1 text-sm text-gray-300">Seçilen yöntemde aykırı değer tespit edilmedi.</p>
                 </div>
             )}
 

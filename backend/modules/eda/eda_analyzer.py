@@ -32,7 +32,7 @@ def detect_outliers(df: pd.DataFrame, column: str, method: str = 'iqr') -> Dict:
     Args:
         df: DataFrame to analyze
         column: Column name
-        method: Detection method ('iqr' or 'zscore')
+        method: Detection method ('iqr')
         
     Returns:
         Dictionary with outlier information
@@ -65,10 +65,6 @@ def detect_outliers(df: pd.DataFrame, column: str, method: str = 'iqr') -> Dict:
         outliers = col_data[(col_data < lower_bound) | (col_data > upper_bound)]
         outlier_indices = outliers.index.tolist()
         
-    elif method == 'zscore':
-        z_scores = np.abs(stats.zscore(col_data))
-        outlier_indices = col_data[z_scores > 3].index.tolist()
-        outliers = col_data.loc[outlier_indices]
     else:
         return {
             'outlier_count': 0,
@@ -486,4 +482,3 @@ def detect_temporal_patterns(df: pd.DataFrame, date_column: str, value_column: s
         
     except Exception as e:
         return {'error': str(e)}
-
