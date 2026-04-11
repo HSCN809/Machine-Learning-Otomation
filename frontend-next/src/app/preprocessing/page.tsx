@@ -50,11 +50,13 @@ export default function PreprocessingPage() {
     const {
         currentStep,
         completedSteps,
+        skippedSteps,
         history,
         columns,
         isLoading,
         goToStep,
         nextStep,
+        skipStep,
         prevStep,
         canGoNext,
         canGoPrev,
@@ -229,6 +231,7 @@ export default function PreprocessingPage() {
                                     steps={PREPROCESSING_STEPS}
                                     currentStep={currentStep}
                                     completedSteps={completedSteps}
+                                    skippedSteps={skippedSteps}
                                     onStepClick={goToStep}
                                     showActiveLine={false}
                                 />
@@ -254,7 +257,7 @@ export default function PreprocessingPage() {
                                         <StepNavigation
                                             onPrev={prevStep}
                                             onNext={nextStep}
-                                            onSkip={nextStep}
+                                            onSkip={skipStep}
                                             onReset={resetAll}
                                             canGoPrev={canGoPrev}
                                             canGoNext={canGoNext}

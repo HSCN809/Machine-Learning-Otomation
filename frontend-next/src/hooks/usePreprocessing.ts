@@ -87,6 +87,7 @@ interface UsePreprocessingReturn {
     // State
     currentStep: number;
     completedSteps: number[];
+    skippedSteps: number[];
     history: ProcessingHistory[];
     columns: ColumnInfo[];
     isLoading: boolean;
@@ -129,6 +130,7 @@ interface UsePreprocessingReturn {
     // Navigation
     goToStep: (step: number) => void;
     nextStep: () => void;
+    skipStep: () => void;
     prevStep: () => void;
     canGoNext: boolean;
     canGoPrev: boolean;
@@ -155,6 +157,7 @@ interface UsePreprocessingReturn {
 export function usePreprocessing(): UsePreprocessingReturn {
     const [currentStep, setCurrentStep] = useState(0);
     const [completedSteps, setCompletedSteps] = useState<number[]>([]);
+    const [skippedSteps, setSkippedSteps] = useState<number[]>([]);
     const [history, setHistory] = useState<ProcessingHistory[]>([]);
     const [columns, setColumns] = useState<ColumnInfo[]>([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -248,12 +251,23 @@ export function usePreprocessing(): UsePreprocessingReturn {
 
     const nextStep = useCallback(() => {
         if (currentStep < PREPROCESSING_STEPS.length - 1) {
+            setSkippedSteps((prev) => prev.filter((step) => step !== currentStep));
             if (!completedSteps.includes(currentStep)) {
                 setCompletedSteps(prev => [...prev, currentStep]);
             }
             setCurrentStep(prev => prev + 1);
         }
     }, [currentStep, completedSteps]);
+
+    const skipStep = useCallback(() => {
+        if (currentStep < PREPROCESSING_STEPS.length - 1) {
+            setCompletedSteps((prev) => prev.filter((step) => step !== currentStep));
+            if (!skippedSteps.includes(currentStep)) {
+                setSkippedSteps((prev) => [...prev, currentStep]);
+            }
+            setCurrentStep((prev) => prev + 1);
+        }
+    }, [currentStep, skippedSteps]);
 
     const prevStep = useCallback(() => {
         if (currentStep > 0) {
@@ -401,6 +415,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
             await api.resetPreprocessing();
             setHistory([]);
             setCompletedSteps([]);
+            setSkippedSteps([]);
             setCurrentStep(0);
             await loadColumns();
             setError(null);
@@ -424,12 +439,14 @@ export function usePreprocessing(): UsePreprocessingReturn {
     return {
         currentStep,
         completedSteps,
+        skippedSteps,
         history,
         columns,
         isLoading,
         error,
         goToStep,
         nextStep,
+        skipStep,
         prevStep,
         canGoNext,
         canGoPrev,

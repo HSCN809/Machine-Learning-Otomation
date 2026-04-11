@@ -131,6 +131,7 @@ export type StepStatus = 'pending' | 'current' | 'completed' | 'skipped';
 export interface PreprocessingState {
     currentStep: number;
     completedSteps: number[];
+    skippedSteps: number[];
     history: ProcessingHistory[];
     originalData: Record<string, unknown>[] | null;
     processedData: Record<string, unknown>[] | null;

@@ -3,12 +3,13 @@
 import { cn } from '@/lib/utils';
 import { theme } from '@/styles/theme';
 import { PreprocessingStep, StepStatus } from '@/types/preprocessing';
-import { Check } from 'lucide-react';
+import { Check, SkipForward } from 'lucide-react';
 
 interface StepProgressProps {
     steps: PreprocessingStep[];
     currentStep: number;
     completedSteps: number[];
+    skippedSteps?: number[];
     onStepClick?: (step: number) => void;
     showActiveLine?: boolean;
 }
@@ -17,11 +18,13 @@ export function StepProgress({
     steps,
     currentStep,
     completedSteps,
+    skippedSteps = [],
     onStepClick,
     showActiveLine = true,
 }: StepProgressProps) {
     const getStepStatus = (index: number): StepStatus => {
         if (completedSteps.includes(index)) return 'completed';
+        if (skippedSteps.includes(index)) return 'skipped';
         if (index === currentStep) return 'current';
         return 'pending';
     };
@@ -45,7 +48,7 @@ export function StepProgress({
 
                 {steps.map((step, index) => {
                     const status = getStepStatus(index);
-                    const isClickable = status === 'completed' || index <= currentStep;
+                    const isClickable = status === 'completed' || status === 'skipped' || index <= currentStep;
 
                     return (
                         <div
@@ -60,6 +63,7 @@ export function StepProgress({
                                     'w-12 h-12 rounded-full flex items-center justify-center text-lg transition-all duration-300',
                                     'border-2',
                                     status === 'completed' && 'border-green-500 bg-green-500/20',
+                                    status === 'skipped' && 'border-amber-500 bg-amber-500/15',
                                     status === 'current' && 'border-cyan-500 bg-cyan-500/20',
                                     status === 'pending' && 'border-white/20 bg-white/5',
                                     isClickable && 'cursor-pointer hover:scale-110',
@@ -70,11 +74,15 @@ export function StepProgress({
                                         ? { boxShadow: theme.glow.cyan }
                                         : status === 'completed'
                                             ? { boxShadow: theme.glow.green }
+                                            : status === 'skipped'
+                                                ? { boxShadow: '0 0 20px rgba(245, 158, 11, 0.25)' }
                                             : undefined
                                 }
                             >
                                 {status === 'completed' ? (
                                     <Check className="w-6 h-6 text-green-400" />
+                                ) : status === 'skipped' ? (
+                                    <SkipForward className="w-5 h-5 text-amber-400" />
                                 ) : (
                                     <span>{step.icon}</span>
                                 )}
@@ -85,6 +93,7 @@ export function StepProgress({
                                     'mt-2 text-sm font-medium text-center',
                                     status === 'current' && 'text-cyan-400',
                                     status === 'completed' && 'text-green-400',
+                                    status === 'skipped' && 'text-amber-400',
                                     status === 'pending' && 'text-gray-500'
                                 )}
                             >
