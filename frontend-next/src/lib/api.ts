@@ -367,6 +367,9 @@ export interface OutlierAnalysisResponse {
     detected_columns: string[];
     columns: OutlierColumnAnalysis[];
     total_outliers: number;
+    total_rows: number;
+    outlier_row_count: number;
+    outlier_row_percentage: number;
 }
 
 export async function analyzeOutliers(

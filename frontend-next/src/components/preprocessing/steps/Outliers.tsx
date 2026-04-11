@@ -26,6 +26,11 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
     const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
     const [threshold, setThreshold] = useState<string>('1.5');
     const [detectedColumns, setDetectedColumns] = useState<ColumnInfo[]>([]);
+    const [analysisSummary, setAnalysisSummary] = useState<{
+        totalRows: number;
+        outlierRowCount: number;
+        outlierRowPercentage: number;
+    } | null>(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisError, setAnalysisError] = useState<string | null>(null);
 
@@ -39,6 +44,7 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
             if (numericColumns.length === 0) {
                 setDetectedColumns([]);
                 setSelectedColumns([]);
+                setAnalysisSummary(null);
                 return;
             }
 
@@ -55,6 +61,11 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
                     numericColumns.map((column) => column.name),
                     thresholdValue
                 );
+                setAnalysisSummary({
+                    totalRows: result.total_rows,
+                    outlierRowCount: result.outlier_row_count,
+                    outlierRowPercentage: result.outlier_row_percentage,
+                });
 
                 const nextDetected: ColumnInfo[] = [];
                 for (const item of result.columns) {
@@ -80,6 +91,7 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
                 if (isSessionRequiredError(err)) {
                     setDetectedColumns([]);
                     setSelectedColumns([]);
+                    setAnalysisSummary(null);
                     setAnalysisError(null);
                     return;
                 }
@@ -87,6 +99,7 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
                 console.error('Outlier analysis error:', err);
                 setDetectedColumns([]);
                 setSelectedColumns([]);
+                setAnalysisSummary(null);
                 setAnalysisError(err instanceof Error ? err.message : 'Aykırı değer analizi sırasında hata oluştu');
             } finally {
                 setIsAnalyzing(false);
@@ -114,6 +127,7 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
 
     const canApply = selectedColumns.length > 0 && !isAnalyzing;
     const showThreshold = method.startsWith('iqr') || method.startsWith('zscore');
+    const isRowBasedMethod = method === 'isolation_forest' || method === 'lof';
 
     const handleMethodChange = (value: string) => {
         const nextMethod = value as OutlierMethod;
@@ -171,9 +185,15 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
                 onChange={setSelectedColumns}
                 label="Uygulanacak Sayısal Sütunlar"
                 showMissing={false}
-                showOutliers
+                showOutliers={!isRowBasedMethod}
                 disabled={isLoading || isAnalyzing}
             />
+            {!analysisError && !isAnalyzing && isRowBasedMethod && analysisSummary && (
+                <p className="text-xs text-cyan-300">
+                    Global anomalik satır oranı: %{analysisSummary.outlierRowPercentage.toFixed(2)}
+                    {' '}({analysisSummary.outlierRowCount}/{analysisSummary.totalRows})
+                </p>
+            )}
 
             {analysisError && (
                 <p className="text-xs text-red-400">{analysisError}</p>

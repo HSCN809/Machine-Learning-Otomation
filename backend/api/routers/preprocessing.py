@@ -137,6 +137,9 @@ def _analyze_outliers_for_columns(
             "detected_columns": [],
             "column_stats": [],
             "total_outliers": 0,
+            "total_rows": len(df),
+            "outlier_row_count": 0,
+            "outlier_row_percentage": 0.0,
         }
 
     analysis_kwargs: dict[str, Any] = {}
@@ -161,6 +164,15 @@ def _analyze_outliers_for_columns(
         **analysis_kwargs,
     )
     outliers_by_column = analysis_result.get("outliers_by_column", {})
+    outlier_rows = analysis_result.get("outlier_rows", set())
+    if isinstance(outlier_rows, set):
+        outlier_row_count = len(outlier_rows)
+    elif isinstance(outlier_rows, (list, tuple)):
+        outlier_row_count = len(outlier_rows)
+    else:
+        outlier_row_count = 0
+    total_rows = len(df)
+    outlier_row_percentage = round((outlier_row_count / total_rows * 100), 2) if total_rows > 0 else 0.0
 
     column_stats: list[dict[str, Any]] = []
     detected_columns: list[str] = []
@@ -186,6 +198,9 @@ def _analyze_outliers_for_columns(
         "detected_columns": detected_columns,
         "column_stats": column_stats,
         "total_outliers": int(analysis_result.get("total_outliers", 0)),
+        "total_rows": total_rows,
+        "outlier_row_count": outlier_row_count,
+        "outlier_row_percentage": outlier_row_percentage,
         "resolved_threshold": resolved_threshold,
     }
 
@@ -382,6 +397,9 @@ async def analyze_outlier_columns(
             "detected_columns": analysis["detected_columns"],
             "columns": analysis["column_stats"],
             "total_outliers": analysis["total_outliers"],
+            "total_rows": analysis["total_rows"],
+            "outlier_row_count": analysis["outlier_row_count"],
+            "outlier_row_percentage": analysis["outlier_row_percentage"],
         }
     except HTTPException:
         raise
