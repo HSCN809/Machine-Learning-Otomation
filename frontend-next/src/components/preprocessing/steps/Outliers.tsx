@@ -17,7 +17,6 @@ interface OutliersProps {
 const METHODS = [
     { value: 'iqr_cap', label: 'IQR - Sınırla', icon: '📦', description: 'IQR yöntemi ile aykırı değerleri sınırla' },
     { value: 'zscore_cap', label: 'Z-Score - Sınırla', icon: '📊', description: 'Z-Score ile aykırı değerleri sınırla' },
-    { value: 'lof', label: 'LOF', icon: '🎯', description: 'Local Outlier Factor algoritması' },
 ];
 
 export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) {
@@ -25,11 +24,6 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
     const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
     const [threshold, setThreshold] = useState<string>('1.5');
     const [detectedColumns, setDetectedColumns] = useState<ColumnInfo[]>([]);
-    const [analysisSummary, setAnalysisSummary] = useState<{
-        totalRows: number;
-        outlierRowCount: number;
-        outlierRowPercentage: number;
-    } | null>(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisError, setAnalysisError] = useState<string | null>(null);
 
@@ -43,7 +37,6 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
             if (numericColumns.length === 0) {
                 setDetectedColumns([]);
                 setSelectedColumns([]);
-                setAnalysisSummary(null);
                 return;
             }
 
@@ -60,11 +53,6 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
                     numericColumns.map((column) => column.name),
                     thresholdValue
                 );
-                setAnalysisSummary({
-                    totalRows: result.total_rows,
-                    outlierRowCount: result.outlier_row_count,
-                    outlierRowPercentage: result.outlier_row_percentage,
-                });
 
                 const nextDetected: ColumnInfo[] = [];
                 for (const item of result.columns) {
@@ -90,7 +78,6 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
                 if (isSessionRequiredError(err)) {
                     setDetectedColumns([]);
                     setSelectedColumns([]);
-                    setAnalysisSummary(null);
                     setAnalysisError(null);
                     return;
                 }
@@ -98,7 +85,6 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
                 console.error('Outlier analysis error:', err);
                 setDetectedColumns([]);
                 setSelectedColumns([]);
-                setAnalysisSummary(null);
                 setAnalysisError(err instanceof Error ? err.message : 'Aykırı değer analizi sırasında hata oluştu');
             } finally {
                 setIsAnalyzing(false);
@@ -108,12 +94,8 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
         void run();
     }, [method, threshold, numericColumns, numericColumnsByName]);
 
-    const isRowBasedMethod = method === 'lof';
-
     const handleApply = async () => {
-        const columnsToApply = isRowBasedMethod
-            ? numericColumns.map((column) => column.name)
-            : selectedColumns;
+        const columnsToApply = selectedColumns;
         if (columnsToApply.length === 0) return;
 
         const parsedThreshold = method.startsWith('iqr') || method.startsWith('zscore')
@@ -129,9 +111,7 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
         setSelectedColumns([]);
     };
 
-    const canApply = isRowBasedMethod
-        ? detectedColumns.length > 0 && !isAnalyzing
-        : selectedColumns.length > 0 && !isAnalyzing;
+    const canApply = selectedColumns.length > 0 && !isAnalyzing;
     const showThreshold = method.startsWith('iqr') || method.startsWith('zscore');
     const showNoOutlierCard = !analysisError && !isAnalyzing && detectedColumns.length === 0;
 
@@ -184,7 +164,7 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
                 </div>
             )}
 
-            {!isRowBasedMethod && !showNoOutlierCard && (
+            {!showNoOutlierCard && (
                 <ColumnSelector
                     columns={detectedColumns}
                     selectedColumns={selectedColumns}
@@ -194,20 +174,6 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
                     showOutliers
                     disabled={isLoading || isAnalyzing}
                 />
-            )}
-            {!analysisError && !isAnalyzing && isRowBasedMethod && analysisSummary && !showNoOutlierCard && (
-                <div
-                    className="rounded-xl border p-4"
-                    style={{
-                        borderColor: 'rgba(34, 211, 238, 0.35)',
-                        background: 'rgba(6, 182, 212, 0.08)',
-                    }}
-                >
-                    <p className="text-sm font-medium text-cyan-300">Global anomalik satır oranı</p>
-                    <p className="mt-1 text-base text-cyan-200">
-                        %{analysisSummary.outlierRowPercentage.toFixed(2)} ({analysisSummary.outlierRowCount}/{analysisSummary.totalRows})
-                    </p>
-                </div>
             )}
 
             {analysisError && (

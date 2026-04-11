@@ -67,12 +67,10 @@ def analyze_outliers(df: pd.DataFrame, columns: Optional[List[str]] = None, meth
     Args:
         df: Input DataFrame
         columns: List of column names to analyze (None for all numeric columns)
-        method: Detection method ('iqr', 'zscore', 'lof')
+        method: Detection method ('iqr', 'zscore')
         **kwargs: Additional parameters for the method
             - factor: For IQR method (default: 1.5)
             - threshold: For Z-score method (default: 3.0)
-            - contamination: For LOF (default: 0.1)
-            - n_neighbors: For LOF method (default: 20)
     
     Returns:
         Dictionary with outlier information
@@ -105,10 +103,8 @@ def analyze_outliers(df: pd.DataFrame, columns: Optional[List[str]] = None, meth
         return _analyze_outliers_iqr(df, columns, kwargs.get('factor', 1.5))
     elif method == 'zscore':
         return _analyze_outliers_zscore(df, columns, kwargs.get('threshold', 3.0))
-    elif method == 'lof':
-        return _analyze_outliers_lof(df, columns, kwargs.get('contamination', 0.1), kwargs.get('n_neighbors', 20))
     else:
-        raise ValueError(f"Unknown method: {method}. Must be 'iqr', 'zscore', or 'lof'")
+        raise ValueError(f"Unknown method: {method}. Must be 'iqr' or 'zscore'")
 
 
 def _analyze_outliers_iqr(df: pd.DataFrame, columns: List[str], factor: float = 1.5) -> Dict:
@@ -283,57 +279,6 @@ def _analyze_outliers_zscore(df: pd.DataFrame, columns: List[str], threshold: fl
     return outlier_info
 
 
-def _analyze_outliers_lof(df: pd.DataFrame, columns: List[str], contamination: float = 0.1, n_neighbors: int = 20) -> Dict:
-    """Analyze outliers using Local Outlier Factor method."""
-    from sklearn.neighbors import LocalOutlierFactor
-    
-    outlier_info = {
-        'method': 'LOF',
-        'contamination': contamination,
-        'n_neighbors': n_neighbors,
-        'outliers_by_column': {},
-        'total_outliers': 0,
-        'outlier_rows': set()
-    }
-    
-    total_rows = len(df)
-    
-    numeric_cols = [col for col in columns if col in df.columns and pd.api.types.is_numeric_dtype(df[col])]
-    
-    if not numeric_cols:
-        outlier_info['total_outlier_percentage'] = 0.0
-        return outlier_info
-    
-    try:
-        lof = LocalOutlierFactor(contamination=contamination, n_neighbors=n_neighbors)
-        outliers = lof.fit_predict(df[numeric_cols])
-        outlier_indices = df[outliers == -1].index.tolist()
-        
-        outlier_info['outlier_rows'] = set(outlier_indices)
-        
-        # Calculate per-column statistics (percentage based on rows, not cells)
-        for col in numeric_cols:
-            col_outliers = df.loc[outlier_indices, col] if outlier_indices else pd.Series()
-            outlier_count = len(col_outliers)
-            outlier_info['outliers_by_column'][col] = {
-                'count': outlier_count,
-                'percentage': (outlier_count / total_rows * 100) if total_rows > 0 else 0.0,
-                'outlier_indices': outlier_indices
-            }
-        
-        # Calculate total outlier cells (sum of all outlier counts across columns) for total percentage
-        # Use ALL numeric columns in dataframe, not just the ones in columns parameter
-        all_numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-        total_cells = total_rows * len(all_numeric_cols) if all_numeric_cols else total_rows
-        total_outlier_cells = sum(info['count'] for info in outlier_info['outliers_by_column'].values())
-        outlier_info['total_outliers'] = total_outlier_cells
-        outlier_info['total_outlier_percentage'] = (total_outlier_cells / total_cells * 100) if total_cells > 0 else 0.0
-    except Exception as e:
-        outlier_info['total_outlier_percentage'] = 0.0
-    
-    return outlier_info
-
-
 def analyze_outliers_iqr(df: pd.DataFrame, columns: Optional[List[str]] = None, factor: float = 1.5) -> Dict:
     """Analyze outliers using IQR method."""
     if columns is None:
@@ -348,13 +293,6 @@ def analyze_outliers_zscore(df: pd.DataFrame, columns: Optional[List[str]] = Non
     return _analyze_outliers_zscore(df, columns, threshold)
 
 
-def analyze_outliers_lof(df: pd.DataFrame, columns: Optional[List[str]] = None, contamination: float = 0.1, n_neighbors: int = 20) -> Dict:
-    """Analyze outliers using Local Outlier Factor method."""
-    if columns is None:
-        columns = df.select_dtypes(include=[np.number]).columns.tolist()
-    return _analyze_outliers_lof(df, columns, contamination, n_neighbors)
-
-
 def get_all_outlier_info(df: pd.DataFrame, columns: Optional[List[str]] = None, methods: Optional[List[str]] = None) -> Dict:
     """
     Get comprehensive outlier information using multiple methods.
@@ -362,14 +300,14 @@ def get_all_outlier_info(df: pd.DataFrame, columns: Optional[List[str]] = None, 
     Args:
         df: Input DataFrame
         columns: List of columns to analyze (None for all numeric columns)
-        methods: List of methods to use ('iqr', 'zscore', 'lof')
+        methods: List of methods to use ('iqr', 'zscore')
                  If None, uses all methods
     
     Returns:
         Dictionary with outlier information for each method
     """
     if methods is None:
-        methods = ['iqr', 'zscore', 'lof']
+        methods = ['iqr', 'zscore']
     
     if columns is None:
         columns = df.select_dtypes(include=[np.number]).columns.tolist()
@@ -382,8 +320,6 @@ def get_all_outlier_info(df: pd.DataFrame, columns: Optional[List[str]] = None, 
                 results['iqr'] = analyze_outliers_iqr(df, columns)
             elif method == 'zscore':
                 results['zscore'] = analyze_outliers_zscore(df, columns)
-            elif method == 'lof':
-                results['lof'] = analyze_outliers_lof(df, columns)
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)

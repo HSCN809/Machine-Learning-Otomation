@@ -39,7 +39,7 @@ class MissingValuesRequest(BaseModel):
 
 
 class OutliersRequest(BaseModel):
-    method: str  # iqr_cap, zscore_cap, lof
+    method: str  # iqr_cap, zscore_cap
     columns: List[str]
     threshold: Optional[float] = None
 
@@ -110,9 +110,6 @@ def _parse_outlier_method(method: str) -> tuple[str, str]:
         return "iqr", "cap"
     if normalized == "zscore_cap":
         return "zscore", "cap"
-    if normalized == "lof":
-        return "lof", "remove"
-
     raise HTTPException(status_code=400, detail=f"Unsupported outlier method: {method}")
 
 
@@ -149,11 +146,6 @@ def _analyze_outliers_for_columns(
     elif detection_method == "zscore":
         resolved_threshold = 3.0 if resolved_threshold is None else resolved_threshold
         analysis_kwargs["threshold"] = resolved_threshold
-    elif detection_method == "lof":
-        resolved_threshold = 0.1 if resolved_threshold is None else resolved_threshold
-        if resolved_threshold <= 0 or resolved_threshold >= 0.5:
-            raise HTTPException(status_code=400, detail="Threshold must be between 0 and 0.5 for this method")
-        analysis_kwargs["contamination"] = resolved_threshold
 
     analysis_result = analyze_outliers(
         df,
@@ -327,8 +319,6 @@ async def handle_outliers(
             process_kwargs["factor"] = resolved_threshold
         elif detection_method == "zscore" and resolved_threshold is not None:
             process_kwargs["threshold"] = resolved_threshold
-        elif detection_method == "lof" and resolved_threshold is not None:
-            process_kwargs["contamination"] = resolved_threshold
 
         processed_df = apply_outlier_method(
             df,

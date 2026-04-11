@@ -42,8 +42,7 @@ export interface MissingValueConfig {
 // Outliers
 export type OutlierMethod =
     | 'iqr_cap'
-    | 'zscore_cap'
-    | 'lof';
+    | 'zscore_cap';
 
 export interface OutlierConfig {
     method: OutlierMethod;
