@@ -134,6 +134,7 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
         ? detectedColumns.length > 0 && !isAnalyzing
         : selectedColumns.length > 0 && !isAnalyzing;
     const showThreshold = method.startsWith('iqr') || method.startsWith('zscore');
+    const showNoOutlierCard = !analysisError && !isAnalyzing && detectedColumns.length === 0;
 
     const handleMethodChange = (value: string) => {
         const nextMethod = value as OutlierMethod;
@@ -184,7 +185,7 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
                 </div>
             )}
 
-            {!isRowBasedMethod && (
+            {!isRowBasedMethod && !showNoOutlierCard && (
                 <ColumnSelector
                     columns={detectedColumns}
                     selectedColumns={selectedColumns}
@@ -195,7 +196,7 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
                     disabled={isLoading || isAnalyzing}
                 />
             )}
-            {!analysisError && !isAnalyzing && isRowBasedMethod && analysisSummary && (
+            {!analysisError && !isAnalyzing && isRowBasedMethod && analysisSummary && !showNoOutlierCard && (
                 <div
                     className="rounded-xl border p-4"
                     style={{
@@ -216,8 +217,21 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
             {!analysisError && isAnalyzing && (
                 <p className="text-xs text-cyan-300">Yönteme göre aykırı sütunlar analiz ediliyor...</p>
             )}
-            {!analysisError && !isAnalyzing && detectedColumns.length === 0 && (
+            {!analysisError && !isAnalyzing && detectedColumns.length === 0 && false && (
                 <p className="text-xs text-gray-400">Seçilen yöntemde aykırı değer tespit edilen sütun bulunamadı.</p>
+            )}
+
+            {showNoOutlierCard && (
+                <div
+                    className="rounded-xl border p-4"
+                    style={{
+                        borderColor: 'rgba(148, 163, 184, 0.35)',
+                        background: 'rgba(148, 163, 184, 0.08)',
+                    }}
+                >
+                    <p className="text-sm font-medium text-gray-200">Bilgi</p>
+                    <p className="mt-1 text-sm text-gray-300">Secilen yontemde aykiri deger tespit edilmedi.</p>
+                </div>
             )}
 
             {/* Apply button */}
