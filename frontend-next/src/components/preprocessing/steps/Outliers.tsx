@@ -132,19 +132,6 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
     return (
         <div className="space-y-6">
 
-            {/* Info */}
-            <div
-                className="p-4 rounded-xl border"
-                style={{
-                    borderColor: `${theme.colors.status.info}50`,
-                    background: `${theme.colors.status.info}10`,
-                }}
-            >
-                <p className="text-blue-400">
-                    ℹ️ Aykırı değerler veri kalitesini ve model performansını etkileyebilir.
-                </p>
-            </div>
-
             {/* Method selector */}
             <MethodSelector
                 label="Aykırı Değer Yöntemi"
