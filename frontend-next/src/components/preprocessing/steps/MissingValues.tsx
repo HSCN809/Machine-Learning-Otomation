@@ -24,6 +24,28 @@ const METHODS = [
     { value: 'drop_columns', label: 'Sütunları Sil', icon: '❌', description: 'Eksik değerli sütunları kaldır' },
 ];
 
+const METHOD_DETAILS: Record<MissingValueMethod, string> = {
+    fill_mean: 'Ortalama ile doldurma, eksik sayısal gözlemleri sütunun aritmetik ortalamasıyla tamamlar. Dağılımı çok bozuk olmayan verilerde pratik ve hızlı bir yaklaşımdır.',
+    fill_median: 'Medyan ile doldurma, eksik değerleri ortadaki temsil değeriyle tamamlar. Aykırı değerlerin etkisini ortalamaya göre daha iyi sınırladığı için dayanıklıdır.',
+    fill_mode: 'Mod ile doldurma, eksik kayıtları sütunda en sık görülen kategori veya değerle tamamlar. Özellikle kategorik alanlarda veri yapısını korumak için sık kullanılır.',
+    fill_constant: 'Sabit değerle doldurma, tüm eksik gözlemleri önceden belirlenen tek bir değerle tamamlar. Bilinmeyen veya varsayılan bir işaret bırakmak istediğiniz durumlarda uygundur.',
+    fill_ffill: 'Forward fill, eksik kaydı kendisinden önce gelen son geçerli değerle doldurur. Zaman serisi veya sıralı kayıtlarda süreklilik varsayımı yapıldığında kullanışlıdır.',
+    fill_bfill: 'Backward fill, eksik değeri kendisinden sonra gelen ilk geçerli gözlemle tamamlar. Gelecek kaydın referans kabul edildiği sıralı veri senaryolarında tercih edilebilir.',
+    drop_rows: 'Satır silme, eksik gözlem içeren kayıtları veri setinden tamamen çıkarır. Eksik oranı düşükse temiz bir veri seti sağlar ancak veri kaybı oluşturur.',
+    drop_columns: 'Sütun silme, eksik değer içeren özellikleri tamamen kaldırır. Bilgi değeri düşük veya eksik oranı çok yüksek alanlarda modeli sadeleştirmek için kullanılabilir.',
+};
+
+const METHOD_DETAILS_MARKDOWN: Record<MissingValueMethod, string> = {
+    fill_mean: '**Ne yapar?** Eksik sayısal gözlemleri sütunun aritmetik ortalamasıyla tamamlar.\n\n**Ne zaman uygundur?** Dağılımı çok bozuk olmayan verilerde pratik ve hızlı bir yaklaşımdır.',
+    fill_median: '**Ne yapar?** Eksik değerleri ortadaki temsil değeriyle tamamlar.\n\n**Ne zaman uygundur?** Aykırı değerlerin etkisini ortalamaya göre daha iyi sınırladığı için dayanıklı bir seçenektir.',
+    fill_mode: '**Ne yapar?** Eksik kayıtları sütunda en sık görülen kategori veya değerle tamamlar.\n\n**Ne zaman uygundur?** Özellikle kategorik alanlarda veri yapısını korumak için sık kullanılır.',
+    fill_constant: '**Ne yapar?** Tüm eksik gözlemleri önceden belirlenen tek bir değerle tamamlar.\n\n**Ne zaman uygundur?** Bilinmeyen veya varsayılan bir işaret bırakmak istediğiniz durumlarda kullanışlıdır.',
+    fill_ffill: '**Ne yapar?** Eksik kaydı kendisinden önce gelen son geçerli değerle doldurur.\n\n**Ne zaman uygundur?** Zaman serisi veya sıralı kayıtlarda süreklilik varsayımı yapıldığında tercih edilir.',
+    fill_bfill: '**Ne yapar?** Eksik değeri kendisinden sonra gelen ilk geçerli gözlemle tamamlar.\n\n**Ne zaman uygundur?** Gelecek kaydın referans kabul edildiği sıralı veri senaryolarında kullanılabilir.',
+    drop_rows: '**Ne yapar?** Eksik gözlem içeren kayıtları veri setinden tamamen çıkarır.\n\n**Ne zaman uygundur?** Eksik oranı düşükse temiz bir veri seti sağlar ancak veri kaybı oluşturur.',
+    drop_columns: '**Ne yapar?** Eksik değer içeren özellikleri tamamen kaldırır.\n\n**Ne zaman uygundur?** Bilgi değeri düşük veya eksik oranı çok yüksek alanlarda modeli sadeleştirmek için kullanılabilir.',
+};
+
 export function MissingValues({ columnsWithMissing, onApply, isLoading }: MissingValuesProps) {
     const [method, setMethod] = useState<MissingValueMethod>('fill_mean');
     const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
@@ -75,7 +97,12 @@ export function MissingValues({ columnsWithMissing, onApply, isLoading }: Missin
             {/* Method selector */}
             <MethodSelector
                 label="Doldurma Yöntemi"
-                options={METHODS}
+                options={METHODS.map((option) => ({
+                    ...option,
+                    details:
+                        METHOD_DETAILS_MARKDOWN[option.value as MissingValueMethod]
+                        ?? METHOD_DETAILS[option.value as MissingValueMethod],
+                }))}
                 value={method}
                 onChange={(v) => setMethod(v as MissingValueMethod)}
                 disabled={isLoading}
