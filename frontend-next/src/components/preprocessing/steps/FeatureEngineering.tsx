@@ -340,17 +340,6 @@ export function FeatureEngineering({ columns, numericColumns, onApply, isLoading
 
     return (
         <div className="space-y-6">
-            <div
-                className="rounded-xl border p-4"
-                style={{
-                    borderColor: `${theme.colors.status.info}50`,
-                    background: `${theme.colors.status.info}10`,
-                }}
-            >
-                <p className="text-blue-400">
-                    Sekmeli yapı ile feature engineering işlemlerini operasyon bazında yönetebilirsiniz.
-                </p>
-            </div>
 
             <PreprocessingTabs tabs={FEATURE_TABS} value={activeTab} onChange={setActiveTab} disabled={isLoading} />
 
