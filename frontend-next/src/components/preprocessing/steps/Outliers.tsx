@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { MethodSelector } from '../MethodSelector';
 import { ColumnSelector } from '../ColumnSelector';
 import { ColumnInfo, OutlierConfig, OutlierMethod } from '@/types/preprocessing';
-import { Loader2 } from 'lucide-react';
+import { Info, Loader2, X } from 'lucide-react';
 import { theme } from '@/styles/theme';
 import { analyzeOutliers, isSessionRequiredError } from '@/lib/api';
 
@@ -19,6 +19,52 @@ const METHODS = [
     { value: 'iqr_winsorize', label: 'IQR - Winsorize', icon: '📉', description: 'IQR ile aykırıyı tespit et, seçilen yüzdelik sınıra çek' },
 ];
 
+const METHOD_DETAILS_MARKDOWN: Record<OutlierMethod, string> = {
+    iqr_cap:
+        '**Ne yapar?** IQR sınırlarının dışındaki değerleri doğrudan alt/üst IQR sınırına çeker.\n\n**Ne zaman uygundur?** Uç değerleri silmeden hızlı ve stabil biçimde sınırlamak istediğinizde tercih edilir.',
+    iqr_winsorize:
+        '**Ne yapar?** IQR ile aykırıları belirler, ardından seçilen kuyruk yüzdesine karşılık gelen quantile sınırlarına çeker.\n\n**Ne zaman uygundur?** Aykırı tespiti ile sıkıştırma seviyesini ayrı kontrol etmek istediğinizde daha esnek sonuç verir.',
+};
+
+type InfoKey = 'threshold' | 'winsorize';
+
+const INFO_CONTENT: Record<InfoKey, { title: string; details: string }> = {
+    threshold: {
+        title: 'Eşik Değeri (IQR çarpanı)',
+        details:
+            '**Ne yapar?** IQR çarpanı, aykırı sınırlarını `Q1 - k×IQR` ve `Q3 + k×IQR` formülüyle belirler.\n\n**Nasıl etkiler?** Çarpan arttıkça sınırlar genişler ve daha az kayıt aykırı kabul edilir.',
+    },
+    winsorize: {
+        title: 'Winsorize Yüzdesi',
+        details:
+            '**Ne yapar?** Bu yüzde, alt ve üst kuyrukta ayrı ayrı kaç verinin winsorize sınırına çekileceğini belirler.\n\n**Örnek:** `%5` seçildiğinde alt `%5` ve üst `%5` değerler sınır quantile değerlerine çekilir.',
+    },
+};
+
+function renderInlineMarkdown(text: string) {
+    const parts = text.split(/(\*\*.*?\*\*)/g);
+
+    return parts.map((part, index) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+            return (
+                <strong key={`${part}-${index}`} className="font-semibold text-white">
+                    {part.slice(2, -2)}
+                </strong>
+            );
+        }
+
+        return <span key={`${part}-${index}`}>{part}</span>;
+    });
+}
+
+function renderMarkdown(content: string) {
+    return content.split(/\n\s*\n/).map((paragraph, index) => (
+        <p key={`${paragraph}-${index}`} className="text-sm leading-6 text-gray-300">
+            {renderInlineMarkdown(paragraph)}
+        </p>
+    ));
+}
+
 export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) {
     const [method, setMethod] = useState<OutlierMethod>('iqr_cap');
     const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
@@ -27,6 +73,7 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
     const [detectedColumns, setDetectedColumns] = useState<ColumnInfo[]>([]);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisError, setAnalysisError] = useState<string | null>(null);
+    const [activeInfo, setActiveInfo] = useState<InfoKey | null>(null);
 
     const numericColumnsByName = useMemo(
         () => new Map(numericColumns.map((column) => [column.name, column])),
@@ -134,7 +181,10 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
             {/* Method selector */}
             <MethodSelector
                 label="Aykırı Değer Yöntemi"
-                options={METHODS}
+                options={METHODS.map((option) => ({
+                    ...option,
+                    details: METHOD_DETAILS_MARKDOWN[option.value as OutlierMethod],
+                }))}
                 value={method}
                 onChange={handleMethodChange}
                 disabled={isLoading || isAnalyzing}
@@ -144,7 +194,22 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
             {showThreshold && (
                 <div className="space-y-2">
                     <label className="text-sm font-medium text-gray-300">
-                        Eşik Değeri (IQR çarpanı)
+                        <span className="flex items-center gap-2">
+                            Eşik Değeri (IQR çarpanı)
+                            <div className="group relative flex items-center">
+                                <button
+                                    type="button"
+                                    aria-label="Eşik değeri hakkında bilgi"
+                                    onClick={() => setActiveInfo('threshold')}
+                                    className="flex h-5 w-5 cursor-pointer items-center justify-center rounded-full border border-cyan-400/20 bg-cyan-400/10 text-cyan-300 transition-all duration-200 hover:border-cyan-400/40 hover:bg-cyan-400/15 hover:text-cyan-200"
+                                >
+                                    <Info className="h-3 w-3" />
+                                </button>
+                                <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 -translate-x-1/2 whitespace-nowrap rounded-full border border-cyan-400/20 bg-slate-950/95 px-3 py-1 text-[11px] font-medium text-cyan-200 opacity-0 shadow-lg shadow-cyan-500/10 transition-all duration-200 group-hover:opacity-100">
+                                    Bilgi almak için tıklayın
+                                </span>
+                            </div>
+                        </span>
                     </label>
                     <input
                         type="number"
@@ -156,36 +221,41 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
                         disabled={isLoading || isAnalyzing}
                         className="w-full px-4 py-2 rounded-lg border border-white/10 bg-white/5 text-white placeholder:text-gray-500 outline-none focus:border-cyan-500/50"
                     />
-                    <p className="text-xs text-gray-500">
-                        Varsayılan: 1.5 (standart IQR kuralı)
-                    </p>
                 </div>
             )}
 
             {showWinsorizePercent && (
                 <div className="space-y-2">
                     <label className="text-sm font-medium text-gray-300">
-                        Winsorize Yüzdesi (iki kuyruk, %)
+                        <span className="flex items-center gap-2">
+                            Winsorize Yüzdesi (iki kuyruk, %)
+                            <div className="group relative flex items-center">
+                                <button
+                                    type="button"
+                                    aria-label="Winsorize yüzdesi hakkında bilgi"
+                                    onClick={() => setActiveInfo('winsorize')}
+                                    className="flex h-5 w-5 cursor-pointer items-center justify-center rounded-full border border-cyan-400/20 bg-cyan-400/10 text-cyan-300 transition-all duration-200 hover:border-cyan-400/40 hover:bg-cyan-400/15 hover:text-cyan-200"
+                                >
+                                    <Info className="h-3 w-3" />
+                                </button>
+                                <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 -translate-x-1/2 whitespace-nowrap rounded-full border border-cyan-400/20 bg-slate-950/95 px-3 py-1 text-[11px] font-medium text-cyan-200 opacity-0 shadow-lg shadow-cyan-500/10 transition-all duration-200 group-hover:opacity-100">
+                                    Bilgi almak için tıklayın
+                                </span>
+                            </div>
+                        </span>
                     </label>
-                    <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-3">
-                        <input
-                            type="range"
-                            min="1"
-                            max="20"
-                            step="1"
-                            value={winsorizePercent}
-                            onChange={(e) => setWinsorizePercent(e.target.value)}
-                            disabled={isLoading || isAnalyzing}
-                            className="h-2 w-full cursor-pointer accent-cyan-400"
-                        />
-                        <div className="mt-2 flex items-center justify-between text-xs text-gray-400">
-                            <span>%1</span>
-                            <span className="font-medium text-cyan-300">%{winsorizePercent} / kuyruk</span>
-                            <span>%20</span>
-                        </div>
-                    </div>
-                    <p className="text-xs text-gray-500">
-                        Örnek: %5 seçilirse alt %5 ve üst %5 değerler winsorize edilir.
+                    <input
+                        type="range"
+                        min="1"
+                        max="20"
+                        step="1"
+                        value={winsorizePercent}
+                        onChange={(e) => setWinsorizePercent(e.target.value)}
+                        disabled={isLoading || isAnalyzing}
+                        className="h-2 w-full cursor-pointer accent-cyan-400"
+                    />
+                    <p className="text-sm font-medium text-cyan-300">
+                        %{winsorizePercent} / kuyruk
                     </p>
                 </div>
             )}
@@ -246,6 +316,47 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
                     <>Uygula</>
                 )}
             </button>
+
+            {activeInfo && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 backdrop-blur-sm"
+                    onClick={() => setActiveInfo(null)}
+                >
+                    <div
+                        className="w-full max-w-md rounded-2xl border border-cyan-400/20 bg-[#0D1528]/95 p-6 shadow-2xl"
+                        style={{ boxShadow: theme.glow.cyanStrong }}
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-start gap-3">
+                                <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-400/20 bg-cyan-400/10 text-cyan-300">
+                                    <Info className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <p className="text-xs font-medium uppercase tracking-[0.2em] text-cyan-400/80">
+                                        Alan Bilgisi
+                                    </p>
+                                    <h3 className="mt-1 text-lg font-semibold text-white">
+                                        {INFO_CONTENT[activeInfo].title}
+                                    </h3>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setActiveInfo(null)}
+                                className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-white/5 text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
+                                aria-label="Bilgi penceresini kapat"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
+                        </div>
+
+                        <div className="mt-5 space-y-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                            {renderMarkdown(INFO_CONTENT[activeInfo].details)}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

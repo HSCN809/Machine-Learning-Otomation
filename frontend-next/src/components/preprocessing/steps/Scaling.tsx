@@ -21,6 +21,19 @@ const METHODS = [
     { value: 'normalizer', label: 'Normalizer', icon: '🔄', description: 'Birim norm\'a normalize et' },
 ];
 
+const METHOD_DETAILS_MARKDOWN: Record<ScalingMethod, string> = {
+    standard:
+        '**Ne yapar?** Her sütunu ortalaması 0 ve standart sapması 1 olacak şekilde dönüştürür.\n\n**Ne zaman uygundur?** Özellikle uzaklık/gradient tabanlı modellerde ölçek farkını azaltmak için kullanılır.',
+    minmax:
+        '**Ne yapar?** Değerleri belirlenen aralığa (genelde 0-1) lineer olarak taşır.\n\n**Ne zaman uygundur?** Özelliklerin aynı bantta olmasının önemli olduğu modellerde pratik bir tercihtir.',
+    robust:
+        '**Ne yapar?** Medyan ve IQR kullanarak ölçekler, uç değerlere daha az duyarlıdır.\n\n**Ne zaman uygundur?** Aykırı değerlerin yoğun olduğu veri setlerinde daha stabil sonuç verir.',
+    maxabs:
+        '**Ne yapar?** Her sütunu mutlak maksimum değerine bölerek aralığı yaklaşık -1 ile 1’e getirir.\n\n**Ne zaman uygundur?** Seyrek veri yapısını bozmadan ölçekleme gerektiğinde tercih edilir.',
+    normalizer:
+        '**Ne yapar?** Her satırı seçilen norma göre birim vektöre dönüştürür.\n\n**Ne zaman uygundur?** Yön bilgisinin büyüklükten daha önemli olduğu metin/vektör benzerliği problemlerinde faydalıdır.',
+};
+
 export function Scaling({ numericColumns, onApply, isLoading }: ScalingProps) {
     const [method, setMethod] = useState<ScalingMethod>('standard');
     const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
@@ -40,23 +53,14 @@ export function Scaling({ numericColumns, onApply, isLoading }: ScalingProps) {
 
     return (
         <div className="space-y-6">
-            {/* Info */}
-            <div
-                className="p-4 rounded-xl border"
-                style={{
-                    borderColor: `${theme.colors.status.info}50`,
-                    background: `${theme.colors.status.info}10`,
-                }}
-            >
-                <p className="text-blue-400">
-                    ℹ️ Ölçeklendirme, ML algoritmalarının daha iyi performans göstermesini sağlar.
-                </p>
-            </div>
 
             {/* Method selector */}
             <MethodSelector
                 label="Ölçeklendirme Yöntemi"
-                options={METHODS}
+                options={METHODS.map((option) => ({
+                    ...option,
+                    details: METHOD_DETAILS_MARKDOWN[option.value as ScalingMethod],
+                }))}
                 value={method}
                 onChange={(v) => setMethod(v as ScalingMethod)}
                 disabled={isLoading}

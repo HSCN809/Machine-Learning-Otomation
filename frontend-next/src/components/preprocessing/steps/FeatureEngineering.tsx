@@ -11,7 +11,7 @@ import {
     FeatureOperation,
     NumericFeatureOperation,
 } from '@/types/preprocessing';
-import { Loader2, Plus } from 'lucide-react';
+import { Info, Loader2, Plus, X } from 'lucide-react';
 import { theme } from '@/styles/theme';
 
 interface FeatureEngineeringProps {
@@ -31,6 +31,19 @@ const FEATURE_TABS: { id: FeatureTab; label: string; icon: string; description: 
     { id: 'categorical', label: 'Kategorik Kombinasyon', icon: '🔗', description: 'Birden çok kategorik sütunu birleştir.' },
 ];
 
+const FEATURE_TAB_DETAILS_MARKDOWN: Record<FeatureTab, string> = {
+    numeric:
+        '**Ne yapar?** Seçili sayısal sütunlar üzerinde toplama/çıkarma/çarpma/bölme veya özel ifade ile yeni sütun üretir.\n\n**Ne zaman uygundur?** Alan bilgisini matematiksel kombinasyonlarla modele taşımak istediğinizde kullanılır.',
+    polynomial:
+        '**Ne yapar?** Seçilen sayısal sütunlar için karesel (`x²`) türev sütunlar üretir.\n\n**Ne zaman uygundur?** Doğrusal olmayan etkileri basit şekilde modele eklemek istediğinizde tercih edilir.',
+    binning:
+        '**Ne yapar?** Tek bir sayısal sütunu belirli aralıklara bölerek kategorik hale getirir.\n\n**Ne zaman uygundur?** Sürekli değişkeni segmentlere ayırıp yorumlanabilirlik artırılmak istendiğinde faydalıdır.',
+    datetime:
+        '**Ne yapar?** Tarih/zaman sütunundan yıl, ay, gün, saat gibi parçalar çıkarır.\n\n**Ne zaman uygundur?** Zamana bağlı döngüsel veya dönemsel etkileri modele dahil etmek için kullanılır.',
+    categorical:
+        '**Ne yapar?** Birden çok kategorik sütunu birleştirerek yeni bir birleşik kategori üretir.\n\n**Ne zaman uygundur?** Özellik etkileşimlerini tek bir alanda temsil etmek istediğinizde uygundur.',
+};
+
 const NUMERIC_OPTIONS: { value: NumericFeatureOperation; label: string; description: string }[] = [
     { value: 'add', label: 'Toplama', description: '2 veya daha fazla sütunu topla.' },
     { value: 'subtract', label: 'Çıkarma', description: 'Tam 2 sütun arasında fark al.' },
@@ -43,6 +56,26 @@ const BINNING_OPTIONS: { value: BinningStrategy; label: string; description: str
     { value: 'equal_width', label: 'Equal Width', description: 'Aralık genişlikleri eşit olsun.' },
     { value: 'quantile', label: 'Quantile', description: 'Aralıklarda gözlem sayıları dengelensin.' },
 ];
+
+const NUMERIC_OPTION_DETAILS_MARKDOWN: Record<NumericFeatureOperation, string> = {
+    add:
+        '**Ne yapar?** Seçilen sütunları satır bazında toplar.\n\n**Ne zaman uygundur?** Toplam skor, toplam maliyet gibi birleşik metrik üretmek istediğinizde kullanılır.',
+    subtract:
+        '**Ne yapar?** İki sütun arasındaki farkı hesaplar.\n\n**Ne zaman uygundur?** Delta, sapma veya artış/azalış ölçümü gereken durumlarda uygundur.',
+    multiply:
+        '**Ne yapar?** Seçilen sütunları çarparak etkileşim terimi üretir.\n\n**Ne zaman uygundur?** İki özelliğin birlikte etkisini modele taşımak istediğinizde faydalıdır.',
+    divide:
+        '**Ne yapar?** İki sütun oranını hesaplar.\n\n**Ne zaman uygundur?** Verimlilik, dönüşüm oranı, kişi başı metrik gibi oran tabanlı özelliklerde kullanılır.',
+    custom:
+        '**Ne yapar?** Seçilen sütunlarla özel matematiksel ifade çalıştırır.\n\n**Ne zaman uygundur?** Standart presetlerin yetmediği alan kurallarını doğrudan formülle uygulamak istediğinizde tercih edilir.',
+};
+
+const BINNING_OPTION_DETAILS_MARKDOWN: Record<BinningStrategy, string> = {
+    equal_width:
+        '**Ne yapar?** Değer aralığını eşit genişlikte dilimlere böler.\n\n**Ne zaman uygundur?** Aralık sınırlarının sabit ve yorumlanabilir olmasını istediğinizde uygundur.',
+    quantile:
+        '**Ne yapar?** Dilimleri gözlem sayısı dengeli olacak şekilde oluşturur.\n\n**Ne zaman uygundur?** Dağılım dengesizse her dilimde benzer örnek sayısı elde etmek için tercih edilir.',
+};
 
 const DATETIME_PARTS: { value: DatetimeFeaturePart; label: string }[] = [
     { value: 'year', label: 'Yıl' },
@@ -59,6 +92,30 @@ const OPERATIONS = [
     { value: 'polynomial', label: 'Polinom Özellik', icon: '📈', description: 'x², x³ gibi özellikler oluştur' },
     { value: 'binning', label: 'Binning', icon: '📊', description: 'Sayısal değeri kategorize et' },
 ];
+
+function renderInlineMarkdown(text: string) {
+    const parts = text.split(/(\*\*.*?\*\*)/g);
+
+    return parts.map((part, index) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+            return (
+                <strong key={`${part}-${index}`} className="font-semibold text-white">
+                    {part.slice(2, -2)}
+                </strong>
+            );
+        }
+
+        return <span key={`${part}-${index}`}>{part}</span>;
+    });
+}
+
+function renderMarkdown(content: string) {
+    return content.split(/\n\s*\n/).map((paragraph, index) => (
+        <p key={`${paragraph}-${index}`} className="text-sm leading-6 text-gray-300">
+            {renderInlineMarkdown(paragraph)}
+        </p>
+    ));
+}
 
 export function FeatureEngineeringLegacy({ columns, numericColumns, onApply, isLoading }: FeatureEngineeringProps) {
     const [operation, setOperation] = useState<FeatureOperation>('create_numeric');
@@ -211,6 +268,7 @@ export function FeatureEngineering({ columns, numericColumns, onApply, isLoading
     const [categoricalColumnsSelected, setCategoricalColumnsSelected] = useState<string[]>([]);
     const [categoricalColumnName, setCategoricalColumnName] = useState('');
     const [separator, setSeparator] = useState('_');
+    const [activeOptionInfo, setActiveOptionInfo] = useState<{ title: string; details: string } | null>(null);
 
     const datetimeCandidateColumns = useMemo(
         () =>
@@ -341,7 +399,15 @@ export function FeatureEngineering({ columns, numericColumns, onApply, isLoading
     return (
         <div className="space-y-6">
 
-            <PreprocessingTabs tabs={FEATURE_TABS} value={activeTab} onChange={setActiveTab} disabled={isLoading} />
+            <PreprocessingTabs
+                tabs={FEATURE_TABS.map((tab) => ({
+                    ...tab,
+                    details: FEATURE_TAB_DETAILS_MARKDOWN[tab.id],
+                }))}
+                value={activeTab}
+                onChange={setActiveTab}
+                disabled={isLoading}
+            />
 
             {activeTab === 'numeric' && (
                 <div className="space-y-6">
@@ -362,7 +428,34 @@ export function FeatureEngineering({ columns, numericColumns, onApply, isLoading
                                                 : 'border-white/10 bg-white/5 text-white hover:border-cyan-500/30 hover:bg-white/10'
                                         } ${isLoading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
                                     >
-                                        <p className="font-medium">{option.label}</p>
+                                        <div className="flex items-center gap-2">
+                                            <p className="font-medium">{option.label}</p>
+                                            <div className="group relative flex items-center">
+                                                <button
+                                                    type="button"
+                                                    aria-label={`${option.label} hakkında bilgi`}
+                                                    onClick={(event) => {
+                                                        event.preventDefault();
+                                                        event.stopPropagation();
+                                                        setActiveOptionInfo({
+                                                            title: option.label,
+                                                            details: NUMERIC_OPTION_DETAILS_MARKDOWN[option.value],
+                                                        });
+                                                    }}
+                                                    disabled={isLoading}
+                                                    className={`flex h-5 w-5 items-center justify-center rounded-full border transition-all duration-200 ${
+                                                        isLoading
+                                                            ? 'cursor-not-allowed border-white/10 text-gray-600'
+                                                            : 'cursor-pointer border-cyan-400/20 bg-cyan-400/10 text-cyan-300 hover:border-cyan-400/40 hover:bg-cyan-400/15 hover:text-cyan-200'
+                                                    }`}
+                                                >
+                                                    <Info className="h-3 w-3" />
+                                                </button>
+                                                <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 -translate-x-1/2 whitespace-nowrap rounded-full border border-cyan-400/20 bg-slate-950/95 px-3 py-1 text-[11px] font-medium text-cyan-200 opacity-0 shadow-lg shadow-cyan-500/10 transition-all duration-200 group-hover:opacity-100">
+                                                    Bilgi almak için tıklayın
+                                                </span>
+                                            </div>
+                                        </div>
                                         <p className="mt-1 text-xs text-gray-400">{option.description}</p>
                                     </button>
                                 );
@@ -464,7 +557,34 @@ export function FeatureEngineering({ columns, numericColumns, onApply, isLoading
                                                 : 'border-white/10 bg-white/5 text-white hover:border-cyan-500/30 hover:bg-white/10'
                                         } ${isLoading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
                                     >
-                                        <p className="font-medium">{option.label}</p>
+                                        <div className="flex items-center gap-2">
+                                            <p className="font-medium">{option.label}</p>
+                                            <div className="group relative flex items-center">
+                                                <button
+                                                    type="button"
+                                                    aria-label={`${option.label} hakkında bilgi`}
+                                                    onClick={(event) => {
+                                                        event.preventDefault();
+                                                        event.stopPropagation();
+                                                        setActiveOptionInfo({
+                                                            title: option.label,
+                                                            details: BINNING_OPTION_DETAILS_MARKDOWN[option.value],
+                                                        });
+                                                    }}
+                                                    disabled={isLoading}
+                                                    className={`flex h-5 w-5 items-center justify-center rounded-full border transition-all duration-200 ${
+                                                        isLoading
+                                                            ? 'cursor-not-allowed border-white/10 text-gray-600'
+                                                            : 'cursor-pointer border-cyan-400/20 bg-cyan-400/10 text-cyan-300 hover:border-cyan-400/40 hover:bg-cyan-400/15 hover:text-cyan-200'
+                                                    }`}
+                                                >
+                                                    <Info className="h-3 w-3" />
+                                                </button>
+                                                <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 -translate-x-1/2 whitespace-nowrap rounded-full border border-cyan-400/20 bg-slate-950/95 px-3 py-1 text-[11px] font-medium text-cyan-200 opacity-0 shadow-lg shadow-cyan-500/10 transition-all duration-200 group-hover:opacity-100">
+                                                    Bilgi almak için tıklayın
+                                                </span>
+                                            </div>
+                                        </div>
                                         <p className="mt-1 text-xs text-gray-400">{option.description}</p>
                                     </button>
                                 );
@@ -605,6 +725,47 @@ export function FeatureEngineering({ columns, numericColumns, onApply, isLoading
                     </>
                 )}
             </button>
+
+            {activeOptionInfo && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 backdrop-blur-sm"
+                    onClick={() => setActiveOptionInfo(null)}
+                >
+                    <div
+                        className="w-full max-w-md rounded-2xl border border-cyan-400/20 bg-[#0D1528]/95 p-6 shadow-2xl"
+                        style={{ boxShadow: theme.glow.cyanStrong }}
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-start gap-3">
+                                <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-400/20 bg-cyan-400/10 text-cyan-300">
+                                    <Info className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <p className="text-xs font-medium uppercase tracking-[0.2em] text-cyan-400/80">
+                                        Yöntem Bilgisi
+                                    </p>
+                                    <h3 className="mt-1 text-lg font-semibold text-white">
+                                        {activeOptionInfo.title}
+                                    </h3>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setActiveOptionInfo(null)}
+                                className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-white/5 text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
+                                aria-label="Bilgi penceresini kapat"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
+                        </div>
+
+                        <div className="mt-5 space-y-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                            {renderMarkdown(activeOptionInfo.details)}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

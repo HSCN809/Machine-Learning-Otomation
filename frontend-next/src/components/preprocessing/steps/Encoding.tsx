@@ -21,6 +21,19 @@ const METHODS = [
     { value: 'frequency', label: 'Frequency Encoding', icon: '📈', description: 'Frekansa göre değer ata' },
 ];
 
+const METHOD_DETAILS_MARKDOWN: Record<EncodingMethod, string> = {
+    label:
+        '**Ne yapar?** Her kategoriye bir tam sayı kodu atar.\n\n**Ne zaman uygundur?** Ağaç tabanlı modellerde veya kategori sırası önemli olmadığında hızlı bir başlangıç çözümüdür.',
+    onehot:
+        '**Ne yapar?** Her kategori için ayrı bir 0/1 sütunu üretir.\n\n**Ne zaman uygundur?** Kategoriler arasında yapay sıralama oluşturmak istemediğinizde en güvenli yaklaşımdır.',
+    ordinal:
+        '**Ne yapar?** Kategorileri belirli bir sıralı sayısal düzene göre kodlar.\n\n**Ne zaman uygundur?** Kategoriler gerçekten sıralıysa (düşük-orta-yüksek gibi) anlamlıdır.',
+    binary:
+        '**Ne yapar?** Kategori indeksini ikili (binary) bit sütunlarına dönüştürür.\n\n**Ne zaman uygundur?** Kardinalitesi yüksek kategorilerde one-hot sütun patlamasını azaltmak için tercih edilir.',
+    frequency:
+        '**Ne yapar?** Her kategoriyi veri içindeki görülme sıklığıyla temsil eder.\n\n**Ne zaman uygundur?** Kategori sayısı çok olduğunda daha kompakt bir temsil istediğinizde kullanılır.',
+};
+
 export function Encoding({ categoricalColumns, onApply, isLoading }: EncodingProps) {
     const [method, setMethod] = useState<EncodingMethod>('label');
     const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
@@ -42,35 +55,14 @@ export function Encoding({ categoricalColumns, onApply, isLoading }: EncodingPro
 
     return (
         <div className="space-y-6">
-            {/* Info */}
-            {categoricalColumns.length === 0 ? (
-                <div
-                    className="p-4 rounded-xl border"
-                    style={{
-                        borderColor: `${theme.colors.status.info}50`,
-                        background: `${theme.colors.status.info}10`,
-                    }}
-                >
-                    <p className="text-blue-400">ℹ️ Kategorik sütun bulunamadı.</p>
-                </div>
-            ) : (
-                <div
-                    className="p-4 rounded-xl border"
-                    style={{
-                        borderColor: `${theme.colors.status.info}50`,
-                        background: `${theme.colors.status.info}10`,
-                    }}
-                >
-                    <p className="text-blue-400">
-                        ℹ️ {categoricalColumns.length} kategorik sütun kodlanmaya hazır.
-                    </p>
-                </div>
-            )}
 
             {/* Method selector */}
             <MethodSelector
                 label="Encoding Yöntemi"
-                options={METHODS}
+                options={METHODS.map((option) => ({
+                    ...option,
+                    details: METHOD_DETAILS_MARKDOWN[option.value as EncodingMethod],
+                }))}
                 value={method}
                 onChange={(v) => setMethod(v as EncodingMethod)}
                 disabled={isLoading}
