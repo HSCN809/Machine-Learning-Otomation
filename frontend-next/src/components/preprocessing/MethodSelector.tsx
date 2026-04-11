@@ -126,14 +126,6 @@ export function MethodSelector({
                                         )}>
                                             {option.label}
                                         </p>
-                                        {isSelected && (
-                                            <span
-                                                className="flex h-5 w-5 items-center justify-center rounded-full text-xs text-white"
-                                                style={{ background: theme.colors.primary.cyan }}
-                                            >
-                                                ✓
-                                            </span>
-                                        )}
                                         {option.details && (
                                             <div className="group relative flex items-center">
                                                 <button
@@ -158,6 +150,14 @@ export function MethodSelector({
                                                     Bilgi almak için tıklayın
                                                 </span>
                                             </div>
+                                        )}
+                                        {isSelected && (
+                                            <span
+                                                className="flex h-5 w-5 items-center justify-center rounded-full text-xs text-white"
+                                                style={{ background: theme.colors.primary.cyan }}
+                                            >
+                                                ✓
+                                            </span>
                                         )}
                                     </div>
                                     {option.description && (
@@ -222,3 +222,4 @@ export function MethodSelector({
         </>
     );
 }
+
