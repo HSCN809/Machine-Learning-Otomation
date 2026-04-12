@@ -2,9 +2,7 @@
 
 import { useState } from 'react';
 import { ModelInfo, ModelParameter } from '@/types/model-selection';
-import { theme } from '@/styles/theme';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 interface HyperparameterFormProps {
     models: ModelInfo[];
@@ -99,7 +97,7 @@ export function HyperparameterForm({
                         {/* Header */}
                         <button
                             onClick={() => setExpandedModel(isExpanded ? null : model.id)}
-                            className="w-full flex items-center justify-between px-4 py-3 bg-white/5 hover:bg-white/10 transition-colors"
+                            className="w-full cursor-pointer flex items-center justify-between px-4 py-3 bg-white/5 hover:bg-white/10 transition-colors"
                         >
                             <div className="flex items-center gap-3">
                                 <span className="text-xl">{model.icon}</span>

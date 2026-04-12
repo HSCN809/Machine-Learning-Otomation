@@ -35,7 +35,7 @@ export function TargetSelector({
                                 onClick={() => onSelect(column.name)}
                                 disabled={disabled}
                                 className={cn(
-                                    'p-4 rounded-xl border-2 text-left transition-all duration-200',
+                                    'cursor-pointer p-4 rounded-xl border-2 text-left transition-all duration-200',
                                     isSelected
                                         ? 'border-cyan-500 bg-cyan-500/10'
                                         : 'border-white/10 bg-white/5 hover:border-cyan-500/30',

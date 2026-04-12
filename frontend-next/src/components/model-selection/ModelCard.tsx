@@ -33,7 +33,7 @@ export function ModelCard({ model, isSelected, onToggle, disabled = false }: Mod
             onClick={onToggle}
             disabled={disabled}
             className={cn(
-                'relative p-5 rounded-xl border-2 text-left transition-all duration-300',
+                'relative cursor-pointer p-5 rounded-xl border-2 text-left transition-all duration-300',
                 'hover:scale-[1.02] hover:shadow-lg',
                 isSelected
                     ? 'border-cyan-500 bg-cyan-500/10'

@@ -117,7 +117,7 @@ export default function ModelSelectionPage() {
                                 </p>
                                 <button
                                     onClick={trainModels}
-                                    className="inline-flex items-center gap-2 px-8 py-3 rounded-xl font-medium text-white transition-all hover:scale-105"
+                                    className="inline-flex cursor-pointer items-center gap-2 px-8 py-3 rounded-xl font-medium text-white transition-all hover:scale-105"
                                     style={{
                                         background: theme.gradients.primary,
                                         boxShadow: theme.glow.cyan,
@@ -228,7 +228,7 @@ export default function ModelSelectionPage() {
                                         <button
                                             onClick={prevStep}
                                             disabled={!canGoPrev || isTraining}
-                                            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-white hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                            className="flex cursor-pointer items-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-white hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                                         >
                                             <ChevronLeft className="w-4 h-4" />
                                             Geri
@@ -239,7 +239,7 @@ export default function ModelSelectionPage() {
                                         <button
                                             onClick={nextStep}
                                             disabled={!canGoNext || isTraining}
-                                            className="flex items-center gap-2 px-6 py-2 rounded-xl font-medium text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105"
+                                            className="flex cursor-pointer items-center gap-2 px-6 py-2 rounded-xl font-medium text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105"
                                             style={{
                                                 background:
                                                     canGoNext && !isTraining
@@ -257,7 +257,7 @@ export default function ModelSelectionPage() {
                                     {currentStep === 3 && !isTraining && trainingResults.length === 0 && (
                                         <button
                                             onClick={trainModels}
-                                            className="flex items-center gap-2 px-6 py-2 rounded-xl font-medium text-white transition-all hover:scale-105"
+                                            className="flex cursor-pointer items-center gap-2 px-6 py-2 rounded-xl font-medium text-white transition-all hover:scale-105"
                                             style={{
                                                 background: theme.gradients.primary,
                                                 boxShadow: theme.glow.cyan,
