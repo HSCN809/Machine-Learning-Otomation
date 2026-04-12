@@ -20,6 +20,7 @@ from backend.modules.data_preprocessing.feature_engineering.processor import (
     create_categorical_combination,
     create_datetime_feature,
     create_numeric_feature,
+    drop_columns,
 )
 from backend.modules.data_preprocessing.missing_values.processor import (
     fill_missing_values_interpolation,
@@ -73,6 +74,11 @@ class FeatureRequest(BaseModel):
 
 class UndoToHistoryRequest(BaseModel):
     history_index: int = Field(ge=0)
+
+
+class DropColumnsRequest(BaseModel):
+    columns: List[str]
+    reason: Optional[str] = None
 
 
 ALLOWED_EXPRESSION_NODES = (
@@ -615,6 +621,113 @@ async def get_history(session_id: str = Depends(require_session)):
     """Get preprocessing history"""
     history = session_manager.get_history(session_id)
     return {"history": history}
+
+
+@router.post("/drop-columns")
+async def handle_drop_columns(
+    request: DropColumnsRequest,
+    session_id: str = Depends(require_session)
+):
+    """Drop specified columns from the dataframe"""
+    df = session_manager.get_dataframe(session_id)
+    if df is None:
+        raise HTTPException(status_code=400, detail="No data loaded")
+    
+    try:
+        previous_df = df.copy(deep=True)
+        
+        existing_columns = [col for col in request.columns if col in df.columns]
+        missing_columns = [col for col in request.columns if col not in df.columns]
+        
+        if missing_columns:
+            logger.warning(f"⚠️ Columns not found: {missing_columns}")
+        
+        if not existing_columns:
+            raise HTTPException(status_code=400, detail="No valid columns to drop")
+        
+        df = drop_columns(df, existing_columns)
+        
+        session_manager.set_dataframe(session_id, df)
+        session_manager.add_history_snapshot(session_id, previous_df)
+        session_manager.add_history(session_id, {
+            "step": "feature_engineering",
+            "action": "drop_columns",
+            "columns": existing_columns,
+            "reason": request.reason,
+        })
+        
+        return {
+            "success": True,
+            "dropped_columns": existing_columns,
+            "missing_columns": missing_columns,
+            "total_columns": len(df.columns),
+            "remaining_rows": len(df),
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/drop-columns/analyze")
+async def analyze_droppable_columns(
+    cardinality_threshold: float = 0.9,
+    session_id: str = Depends(require_session)
+):
+    """Analyze columns for potential removal recommendations"""
+    df = session_manager.get_dataframe(session_id)
+    if df is None:
+        raise HTTPException(status_code=400, detail="No data loaded")
+    
+    try:
+        total_rows = len(df)
+        recommendations = []
+        
+        for col in df.columns:
+            unique_count = df[col].nunique()
+            unique_ratio = unique_count / total_rows if total_rows > 0 else 0
+            
+            recommendation = {
+                "column": col,
+                "unique_count": int(unique_count),
+                "unique_ratio": round(unique_ratio, 4),
+                "missing_count": int(df[col].isnull().sum()),
+                "missing_percentage": round(df[col].isnull().sum() / total_rows * 100, 2) if total_rows > 0 else 0,
+                "reasons": [],
+            }
+            
+            missing_pct = round(df[col].isnull().sum() / total_rows * 100, 2) if total_rows > 0 else 0
+            
+            if unique_count == 1:
+                recommendation["reasons"].append("Sabit değer")
+            
+            if missing_pct > 50:
+                recommendation["reasons"].append(f"Yüksek eksik değer ({missing_pct}%)")
+            
+            if np.issubdtype(df[col].dtype, np.number):
+                variance = df[col].var()
+                if variance == 0:
+                    recommendation["reasons"].append("Düşük varyans")
+            
+            if unique_ratio > cardinality_threshold:
+                recommendation["reasons"].append(f"Yüksek kardinalite ({int(unique_ratio * 100)}%)")
+            
+            if recommendation["reasons"]:
+                recommendations.append(recommendation)
+        
+        recommended_columns = [r["column"] for r in recommendations]
+        
+        return {
+            "success": True,
+            "recommendations": recommendations,
+            "recommended_columns": recommended_columns,
+            "all_columns": list(df.columns),
+            "cardinality_threshold": cardinality_threshold,
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/undo")

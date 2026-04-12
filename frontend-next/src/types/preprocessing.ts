@@ -86,7 +86,13 @@ export type FeatureOperation =
     | 'create_datetime'
     | 'create_categorical'
     | 'polynomial'
-    | 'binning';
+    | 'binning'
+    | 'drop_columns';
+
+export interface DropColumnConfig {
+    columns: string[];
+    reason?: string;
+}
 
 export type NumericFeatureOperation =
     | 'add'

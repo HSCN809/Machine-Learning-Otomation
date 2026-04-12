@@ -1,7 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { ColumnSelector } from '../ColumnSelector';
+import * as api from '@/lib/api';
 import {
     BinningStrategy,
     ColumnInfo,
@@ -10,17 +11,24 @@ import {
     FeatureOperation,
     NumericFeatureOperation,
 } from '@/types/preprocessing';
-import { Info, Loader2, Plus, X } from 'lucide-react';
+import { Info, Loader2, Plus, X, Check } from 'lucide-react';
 import { theme } from '@/styles/theme';
 
 interface FeatureEngineeringProps {
     columns: ColumnInfo[];
     numericColumns: ColumnInfo[];
     onApply: (config: FeatureConfig) => Promise<void>;
+    onDropColumns?: (config: { columns: string[]; reason?: string }) => Promise<void>;
     isLoading: boolean;
 }
 
-type FeatureTab = 'numeric' | 'polynomial' | 'binning' | 'datetime' | 'categorical';
+interface DropColumnsTabProps {
+    columns: ColumnInfo[];
+    isLoading: boolean;
+    onDropColumns?: (config: { columns: string[]; reason?: string }) => Promise<void>;
+}
+
+type FeatureTab = 'numeric' | 'polynomial' | 'binning' | 'datetime' | 'categorical' | 'drop_columns';
 
 const FEATURE_TABS: { id: FeatureTab; label: string; icon: string; description: string }[] = [
     { id: 'numeric', label: 'Sayısal İşlem', icon: '🔢', description: 'Preset veya özel ifade ile yeni sütun üret.' },
@@ -28,6 +36,7 @@ const FEATURE_TABS: { id: FeatureTab; label: string; icon: string; description: 
     { id: 'binning', label: 'Binning', icon: '📊', description: 'Tek sütunu aralıklara bölerek kategorize et.' },
     { id: 'datetime', label: 'Tarih/Zaman', icon: '🕒', description: 'Tarih sütunlarından parçalar çıkar.' },
     { id: 'categorical', label: 'Kategorik Kombinasyon', icon: '🔗', description: 'Birden çok kategorik sütunu birleştir.' },
+    { id: 'drop_columns', label: 'Sütun Sil', icon: '🗑️', description: 'Belirli sütunları veri setinden kaldır.' },
 ];
 
 const NUMERIC_OPTIONS: { value: NumericFeatureOperation; label: string; description: string }[] = [
@@ -732,6 +741,10 @@ export function FeatureEngineering({ columns, numericColumns, onApply, isLoading
                 </div>
             )}
 
+            {activeTab === 'drop_columns' && (
+                <DropColumnsTab columns={columns} isLoading={isLoading} />
+            )}
+
             <button
                 type="button"
                 onClick={handleApply}
@@ -797,6 +810,148 @@ export function FeatureEngineering({ columns, numericColumns, onApply, isLoading
                     </div>
                 </div>
             )}
+        </div>
+    );
+}
+
+function DropColumnsTab({ columns, isLoading, onDropColumns }: DropColumnsTabProps) {
+    const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
+    const [recommendations, setRecommendations] = useState<api.DropColumnRecommendation[]>([]);
+
+    useEffect(() => {
+        async function loadAnalysis() {
+            try {
+                const analysis = await api.analyzeDroppableColumns(0.9);
+                if (analysis.success) {
+                    setRecommendations(analysis.recommendations);
+                }
+            } catch (err) {
+                console.error('Analysis error:', err);
+            }
+        }
+        loadAnalysis();
+    }, []);
+
+    const handleSelectAllRecommended = () => {
+        const recommendedCols = recommendations.map(r => r.column);
+        setSelectedColumns(recommendedCols);
+    };
+
+    const handleClearSelection = () => {
+        setSelectedColumns([]);
+    };
+
+    const handleApply = async () => {
+        if (selectedColumns.length === 0) return;
+        if (onDropColumns) {
+            await onDropColumns({ columns: selectedColumns, reason: 'Manuel sütun silme' });
+        } else {
+            await api.dropColumns(selectedColumns, 'Manuel sütun silme');
+        }
+        setSelectedColumns([]);
+    };
+
+    const recommendedColumns = recommendations.map(r => r.column);
+
+    return (
+        <div className="space-y-6">
+            {recommendations.length > 0 && (
+                <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                        <h4 className="text-sm font-medium text-gray-300">Önerilen Sütunlar</h4>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={handleSelectAllRecommended}
+                                disabled={isLoading}
+                                className="text-xs text-cyan-400 hover:underline cursor-pointer"
+                            >
+                                Tümünü Seç
+                            </button>
+                            <span className="text-white/20">|</span>
+                            <button
+                                onClick={handleClearSelection}
+                                disabled={isLoading}
+                                className="text-xs text-gray-400 hover:text-white cursor-pointer"
+                            >
+                                Temizle
+                            </button>
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        {recommendations.map((rec) => {
+                            const isSelected = selectedColumns.includes(rec.column);
+                            return (
+                                <div
+                                    key={rec.column}
+                                    onClick={() => {
+                                        if (isSelected) {
+                                            setSelectedColumns(selectedColumns.filter(c => c !== rec.column));
+                                        } else {
+                                            setSelectedColumns([...selectedColumns, rec.column]);
+                                        }
+                                    }}
+                                    className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all ${
+                                        isSelected 
+                                        ? 'border-cyan-500/50 bg-cyan-500/10' 
+                                        : 'border-white/10 bg-white/5 hover:border-cyan-500/30'
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-5 h-5 rounded border flex items-center justify-center ${
+                                            isSelected 
+                                            ? 'border-cyan-500 bg-cyan-500' 
+                                            : 'border-white/30'
+                                        }`}>
+                                            {isSelected && <Check className="w-3 h-3 text-white" />}
+                                        </div>
+                                        <span className="text-white">{rec.column}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        {rec.reasons.map((reason, idx) => (
+                                            <span key={idx} className="text-xs px-2 py-1 rounded bg-red-500/20 text-red-400">
+                                                {reason}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            <div className="border-t border-white/10 pt-4">
+                <ColumnSelector
+                    columns={columns}
+                    selectedColumns={selectedColumns}
+                    onChange={setSelectedColumns}
+                    label="Manuel Sütun Seçimi"
+                    showMissing={false}
+                    disabled={isLoading}
+                />
+            </div>
+
+            <button
+                onClick={handleApply}
+                disabled={selectedColumns.length === 0 || isLoading}
+                className={`w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-medium text-white transition-all ${
+                    selectedColumns.length === 0 || isLoading 
+                    ? 'opacity-50 cursor-not-allowed' 
+                    : 'cursor-pointer'
+                }`}
+                style={{
+                    background: selectedColumns.length > 0 && !isLoading 
+                        ? theme.gradients.primary 
+                        : 'rgba(255,255,255,0.1)',
+                    boxShadow: selectedColumns.length > 0 && !isLoading ? theme.glow.cyan : undefined,
+                }}
+            >
+                {isLoading ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                    <>Seçili Sütunları Sil ({selectedColumns.length})</>
+                )}
+            </button>
         </div>
     );
 }

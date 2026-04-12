@@ -452,6 +452,50 @@ export async function resetPreprocessing(): Promise<{ success: boolean; message:
     return apiFetch('/api/preprocessing/reset', { method: 'POST' });
 }
 
+export interface DropColumnsResponse {
+    success: boolean;
+    dropped_columns: string[];
+    missing_columns: string[];
+    total_columns: number;
+    remaining_rows: number;
+}
+
+export interface DropColumnRecommendation {
+    column: string;
+    unique_count: number;
+    unique_ratio: number;
+    missing_count: number;
+    missing_percentage: number;
+    reasons: string[];
+}
+
+export interface DroppableColumnsAnalysis {
+    success: boolean;
+    recommendations: DropColumnRecommendation[];
+    recommended_columns: string[];
+    all_columns: string[];
+    cardinality_threshold: number;
+}
+
+export async function dropColumns(
+    columns: string[],
+    reason?: string
+): Promise<DropColumnsResponse> {
+    return apiFetch<DropColumnsResponse>('/api/preprocessing/drop-columns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ columns, reason }),
+    });
+}
+
+export async function analyzeDroppableColumns(
+    cardinalityThreshold: number = 0.9
+): Promise<DroppableColumnsAnalysis> {
+    return apiFetch<DroppableColumnsAnalysis>(
+        `/api/preprocessing/drop-columns/analyze?cardinality_threshold=${cardinalityThreshold}`
+    );
+}
+
 // ============== Model API ==============
 
 export interface ProblemTypeResponse {

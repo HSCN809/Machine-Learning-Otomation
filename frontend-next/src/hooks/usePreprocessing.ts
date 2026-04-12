@@ -10,6 +10,7 @@ import {
     EncodingConfig,
     ScalingConfig,
     FeatureConfig,
+    DropColumnConfig,
 } from '@/types/preprocessing';
 import * as api from '@/lib/api';
 
@@ -141,9 +142,10 @@ interface UsePreprocessingReturn {
     loadHistory: () => Promise<void>;
     applyMissingValues: (config: MissingValueConfig) => Promise<void>;
     applyOutliers: (config: OutlierConfig) => Promise<void>;
-    applyEncoding: (config: EncodingConfig) => Promise<void>;
+applyEncoding: (config: EncodingConfig) => Promise<void>;
     applyScaling: (config: ScalingConfig) => Promise<void>;
     applyFeatureEngineering: (config: FeatureConfig) => Promise<void>;
+    dropColumns: (config: DropColumnConfig) => Promise<void>;
     undoLastAction: () => Promise<void>;
     undoToHistoryItem: (historyIndex: number) => Promise<void>;
     resetAll: () => Promise<void>;
@@ -374,6 +376,19 @@ export function usePreprocessing(): UsePreprocessingReturn {
         } finally {
             setIsLoading(false);
         }
+}, [refreshColumnsAndHistory]);
+
+    const dropColumns = useCallback(async (config: DropColumnConfig) => {
+        try {
+            setIsLoading(true);
+            setError(null);
+            await api.dropColumns(config.columns, config.reason);
+            await refreshColumnsAndHistory();
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'İşlem sırasında hata oluştu');
+        } finally {
+            setIsLoading(false);
+        }
     }, [refreshColumnsAndHistory]);
 
     const undoLastAction = useCallback(async () => {
@@ -433,7 +448,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
     const columnsWithMissing = useMemo(() =>
         columns.filter(col => col.missingCount > 0), [columns]);
 
-    return {
+return {
         currentStep,
         completedSteps,
         skippedSteps,
@@ -455,6 +470,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
         applyEncoding,
         applyScaling,
         applyFeatureEngineering,
+        dropColumns,
         undoLastAction,
         undoToHistoryItem,
         resetAll,
