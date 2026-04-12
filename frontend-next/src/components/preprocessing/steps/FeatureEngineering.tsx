@@ -550,15 +550,6 @@ export function FeatureEngineering({ columns, numericColumns, onApply, isLoading
 
             {activeTab === 'binning' && (
                 <div className="space-y-6">
-                    <ColumnSelector
-                        columns={numericColumns}
-                        selectedColumns={binningColumn}
-                        onChange={setBinningColumn}
-                        label="Kaynak Sayısal Sütun"
-                        multiSelect={false}
-                        disabled={isLoading}
-                    />
-
                     <div className="space-y-4">
                         <label className="text-sm font-medium text-gray-300">Binning Stratejisi</label>
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -622,6 +613,15 @@ export function FeatureEngineering({ columns, numericColumns, onApply, isLoading
                             })}
                         </div>
                     </div>
+
+                    <ColumnSelector
+                        columns={numericColumns}
+                        selectedColumns={binningColumn}
+                        onChange={setBinningColumn}
+                        label="Uygulanacak Sütun"
+                        multiSelect={false}
+                        disabled={isLoading}
+                    />
 
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                         <div className="space-y-4">
