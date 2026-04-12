@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronLeft, ChevronRight, RotateCcw, SkipForward } from 'lucide-react';
+import { ChevronLeft, ChevronRight, SkipForward } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { theme } from '@/styles/theme';
 
@@ -8,7 +8,6 @@ interface StepNavigationProps {
     onPrev: () => void;
     onNext: () => void;
     onSkip?: () => void;
-    onReset?: () => void;
     canGoPrev: boolean;
     canGoNext: boolean;
     isLastStep?: boolean;
@@ -19,7 +18,6 @@ export function StepNavigation({
     onPrev,
     onNext,
     onSkip,
-    onReset,
     canGoPrev,
     canGoNext,
     isLastStep = false,
@@ -43,17 +41,6 @@ export function StepNavigation({
                     <span>Geri</span>
                 </button>
 
-                {/* Reset button */}
-                {onReset && (
-                    <button
-                        onClick={onReset}
-                        disabled={isLoading}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-gray-400 hover:text-white hover:bg-white/5 transition-all duration-200 ${isLoading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
-                    >
-                        <RotateCcw className="w-4 h-4" />
-                        <span className="hidden sm:inline">Sıfırla</span>
-                    </button>
-                )}
             </div>
 
             <div className="flex items-center gap-2">

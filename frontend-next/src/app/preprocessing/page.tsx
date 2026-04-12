@@ -69,7 +69,6 @@ export default function PreprocessingPage() {
         dropColumns,
         undoLastAction,
         undoToHistoryItem,
-        resetAll,
         numericColumns,
         scalingColumns,
         categoricalColumns,
@@ -261,7 +260,6 @@ export default function PreprocessingPage() {
                                             onPrev={prevStep}
                                             onNext={nextStep}
                                             onSkip={skipStep}
-                                            onReset={resetAll}
                                             canGoPrev={canGoPrev}
                                             canGoNext={canGoNext}
                                             isLastStep={isLastStep}

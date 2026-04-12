@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Sidebar, Header } from '@/components/layout';
 import {
     TargetSelector,
@@ -17,7 +17,11 @@ import { NoDataWarning, SessionPageSkeleton, StepProgress } from '@/components/c
 import { useModelSelection } from '@/hooks/useModelSelection';
 import { hasStoredSession } from '@/lib/api';
 import { theme } from '@/styles/theme';
-import { Target, BrainCircuit, SlidersHorizontal, Rocket, BarChart3, ChevronLeft, ChevronRight, Play, RotateCcw } from 'lucide-react';
+import { Target, BrainCircuit, SlidersHorizontal, Rocket, BarChart3, ChevronLeft, ChevronRight, Play } from 'lucide-react';
+
+const subscribeToSession = () => () => {};
+const getSessionSnapshot = () => hasStoredSession();
+const getServerSessionSnapshot = (): boolean | null => null;
 
 const STEPS = [
     { id: 0, name: 'Target Seçimi', icon: <Target className="w-5 h-5" /> },
@@ -29,7 +33,11 @@ const STEPS = [
 
 export default function ModelSelectionPage() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-    const [hasSession, setHasSession] = useState<boolean | null>(null);
+    const hasSession = useSyncExternalStore(
+        subscribeToSession,
+        getSessionSnapshot,
+        getServerSessionSnapshot
+    );
 
     const {
         currentStep,
@@ -53,16 +61,13 @@ export default function ModelSelectionPage() {
         toggleModelSelection,
         updateModelParams,
         trainModels,
-        resetAll,
     } = useModelSelection();
 
     useEffect(() => {
-        const sessionExists = hasStoredSession();
-        setHasSession(sessionExists);
-        if (sessionExists) {
-            loadColumns();
+        if (hasSession) {
+            void loadColumns();
         }
-    }, [loadColumns]);
+    }, [hasSession, loadColumns]);
 
     const hasData = hasSession === true && columns.length > 0;
     const currentStepInfo = STEPS[currentStep];
@@ -227,13 +232,6 @@ export default function ModelSelectionPage() {
                                         >
                                             <ChevronLeft className="w-4 h-4" />
                                             Geri
-                                        </button>
-                                        <button
-                                            onClick={resetAll}
-                                            disabled={isTraining}
-                                            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-gray-400 hover:text-white hover:bg-white/5 transition-all"
-                                        >
-                                            <RotateCcw className="w-4 h-4" />
                                         </button>
                                     </div>
 
