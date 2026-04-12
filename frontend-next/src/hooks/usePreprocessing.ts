@@ -64,7 +64,7 @@ function mapHistoryEntry(entry: unknown, index: number): ProcessingHistory | nul
         id: `${stepKey}-${rawEntry.timestamp ?? index}-${index}`,
         historyIndex: index,
         stepKey,
-        action: HISTORY_ACTION_BY_STEP[stepKey] || method,
+        action: method === 'drop_columns' ? 'drop_columns' : HISTORY_ACTION_BY_STEP[stepKey] || method,
         columns: rawEntry.columns ?? rawEntry.source_columns ?? [],
         newColumns: rawEntry.new_columns,
         method,

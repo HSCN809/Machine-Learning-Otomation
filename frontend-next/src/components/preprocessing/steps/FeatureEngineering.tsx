@@ -240,7 +240,7 @@ export function FeatureEngineeringLegacy({ columns, numericColumns, onApply, isL
     );
 }
 
-export function FeatureEngineering({ columns, numericColumns, onApply, isLoading }: FeatureEngineeringProps) {
+export function FeatureEngineering({ columns, numericColumns, onApply, onDropColumns, isLoading }: FeatureEngineeringProps) {
     const [activeTab, setActiveTab] = useState<FeatureTab>('numeric');
 
     const [numericOperation, setNumericOperation] = useState<NumericFeatureOperation>('add');
@@ -742,7 +742,7 @@ export function FeatureEngineering({ columns, numericColumns, onApply, isLoading
             )}
 
             {activeTab === 'drop_columns' && (
-                <DropColumnsTab columns={columns} isLoading={isLoading} />
+                <DropColumnsTab columns={columns} isLoading={isLoading} onDropColumns={onDropColumns} />
             )}
 
             <button
@@ -817,6 +817,15 @@ export function FeatureEngineering({ columns, numericColumns, onApply, isLoading
 function DropColumnsTab({ columns, isLoading, onDropColumns }: DropColumnsTabProps) {
     const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
     const [recommendations, setRecommendations] = useState<api.DropColumnRecommendation[]>([]);
+    const availableColumnNames = useMemo(() => new Set(columns.map((column) => column.name)), [columns]);
+    const visibleRecommendations = useMemo(
+        () => recommendations.filter((recommendation) => availableColumnNames.has(recommendation.column)),
+        [availableColumnNames, recommendations]
+    );
+    const visibleSelectedColumns = useMemo(
+        () => selectedColumns.filter((column) => availableColumnNames.has(column)),
+        [availableColumnNames, selectedColumns]
+    );
 
     useEffect(() => {
         async function loadAnalysis() {
@@ -830,10 +839,10 @@ function DropColumnsTab({ columns, isLoading, onDropColumns }: DropColumnsTabPro
             }
         }
         loadAnalysis();
-    }, []);
+    }, [columns]);
 
     const handleSelectAllRecommended = () => {
-        const recommendedCols = recommendations.map(r => r.column);
+        const recommendedCols = visibleRecommendations.map((recommendation) => recommendation.column);
         setSelectedColumns(recommendedCols);
     };
 
@@ -842,20 +851,18 @@ function DropColumnsTab({ columns, isLoading, onDropColumns }: DropColumnsTabPro
     };
 
     const handleApply = async () => {
-        if (selectedColumns.length === 0) return;
+        if (visibleSelectedColumns.length === 0) return;
         if (onDropColumns) {
-            await onDropColumns({ columns: selectedColumns, reason: 'Manuel sütun silme' });
+            await onDropColumns({ columns: visibleSelectedColumns, reason: 'Manuel sütun silme' });
         } else {
-            await api.dropColumns(selectedColumns, 'Manuel sütun silme');
+            await api.dropColumns(visibleSelectedColumns, 'Manuel sütun silme');
         }
         setSelectedColumns([]);
     };
 
-    const recommendedColumns = recommendations.map(r => r.column);
-
     return (
         <div className="space-y-6">
-            {recommendations.length > 0 && (
+            {visibleRecommendations.length > 0 && (
                 <div className="space-y-4">
                     <div className="flex items-center justify-between">
                         <h4 className="text-sm font-medium text-gray-300">Önerilen Sütunlar</h4>
@@ -878,7 +885,7 @@ function DropColumnsTab({ columns, isLoading, onDropColumns }: DropColumnsTabPro
                         </div>
                     </div>
                     <div className="space-y-2">
-                        {recommendations.map((rec) => {
+                        {visibleRecommendations.map((rec) => {
                             const isSelected = selectedColumns.includes(rec.column);
                             return (
                                 <div
@@ -920,10 +927,10 @@ function DropColumnsTab({ columns, isLoading, onDropColumns }: DropColumnsTabPro
                 </div>
             )}
 
-            <div className="border-t border-white/10 pt-4">
+            <div className={visibleRecommendations.length > 0 ? 'border-t border-white/10 pt-4' : ''}>
                 <ColumnSelector
                     columns={columns}
-                    selectedColumns={selectedColumns}
+                    selectedColumns={visibleSelectedColumns}
                     onChange={setSelectedColumns}
                     label="Manuel Sütun Seçimi"
                     showMissing={false}
@@ -933,23 +940,23 @@ function DropColumnsTab({ columns, isLoading, onDropColumns }: DropColumnsTabPro
 
             <button
                 onClick={handleApply}
-                disabled={selectedColumns.length === 0 || isLoading}
+                disabled={visibleSelectedColumns.length === 0 || isLoading}
                 className={`w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-medium text-white transition-all ${
-                    selectedColumns.length === 0 || isLoading 
+                    visibleSelectedColumns.length === 0 || isLoading 
                     ? 'opacity-50 cursor-not-allowed' 
                     : 'cursor-pointer'
                 }`}
                 style={{
-                    background: selectedColumns.length > 0 && !isLoading 
+                    background: visibleSelectedColumns.length > 0 && !isLoading 
                         ? theme.gradients.primary 
                         : 'rgba(255,255,255,0.1)',
-                    boxShadow: selectedColumns.length > 0 && !isLoading ? theme.glow.cyan : undefined,
+                    boxShadow: visibleSelectedColumns.length > 0 && !isLoading ? theme.glow.cyan : undefined,
                 }}
             >
                 {isLoading ? (
                     <Loader2 className="w-5 h-5 animate-spin" />
                 ) : (
-                    <>Seçili Sütunları Sil ({selectedColumns.length})</>
+                    <>Seçili Sütunları Sil ({visibleSelectedColumns.length})</>
                 )}
             </button>
         </div>

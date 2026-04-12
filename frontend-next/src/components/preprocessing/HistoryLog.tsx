@@ -26,6 +26,7 @@ const actionLabels: Record<string, string> = {
     encode_categorical: 'Kategorik kodlama',
     scale_numeric: 'Ölçeklendirme',
     create_feature: 'Özellik oluşturma',
+    drop_columns: 'Sütun silme',
 };
 
 const methodLabels: Record<string, string> = {
@@ -34,6 +35,7 @@ const methodLabels: Record<string, string> = {
     binning: 'Binning',
     create_datetime: 'Tarih/Zaman',
     create_categorical: 'Kategorik Kombinasyon',
+    drop_columns: 'Sütun Sil',
     add: 'Toplama',
     subtract: 'Çıkarma',
     multiply: 'Çarpma',

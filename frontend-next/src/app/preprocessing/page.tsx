@@ -66,6 +66,7 @@ export default function PreprocessingPage() {
         applyEncoding,
         applyScaling,
         applyFeatureEngineering,
+        dropColumns,
         undoLastAction,
         undoToHistoryItem,
         resetAll,
@@ -160,6 +161,7 @@ export default function PreprocessingPage() {
                         columns={columns}
                         numericColumns={numericColumns}
                         onApply={applyFeatureEngineering}
+                        onDropColumns={dropColumns}
                         isLoading={isLoading}
                     />
                 );
