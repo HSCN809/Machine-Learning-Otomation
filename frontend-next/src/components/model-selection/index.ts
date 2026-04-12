@@ -1,7 +1,7 @@
 // Model Selection components barrel export
 export { ModelCard } from './ModelCard';
 export { ModelGrid } from './ModelGrid';
-export { TargetSelector } from './TargetSelector';
+export { TargetSelectorClean as TargetSelector } from './TargetSelectorClean';
 export { HyperparameterForm } from './HyperparameterForm';
 export { TrainingProgress } from './TrainingProgress';
 export { MetricsDisplay } from './MetricsDisplay';
