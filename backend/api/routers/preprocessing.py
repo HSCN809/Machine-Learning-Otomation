@@ -3,6 +3,7 @@ Preprocessing Router - Data preprocessing endpoints
 """
 
 import ast
+import logging
 import os
 import sys
 from typing import Any, List, Optional
@@ -11,6 +12,8 @@ import numpy as np
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
