@@ -71,6 +71,7 @@ export default function PreprocessingPage() {
         undoToHistoryItem,
         resetAll,
         numericColumns,
+        scalingColumns,
         categoricalColumns,
         columnsWithMissing,
     } = usePreprocessing();
@@ -176,7 +177,7 @@ export default function PreprocessingPage() {
             case 'scaling':
                 return (
                     <Scaling
-                        numericColumns={numericColumns}
+                        numericColumns={scalingColumns}
                         onApply={applyScaling}
                         isLoading={isLoading}
                     />

@@ -152,6 +152,7 @@ applyEncoding: (config: EncodingConfig) => Promise<void>;
 
     // Helpers
     numericColumns: ColumnInfo[];
+    scalingColumns: ColumnInfo[];
     categoricalColumns: ColumnInfo[];
     columnsWithMissing: ColumnInfo[];
 }
@@ -442,6 +443,27 @@ export function usePreprocessing(): UsePreprocessingReturn {
     const numericColumns = useMemo(() =>
         columns.filter(col => col.type === 'numeric'), [columns]);
 
+    const scalingColumns = useMemo(() => {
+        const encodedColumnNames = new Set<string>();
+
+        for (const item of history) {
+            if (item.stepKey !== 'encoding') {
+                continue;
+            }
+
+            if (item.method === 'onehot') {
+                item.newColumns?.forEach((column) => encodedColumnNames.add(column));
+                continue;
+            }
+
+            if (item.method === 'label' || item.method === 'ordinal' || item.method === 'frequency' || item.method === 'binary') {
+                item.columns?.forEach((column) => encodedColumnNames.add(column));
+            }
+        }
+
+        return numericColumns.filter((column) => !encodedColumnNames.has(column.name));
+    }, [history, numericColumns]);
+
     const categoricalColumns = useMemo(() =>
         columns.filter(col => col.type === 'categorical'), [columns]);
 
@@ -475,6 +497,7 @@ return {
         undoToHistoryItem,
         resetAll,
         numericColumns,
+        scalingColumns,
         categoricalColumns,
         columnsWithMissing,
     };
