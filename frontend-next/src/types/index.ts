@@ -34,16 +34,6 @@ export interface WizardStep {
     status: 'pending' | 'current' | 'completed';
 }
 
-// LLM Suggestion types
-export interface LLMSuggestion {
-    id: string;
-    type: string;
-    title: string;
-    description: string;
-    priority: 'high' | 'medium' | 'low';
-    action: () => void;
-}
-
 // Chart/Visualization types
 export interface ChartData {
     labels: string[];

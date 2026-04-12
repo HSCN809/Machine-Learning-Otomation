@@ -1,14 +1,13 @@
-# DataScience Copilot - Gemini Edition 🤖📊
+# DataScience Copilot 🤖📊
 
 <div align="center">
 
 ![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
 ![LangChain](https://img.shields.io/badge/LangChain-0.1+-green.svg)
-![Gemini](https://img.shields.io/badge/Gemini_AI-API-orange.svg)
 ![Streamlit](https://img.shields.io/badge/UI-Streamlit-red.svg)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
-**Gemini AI destekli akıllı veri bilimi asistanı - Otomatik EDA, model önerisi ve hiperparametre optimizasyonu**
+**Akıllı veri bilimi asistanı - Otomatik EDA, model önerisi ve hiperparametre optimizasyonu**
 
 [Özellikler](#-özellikler) • [Kurulum](#-kurulum) • [Kullanım](#-kullanım) • [Mimari](#-mimari) • [Katkı](#-katkı)
 
@@ -16,14 +15,13 @@
 
 ## 🎯 Genel Bakış
 
-**DataScience Copilot**, Google Gemini AI ve LangChain kullanarak veri analizi süreçlerini otomatikleştiren akıllı bir asistan sistemidir. Kullanıcıların veri yükleyip, otomatik analizler gerçekleştirebileceği, model önerileri alabileceği ve detaylı raporlar oluşturabileceği kapsamlı bir platform sunar.
+**DataScience Copilot**, veri analizi süreçlerini otomatikleştiren akıllı bir asistan sistemidir. Kullanıcıların veri yükleyip, otomatik analizler gerçekleştirebileceği, model önerileri alabileceği ve detaylı raporlar oluşturabileceği kapsamlı bir platform sunar.
 
 ### 🤖 Temel Yetenekler
 - **Akıllı Veri Analizi**: Otomatik EDA ve istatistiksel analiz
 - **Model Öneri Sistemi**: Problem tipine göre optimize model seçimi
 - **Hiperparametre Optimizasyonu**: Otomatik tuning ve optimizasyon
 - **Görselleştirme**: Interactive chart'lar ve dashboard'lar
-- **Doğal Dil İşleme**: Gemini AI ile metin tabanlı etkileşim
 
 ## ✨ Özellikler
 

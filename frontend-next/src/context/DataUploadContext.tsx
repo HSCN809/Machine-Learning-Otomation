@@ -26,7 +26,6 @@ interface DataUploadContextType {
     dataSummary: DataSummary | null;
     validationReport: ValidationReport | null;
     isInitializing: boolean;
-    setValidationReport: React.Dispatch<React.SetStateAction<ValidationReport | null>>;
     uploadFile: (file: File) => Promise<void>;
     loadSampleDataset: (datasetId: string) => Promise<void>;
     hydrateSession: () => Promise<void>;
@@ -85,7 +84,6 @@ export function DataUploadProvider({ children }: { children: ReactNode }) {
                 column: issue.column,
                 description: issue.description,
                 suggestion: issue.suggestion,
-                llmSuggestion: issue.llmSuggestion,
                 priority: issue.priority as ValidationIssue['priority'],
             };
 
@@ -256,7 +254,6 @@ export function DataUploadProvider({ children }: { children: ReactNode }) {
                 dataSummary,
                 validationReport,
                 isInitializing,
-                setValidationReport,
                 uploadFile,
                 loadSampleDataset,
                 hydrateSession,

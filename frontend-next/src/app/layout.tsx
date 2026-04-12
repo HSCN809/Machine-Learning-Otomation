@@ -11,7 +11,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "ML Automation | Data Science Copilot",
-  description: "Gemini AI destekli akıllı veri bilimi asistanı - Otomatik EDA, model önerisi ve hiperparametre optimizasyonu",
+  description: "Akıllı veri bilimi asistanı - Otomatik EDA, model önerisi ve hiperparametre optimizasyonu",
   keywords: ["machine learning", "data science", "AI", "automation", "EDA", "model training"],
   authors: [{ name: "ML Automation Team" }],
 };

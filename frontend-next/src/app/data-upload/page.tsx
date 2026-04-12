@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Sidebar, Header } from '@/components/layout';
 import {
     FileDropzone,
@@ -12,12 +12,9 @@ import {
 import { SessionPageSkeleton } from '@/components/common';
 import { useDataUpload } from '@/hooks/useDataUpload';
 import * as api from '@/lib/api';
-import { ValidationReport as ValidationReportType, ValidationIssue } from '@/types/data-upload';
 
 export default function DataUploadPage() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-    const [isEnhancing, setIsEnhancing] = useState(false);
-    const [hasLLMSuggestions, setHasLLMSuggestions] = useState(false);
     const [isBootstrapping, setIsBootstrapping] = useState(true);
     const bootstrapStartedRef = useRef(false);
 
@@ -28,7 +25,6 @@ export default function DataUploadPage() {
         uploadedFile,
         dataSummary,
         validationReport,
-        setValidationReport,
         uploadFile,
         loadSampleDataset,
         hydrateSession,
@@ -64,80 +60,6 @@ export default function DataUploadPage() {
             cancelled = true;
         };
     }, [dataSummary, hydrateSession, status, validationReport]);
-
-    const handleEnhanceWithLLM = useCallback(async () => {
-        try {
-            setIsEnhancing(true);
-            const enhanced = await api.enhanceWithLLM();
-
-            if (enhanced && enhanced.issues) {
-                const issues: ValidationReportType['issuesBySeverity'] = {
-                    critical: [],
-                    warning: [],
-                    info: [],
-                };
-
-                enhanced.issues.forEach((issue: api.ValidationIssue) => {
-                    const validationIssue: ValidationIssue = {
-                        id: issue.id,
-                        severity: issue.severity,
-                        type: issue.type as ValidationIssue['type'],
-                        column: issue.column,
-                        description: issue.description,
-                        suggestion: issue.suggestion,
-                        llmSuggestion: issue.llmSuggestion,
-                        priority: issue.priority as ValidationIssue['priority'],
-                    };
-
-                    if (issue.severity === 'critical') {
-                        issues.critical.push(validationIssue);
-                    } else if (issue.severity === 'warning') {
-                        issues.warning.push(validationIssue);
-                    } else {
-                        issues.info.push(validationIssue);
-                    }
-                });
-
-                setValidationReport({
-                    isValid: enhanced.is_valid,
-                    totalIssues: enhanced.issues.length,
-                    issuesBySeverity: issues,
-                });
-                setHasLLMSuggestions(true);
-            }
-        } catch (err) {
-            console.error('LLM enhancement error:', err);
-        } finally {
-            setIsEnhancing(false);
-        }
-    }, [setValidationReport]);
-
-    const handleDelete = useCallback(async () => {
-        await reset();
-        setHasLLMSuggestions(false);
-    }, [reset]);
-
-    const handleResetLLMSuggestions = useCallback(() => {
-        if (validationReport) {
-            const resetIssues = (issues: ValidationIssue[]) =>
-                issues.map((issue) => ({
-                    ...issue,
-                    llmSuggestion: undefined,
-                    priority: undefined,
-                }));
-
-            setValidationReport({
-                ...validationReport,
-                issuesBySeverity: {
-                    critical: resetIssues(validationReport.issuesBySeverity.critical),
-                    warning: resetIssues(validationReport.issuesBySeverity.warning),
-                    info: resetIssues(validationReport.issuesBySeverity.info),
-                },
-            });
-        }
-
-        setHasLLMSuggestions(false);
-    }, [validationReport, setValidationReport]);
 
     const isLoading = status === 'uploading' || status === 'validating';
     const showResults = status === 'success' && dataSummary && validationReport;
@@ -229,11 +151,7 @@ export default function DataUploadPage() {
                             >
                                 <ValidationReport
                                     report={validationReport}
-                                    onEnhanceWithLLM={handleEnhanceWithLLM}
-                                    onResetLLMSuggestions={handleResetLLMSuggestions}
-                                    onDelete={handleDelete}
-                                    isEnhancing={isEnhancing}
-                                    hasLLMSuggestions={hasLLMSuggestions}
+                                    onDelete={reset}
                                 />
                             </section>
                         </>

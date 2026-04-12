@@ -157,7 +157,6 @@ export interface ValidationIssue {
     column?: string;
     description: string;
     suggestion?: string;
-    llmSuggestion?: string;
     priority?: 'high' | 'medium' | 'low';
 }
 
@@ -177,10 +176,6 @@ export async function getDataValidation(): Promise<ValidationResponse> {
 
 export async function resetUpload(): Promise<{ success: boolean; message: string }> {
     return apiFetch('/api/upload/reset', { method: 'DELETE' });
-}
-
-export async function enhanceWithLLM(): Promise<ValidationResponse> {
-    return apiFetch<ValidationResponse>('/api/upload/enhance-with-llm', { method: 'POST' });
 }
 
 // ============== EDA API ==============

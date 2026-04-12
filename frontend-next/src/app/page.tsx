@@ -100,7 +100,7 @@ export default function DashboardPage() {
                 <span className="text-white"> ile Başlayın</span>
               </h1>
               <p className="text-gray-400 text-lg max-w-2xl mb-6">
-                Gemini AI destekli akıllı veri bilimi asistanı ile verilerinizi analiz edin,
+                Akıllı veri bilimi asistanı ile verilerinizi analiz edin,
                 ön işleme yapın ve makine öğrenmesi modelleri eğitin.
               </p>
 

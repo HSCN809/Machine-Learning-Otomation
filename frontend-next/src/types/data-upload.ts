@@ -31,7 +31,6 @@ export interface ValidationIssue {
     column?: string;
     description: string;
     suggestion?: string;
-    llmSuggestion?: string;
     priority?: 'high' | 'medium' | 'low';
 }
 
