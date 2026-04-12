@@ -17,7 +17,7 @@ import { NoDataWarning, SessionPageSkeleton, StepProgress } from '@/components/c
 import { useModelSelection } from '@/hooks/useModelSelection';
 import { hasStoredSession } from '@/lib/api';
 import { theme } from '@/styles/theme';
-import { Target, BrainCircuit, SlidersHorizontal, Rocket, BarChart3, ChevronLeft, ChevronRight, Play } from 'lucide-react';
+import { Target, BrainCircuit, SlidersHorizontal, Rocket, BarChart3, ChevronLeft, ChevronRight, Play, SkipForward } from 'lucide-react';
 
 const subscribeToSession = () => () => {};
 const getSessionSnapshot = () => hasStoredSession();
@@ -72,6 +72,7 @@ export default function ModelSelectionPage() {
     const hasData = hasSession === true && columns.length > 0;
     const currentStepInfo = STEPS[currentStep];
     const completedSteps = STEPS.map((_, index) => index).filter((index) => index < currentStep);
+    const canSkip = currentStep < STEPS.length - 1;
 
     const renderStepContent = () => {
         switch (currentStep) {
@@ -235,6 +236,18 @@ export default function ModelSelectionPage() {
                                         </button>
                                     </div>
 
+                                    <div className="flex items-center gap-2">
+                                        {canSkip && (
+                                            <button
+                                                onClick={nextStep}
+                                                disabled={isTraining}
+                                                className="flex cursor-pointer items-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-gray-400 hover:text-white hover:bg-white/5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                Atla
+                                                <SkipForward className="w-4 h-4" />
+                                            </button>
+                                        )}
+
                                     {currentStep < 3 && (
                                         <button
                                             onClick={nextStep}
@@ -267,6 +280,7 @@ export default function ModelSelectionPage() {
                                             Eğit
                                         </button>
                                     )}
+                                    </div>
                                 </div>
                             </div>
                         </>
