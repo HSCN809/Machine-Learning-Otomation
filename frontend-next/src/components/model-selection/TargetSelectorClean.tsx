@@ -24,7 +24,6 @@ export function TargetSelectorClean({
         return (
             <div className="space-y-6">
                 <div className="space-y-3">
-                    <label className="text-sm font-medium text-gray-300">Hedef Değişken (Target)</label>
                     <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-10 text-center text-gray-400">
                         Kullanılabilir sütun bulunamadı.
                     </div>
@@ -50,7 +49,6 @@ export function TargetSelectorClean({
     return (
         <div className="space-y-6">
             <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-300">Hedef Değişken (Target)</label>
                 <div className="mx-auto flex max-w-5xl items-center gap-3">
                     <button
                         type="button"
@@ -120,30 +118,32 @@ export function TargetSelectorClean({
             </div>
 
             {selectedColumn && problemType && (
-                <div
-                    className="p-6 rounded-xl border animate-fadeIn"
-                    style={{
-                        borderColor: problemType === 'classification'
-                            ? `${theme.colors.secondary.green}50`
-                            : `${theme.colors.primary.cyan}50`,
-                        background: problemType === 'classification'
-                            ? `${theme.colors.secondary.green}10`
-                            : `${theme.colors.primary.cyan}10`,
-                    }}
-                >
-                    <div className="flex items-center gap-4">
-                        <span className="text-5xl">
-                            {problemType === 'classification' ? '🏷️' : '📈'}
-                        </span>
-                        <div>
-                            <h3 className="text-xl font-bold text-white">
-                                {problemType === 'classification' ? 'Sınıflandırma Problemi' : 'Regresyon Problemi'}
-                            </h3>
-                            <p className="mt-1 text-sm text-gray-400">
-                                {problemType === 'classification'
-                                    ? 'Hedef değişken kategorik. Sınıflandırma modelleri önerilir.'
-                                    : 'Hedef değişken sayısal. Regresyon modelleri önerilir.'}
-                            </p>
+                <div className="mx-auto max-w-5xl">
+                    <div
+                        className="p-6 rounded-xl border animate-fadeIn"
+                        style={{
+                            borderColor: problemType === 'classification'
+                                ? `${theme.colors.secondary.green}50`
+                                : `${theme.colors.primary.cyan}50`,
+                            background: problemType === 'classification'
+                                ? `${theme.colors.secondary.green}10`
+                                : `${theme.colors.primary.cyan}10`,
+                        }}
+                    >
+                        <div className="flex items-center gap-4">
+                            <span className="text-5xl">
+                                {problemType === 'classification' ? '🏷️' : '📈'}
+                            </span>
+                            <div>
+                                <h3 className="text-xl font-bold text-white">
+                                    {problemType === 'classification' ? 'Sınıflandırma Problemi' : 'Regresyon Problemi'}
+                                </h3>
+                                <p className="mt-1 text-sm text-gray-400">
+                                    {problemType === 'classification'
+                                        ? 'Hedef değişken kategorik. Sınıflandırma modelleri önerilir.'
+                                        : 'Hedef değişken sayısal. Regresyon modelleri önerilir.'}
+                                </p>
+                            </div>
                         </div>
                     </div>
                 </div>
