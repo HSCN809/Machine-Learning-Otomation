@@ -20,6 +20,8 @@ interface ColumnInfo {
 
 interface UseModelSelectionReturn {
     currentStep: number;
+    completedSteps: number[];
+    skippedSteps: number[];
     targetColumn: string | null;
     problemType: ProblemType | null;
     selectedModels: string[];
@@ -32,6 +34,7 @@ interface UseModelSelectionReturn {
     availableModels: ModelInfo[];
     goToStep: (step: number) => void;
     nextStep: () => void;
+    skipStep: () => void;
     prevStep: () => void;
     canGoNext: boolean;
     canGoPrev: boolean;
@@ -45,6 +48,8 @@ interface UseModelSelectionReturn {
 
 export function useModelSelection(): UseModelSelectionReturn {
     const [currentStep, setCurrentStep] = useState(0);
+    const [completedSteps, setCompletedSteps] = useState<number[]>([]);
+    const [skippedSteps, setSkippedSteps] = useState<number[]>([]);
     const [targetColumn, setTargetColumnState] = useState<string | null>(null);
     const [problemType, setProblemType] = useState<ProblemType | null>(null);
     const [selectedModels, setSelectedModels] = useState<string[]>([]);
@@ -95,9 +100,23 @@ export function useModelSelection(): UseModelSelectionReturn {
 
     const nextStep = useCallback(() => {
         if (currentStep < 4) {
+            setSkippedSteps((prev) => prev.filter((step) => step !== currentStep));
+            if (!completedSteps.includes(currentStep)) {
+                setCompletedSteps((prev) => [...prev, currentStep]);
+            }
             setCurrentStep((prev) => prev + 1);
         }
-    }, [currentStep]);
+    }, [completedSteps, currentStep]);
+
+    const skipStep = useCallback(() => {
+        if (currentStep < 4) {
+            setCompletedSteps((prev) => prev.filter((step) => step !== currentStep));
+            if (!skippedSteps.includes(currentStep)) {
+                setSkippedSteps((prev) => [...prev, currentStep]);
+            }
+            setCurrentStep((prev) => prev + 1);
+        }
+    }, [currentStep, skippedSteps]);
 
     const prevStep = useCallback(() => {
         if (currentStep > 0) {
@@ -218,6 +237,8 @@ export function useModelSelection(): UseModelSelectionReturn {
 
     const resetAll = useCallback(() => {
         setCurrentStep(0);
+        setCompletedSteps([]);
+        setSkippedSteps([]);
         setTargetColumnState(null);
         setProblemType(null);
         setSelectedModels([]);
@@ -228,6 +249,8 @@ export function useModelSelection(): UseModelSelectionReturn {
 
     return {
         currentStep,
+        completedSteps,
+        skippedSteps,
         targetColumn,
         problemType,
         selectedModels,
@@ -240,6 +263,7 @@ export function useModelSelection(): UseModelSelectionReturn {
         availableModels,
         goToStep,
         nextStep,
+        skipStep,
         prevStep,
         canGoNext,
         canGoPrev,

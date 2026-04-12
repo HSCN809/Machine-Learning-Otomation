@@ -41,6 +41,8 @@ export default function ModelSelectionPage() {
 
     const {
         currentStep,
+        completedSteps,
+        skippedSteps,
         targetColumn,
         problemType,
         selectedModels,
@@ -53,6 +55,7 @@ export default function ModelSelectionPage() {
         availableModels,
         goToStep,
         nextStep,
+        skipStep,
         prevStep,
         canGoNext,
         canGoPrev,
@@ -71,7 +74,6 @@ export default function ModelSelectionPage() {
 
     const hasData = hasSession === true && columns.length > 0;
     const currentStepInfo = STEPS[currentStep];
-    const completedSteps = STEPS.map((_, index) => index).filter((index) => index < currentStep);
     const canSkip = currentStep < STEPS.length - 1;
 
     const renderStepContent = () => {
@@ -199,6 +201,7 @@ export default function ModelSelectionPage() {
                                 steps={STEPS}
                                 currentStep={currentStep}
                                 completedSteps={completedSteps}
+                                skippedSteps={skippedSteps}
                                 onStepClick={goToStep}
                                 isStepClickable={(index) => index <= currentStep}
                                 showActiveLine={false}
@@ -239,7 +242,7 @@ export default function ModelSelectionPage() {
                                     <div className="flex items-center gap-2">
                                         {canSkip && (
                                             <button
-                                                onClick={nextStep}
+                                                onClick={skipStep}
                                                 disabled={isTraining}
                                                 className="flex cursor-pointer items-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-gray-400 hover:text-white hover:bg-white/5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                             >

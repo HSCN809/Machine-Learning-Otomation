@@ -1,11 +1,11 @@
 'use client';
 
 import { ReactNode } from 'react';
-import { Check } from 'lucide-react';
+import { Check, SkipForward } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { theme } from '@/styles/theme';
 
-export type StepStatus = 'pending' | 'current' | 'completed';
+export type StepStatus = 'pending' | 'current' | 'completed' | 'skipped';
 
 export interface ProgressStepItem {
     id: string | number;
@@ -17,6 +17,7 @@ interface StepProgressProps {
     steps: ProgressStepItem[];
     currentStep: number;
     completedSteps?: number[];
+    skippedSteps?: number[];
     onStepClick?: (step: number) => void;
     isStepClickable?: (index: number, status: StepStatus) => boolean;
     showActiveLine?: boolean;
@@ -26,12 +27,14 @@ export function StepProgress({
     steps,
     currentStep,
     completedSteps = [],
+    skippedSteps = [],
     onStepClick,
     isStepClickable,
     showActiveLine = true,
 }: StepProgressProps) {
     const getStepStatus = (index: number): StepStatus => {
         if (completedSteps.includes(index)) return 'completed';
+        if (skippedSteps.includes(index)) return 'skipped';
         if (index === currentStep) return 'current';
         return 'pending';
     };
@@ -55,7 +58,7 @@ export function StepProgress({
                     const status = getStepStatus(index);
                     const clickable = isStepClickable
                         ? isStepClickable(index, status)
-                        : status === 'completed' || index <= currentStep;
+                        : status === 'completed' || status === 'skipped' || index <= currentStep;
 
                     return (
                         <div
@@ -69,6 +72,7 @@ export function StepProgress({
                                 className={cn(
                                     'w-12 h-12 rounded-full flex items-center justify-center text-lg transition-all duration-300 border-2',
                                     status === 'completed' && 'border-green-500 bg-green-500/20',
+                                    status === 'skipped' && 'border-amber-500 bg-amber-500/15',
                                     status === 'current' && 'border-cyan-500 bg-cyan-500/20',
                                     status === 'pending' && 'border-white/20 bg-white/5',
                                     clickable && 'cursor-pointer hover:scale-110',
@@ -79,11 +83,15 @@ export function StepProgress({
                                         ? { boxShadow: theme.glow.cyan }
                                         : status === 'completed'
                                           ? { boxShadow: theme.glow.green }
+                                          : status === 'skipped'
+                                            ? { boxShadow: '0 0 20px rgba(245, 158, 11, 0.25)' }
                                           : undefined
                                 }
                             >
                                 {status === 'completed' ? (
                                     <Check className="w-6 h-6 text-green-400" />
+                                ) : status === 'skipped' ? (
+                                    <SkipForward className="w-5 h-5 text-amber-400" />
                                 ) : (
                                     step.icon
                                 )}
@@ -94,6 +102,7 @@ export function StepProgress({
                                     'mt-2 text-sm font-medium text-center',
                                     status === 'current' && 'text-cyan-400',
                                     status === 'completed' && 'text-green-400',
+                                    status === 'skipped' && 'text-amber-400',
                                     status === 'pending' && 'text-gray-500'
                                 )}
                             >
@@ -110,7 +119,7 @@ export function StepProgress({
                         Adım {currentStep + 1} / {steps.length}
                     </span>
                     <span className="text-sm font-medium text-cyan-400">
-                        {steps[currentStep]?.name}
+                        {steps[currentStep]?.icon} {steps[currentStep]?.name}
                     </span>
                 </div>
                 <div className="h-2 bg-white/10 rounded-full overflow-hidden">
