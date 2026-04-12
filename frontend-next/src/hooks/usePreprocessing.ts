@@ -445,23 +445,29 @@ export function usePreprocessing(): UsePreprocessingReturn {
 
     const scalingColumns = useMemo(() => {
         const encodedColumnNames = new Set<string>();
+        const scaledColumnNames = new Set<string>();
 
         for (const item of history) {
-            if (item.stepKey !== 'encoding') {
+            if (item.stepKey === 'encoding') {
+                if (item.method === 'onehot') {
+                    item.newColumns?.forEach((column) => encodedColumnNames.add(column));
+                    continue;
+                }
+
+                if (item.method === 'label' || item.method === 'ordinal' || item.method === 'frequency' || item.method === 'binary') {
+                    item.columns?.forEach((column) => encodedColumnNames.add(column));
+                }
                 continue;
             }
 
-            if (item.method === 'onehot') {
-                item.newColumns?.forEach((column) => encodedColumnNames.add(column));
-                continue;
-            }
-
-            if (item.method === 'label' || item.method === 'ordinal' || item.method === 'frequency' || item.method === 'binary') {
-                item.columns?.forEach((column) => encodedColumnNames.add(column));
+            if (item.stepKey === 'scaling') {
+                item.columns?.forEach((column) => scaledColumnNames.add(column));
             }
         }
 
-        return numericColumns.filter((column) => !encodedColumnNames.has(column.name));
+        return numericColumns.filter(
+            (column) => !encodedColumnNames.has(column.name) && !scaledColumnNames.has(column.name)
+        );
     }, [history, numericColumns]);
 
     const categoricalColumns = useMemo(() =>
