@@ -142,7 +142,7 @@ export function FeatureEngineeringLegacy({ columns, numericColumns, onApply, isL
             </div>
 
             {/* Operation selector */}
-            <div className="space-y-2">
+            <div className="space-y-4">
                 <label className="text-sm font-medium text-gray-300">İşlem Türü</label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {OPERATIONS.map((op) => (
@@ -173,7 +173,7 @@ export function FeatureEngineeringLegacy({ columns, numericColumns, onApply, isL
             />
 
             {/* New column name */}
-            <div className="space-y-2">
+            <div className="space-y-4">
                 <label className="text-sm font-medium text-gray-300">Yeni Sütun Adı</label>
                 <input
                     type="text"
@@ -187,7 +187,7 @@ export function FeatureEngineeringLegacy({ columns, numericColumns, onApply, isL
 
             {/* Expression for numeric operations */}
             {operation === 'create_numeric' && (
-                <div className="space-y-2">
+                <div className="space-y-4">
                     <label className="text-sm font-medium text-gray-300">
                         İfade (opsiyonel)
                     </label>
@@ -385,7 +385,7 @@ export function FeatureEngineering({ columns, numericColumns, onApply, isLoading
     return (
         <div className="space-y-6">
 
-            <div className="space-y-2">
+            <div className="space-y-4">
                 <label className="block text-lg font-semibold text-white">Özellik Yöntemi</label>
                 <div className="flex w-full items-center gap-6 overflow-x-auto border-b border-white/10 pb-0">
                     {FEATURE_TABS.map((tab) => {
@@ -418,7 +418,7 @@ export function FeatureEngineering({ columns, numericColumns, onApply, isLoading
 
             {activeTab === 'numeric' && (
                 <div className="space-y-6">
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                         <label className="text-sm font-medium text-gray-300">İşlem Preseti</label>
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
                             {NUMERIC_OPTIONS.map((option) => {
@@ -490,7 +490,7 @@ export function FeatureEngineering({ columns, numericColumns, onApply, isLoading
                         disabled={isLoading}
                     />
 
-                    <div className="space-y-2">
+                    <div className="space-y-4">
                         <label className="text-sm font-medium text-gray-300">Yeni Sütun Adı</label>
                         <input
                             type="text"
@@ -503,7 +503,7 @@ export function FeatureEngineering({ columns, numericColumns, onApply, isLoading
                     </div>
 
                     {numericOperation === 'custom' && (
-                        <div className="space-y-2">
+                        <div className="space-y-4">
                             <label className="text-sm font-medium text-gray-300">Özel İfade</label>
                             <input
                                 type="text"
@@ -531,7 +531,7 @@ export function FeatureEngineering({ columns, numericColumns, onApply, isLoading
                         disabled={isLoading}
                     />
 
-                    <div className="space-y-2">
+                    <div className="space-y-4">
                         <label className="text-sm font-medium text-gray-300">Oluşacak Sütunlar</label>
                         <div className="flex flex-wrap gap-2 rounded-xl border border-white/10 bg-white/5 p-4">
                             {polynomialPreview.length > 0 ? (
@@ -559,7 +559,7 @@ export function FeatureEngineering({ columns, numericColumns, onApply, isLoading
                         disabled={isLoading}
                     />
 
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                         <label className="text-sm font-medium text-gray-300">Binning Stratejisi</label>
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             {BINNING_OPTIONS.map((option) => {
@@ -624,7 +624,7 @@ export function FeatureEngineering({ columns, numericColumns, onApply, isLoading
                     </div>
 
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                        <div className="space-y-2">
+                        <div className="space-y-4">
                             <label className="text-sm font-medium text-gray-300">Yeni Sütun Adı</label>
                             <input
                                 type="text"
@@ -635,7 +635,7 @@ export function FeatureEngineering({ columns, numericColumns, onApply, isLoading
                                 className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-white outline-none focus:border-cyan-500/50"
                             />
                         </div>
-                        <div className="space-y-2">
+                        <div className="space-y-4">
                             <label className="text-sm font-medium text-gray-300">Aralık Sayısı</label>
                             <input
                                 type="number"
@@ -662,7 +662,7 @@ export function FeatureEngineering({ columns, numericColumns, onApply, isLoading
                         disabled={isLoading || datetimeCandidateColumns.length === 0}
                     />
 
-                    <div className="space-y-2">
+                    <div className="space-y-4">
                         <label className="text-sm font-medium text-gray-300">Çıkarılacak Parça</label>
                         <select
                             value={datetimePart}
@@ -678,7 +678,7 @@ export function FeatureEngineering({ columns, numericColumns, onApply, isLoading
                         </select>
                     </div>
 
-                    <div className="space-y-2">
+                    <div className="space-y-4">
                         <label className="text-sm font-medium text-gray-300">Yeni Sütun Adı</label>
                         <input
                             type="text"
@@ -706,7 +706,7 @@ export function FeatureEngineering({ columns, numericColumns, onApply, isLoading
                     />
 
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                        <div className="space-y-2">
+                        <div className="space-y-4">
                             <label className="text-sm font-medium text-gray-300">Yeni Sütun Adı</label>
                             <input
                                 type="text"
@@ -717,7 +717,7 @@ export function FeatureEngineering({ columns, numericColumns, onApply, isLoading
                                 className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-white outline-none focus:border-cyan-500/50"
                             />
                         </div>
-                        <div className="space-y-2">
+                        <div className="space-y-4">
                             <label className="text-sm font-medium text-gray-300">Ayırıcı</label>
                             <input
                                 type="text"
