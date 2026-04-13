@@ -40,6 +40,7 @@ export interface TrainingResult {
     modelName: string;
     metrics: ModelMetrics;
     confusionMatrix?: number[][];
+    confusionLabels?: string[];
     featureImportance?: FeatureImportance[];
     trainingTime: number;
     timestamp: Date;
@@ -176,6 +177,18 @@ export const REGRESSION_MODELS: ModelInfo[] = [
         color: '#63b3ed',
         params: [
             { name: 'alpha', label: 'Alpha', type: 'number', default: 1.0, min: 0.01, max: 100, step: 0.1 },
+        ],
+    },
+    {
+        id: 'lasso',
+        name: 'Lasso Regression',
+        category: 'linear',
+        description: 'L1 regularization ile özellik seçimi yapabilen regresyon',
+        problemTypes: ['regression'],
+        icon: '🪢',
+        color: '#38b2ac',
+        params: [
+            { name: 'alpha', label: 'Alpha', type: 'number', default: 1.0, min: 0.001, max: 100, step: 0.1 },
         ],
     },
     {

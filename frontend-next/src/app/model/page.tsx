@@ -149,7 +149,10 @@ export default function ModelSelectionPage() {
                                 </div>
 
                                 {problemType === 'classification' && trainingResults[0]?.confusionMatrix && (
-                                    <ConfusionMatrix matrix={trainingResults[0].confusionMatrix} />
+                                    <ConfusionMatrix
+                                        matrix={trainingResults[0].confusionMatrix}
+                                        labels={trainingResults[0].confusionLabels}
+                                    />
                                 )}
 
                                 {trainingResults[0]?.featureImportance && (

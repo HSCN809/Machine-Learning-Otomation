@@ -535,6 +535,7 @@ export interface TrainingResult {
     model_name: string;
     metrics: Record<string, number>;
     confusion_matrix?: number[][];
+    confusion_labels?: string[];
     feature_importance: { feature: string; importance: number }[];
     training_time: number;
 }

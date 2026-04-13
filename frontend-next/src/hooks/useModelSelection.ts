@@ -191,6 +191,11 @@ export function useModelSelection(): UseModelSelectionReturn {
             setError(null);
 
             const response = await api.trainModels(targetColumn, selectedModels, 0.2, modelParams);
+            if (response.results.length === 0) {
+                setTrainingResults([]);
+                setError('Secilen modeller icin egitim sonucu olusmadi');
+                return;
+            }
 
             const results: TrainingResult[] = response.results.map((result) => {
                 const metrics: ModelMetrics =
@@ -220,6 +225,7 @@ export function useModelSelection(): UseModelSelectionReturn {
                     metrics,
                     featureImportance,
                     confusionMatrix: result.confusion_matrix || undefined,
+                    confusionLabels: result.confusion_labels || undefined,
                     trainingTime: result.training_time,
                     timestamp: new Date(),
                 };
