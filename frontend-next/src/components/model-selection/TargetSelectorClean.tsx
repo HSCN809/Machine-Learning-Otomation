@@ -157,7 +157,10 @@ export function TargetSelectorClean({
     return (
         <div className="space-y-6">
             <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-300">Hedef Degisken (Target)</label>
+                <div>
+                    <h3 className="text-xl font-semibold text-white">Hedef Degisken Secimi</h3>
+                    <p className="mt-1 text-sm text-gray-400">Model egitimi icin hedef kolonu belirleyin.</p>
+                </div>
                 <div className="mx-auto flex max-w-5xl items-center gap-3">
                     <button
                         type="button"
@@ -239,7 +242,10 @@ export function TargetSelectorClean({
             {selectedColumn && (
                 <div className="mx-auto max-w-5xl">
                     <div className="space-y-3 rounded-xl border border-white/10 bg-white/5 p-6 animate-fadeIn">
-                        <label className="text-sm font-medium text-gray-300">Problem Secimi</label>
+                        <div>
+                            <h3 className="text-xl font-semibold text-white">Problem Secimi</h3>
+                            <p className="mt-1 text-sm text-gray-400">Bu hedef kolon icin problem turunu manuel olarak secin.</p>
+                        </div>
                         <div className="grid gap-4 md:grid-cols-2">
                             <button
                                 type="button"
