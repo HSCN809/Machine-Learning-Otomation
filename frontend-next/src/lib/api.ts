@@ -18,6 +18,10 @@ function getSessionId(): string | null {
     return sessionId;
 }
 
+export function getStoredSessionId(): string | null {
+    return getSessionId();
+}
+
 function setSessionId(id: string): void {
     sessionId = id;
     if (typeof window !== 'undefined') {
@@ -546,6 +550,19 @@ export interface TrainResponse {
     results: TrainingResult[];
 }
 
+export interface TrainingJobSnapshot {
+    job_id: string;
+    target_column: string;
+    status: 'queued' | 'running' | 'stopping' | 'completed' | 'failed' | 'stopped';
+    current_model: string | null;
+    total_models: number;
+    completed_models: number;
+    results: TrainingResult[];
+    problem_type: string | null;
+    error: string | null;
+    stop_requested: boolean;
+}
+
 export async function trainModels(
     targetColumn: string,
     models: string[],
@@ -567,6 +584,8 @@ export async function trainModels(
 export async function getTrainingResults(): Promise<{
     results: TrainingResult[];
     problem_type: string | null;
+    target_column?: string | null;
+    job?: TrainingJobSnapshot | null;
 }> {
     return apiFetch('/api/model/results');
 }
@@ -577,6 +596,40 @@ export async function getModelComparison(): Promise<{
     primary_metric: string;
 }> {
     return apiFetch('/api/model/comparison');
+}
+
+export async function startModelTraining(
+    targetColumn: string,
+    models: string[],
+    testSize: number = 0.2,
+    params?: Record<string, Record<string, unknown>>
+): Promise<{ success: boolean; job_id: string }> {
+    return apiFetch('/api/model/train/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            target_column: targetColumn,
+            models,
+            test_size: testSize,
+            params,
+        }),
+    });
+}
+
+export async function stopModelTraining(jobId: string): Promise<{ success: boolean; job_id: string }> {
+    return apiFetch('/api/model/train/stop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_id: jobId }),
+    });
+}
+
+export function getModelTrainingStreamUrl(jobId: string): string {
+    const sid = getSessionId();
+    if (!sid) {
+        throw new SessionRequiredError();
+    }
+    return `${API_BASE_URL}/api/model/train/stream?job_id=${encodeURIComponent(jobId)}&session_id=${encodeURIComponent(sid)}`;
 }
 
 // ============== Health Check ==============

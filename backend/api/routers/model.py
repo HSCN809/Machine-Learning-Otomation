@@ -2,15 +2,20 @@
 Model Router - Model training and evaluation endpoints
 """
 
+import asyncio
+import json
 import os
 import sys
+import threading
+import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
+from starlette.responses import StreamingResponse
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
@@ -22,6 +27,8 @@ except ImportError:
     xgb = None
 
 router = APIRouter()
+TRAINING_JOBS: Dict[str, Dict[str, Any]] = {}
+TRAINING_JOBS_LOCK = threading.Lock()
 
 
 # Request schemas
@@ -30,6 +37,10 @@ class TrainRequest(BaseModel):
     models: List[str]
     test_size: float = 0.2
     params: Optional[Dict[str, Dict[str, Any]]] = None
+
+
+class StopTrainingRequest(BaseModel):
+    job_id: str
 
 
 MODEL_PARAM_CASTERS: Dict[str, Dict[str, Any]] = {
@@ -117,6 +128,351 @@ def _build_model(model_id: str, custom_params: Optional[Dict[str, Any]]):
     return None
 
 
+def _get_problem_type_label(is_classification: bool) -> str:
+    return "classification" if is_classification else "regression"
+
+
+def _sort_training_results(results: List[Dict[str, Any]], problem_type: str) -> List[Dict[str, Any]]:
+    primary_metric = "accuracy" if problem_type == "classification" else "r2"
+    return sorted(results, key=lambda item: item["metrics"].get(primary_metric, 0), reverse=True)
+
+
+def _store_training_metadata(
+    session_id: str,
+    *,
+    target_column: Optional[str] = None,
+    problem_type: Optional[str] = None,
+    results: Optional[List[Dict[str, Any]]] = None,
+    active_job_id: Optional[str] = None,
+):
+    if target_column is not None:
+        session_manager.set_metadata(session_id, "training_target_column", target_column)
+    if problem_type is not None:
+        session_manager.set_metadata(session_id, "problem_type", problem_type)
+    if results is not None:
+        session_manager.set_metadata(session_id, "training_results", results)
+    session_manager.set_metadata(session_id, "active_training_job_id", active_job_id)
+
+
+def _create_job(session_id: str, request: TrainRequest) -> str:
+    job_id = str(uuid.uuid4())
+    job = {
+        "job_id": job_id,
+        "session_id": session_id,
+        "target_column": request.target_column,
+        "models": request.models,
+        "test_size": request.test_size,
+        "params": request.params or {},
+        "status": "queued",
+        "current_model": None,
+        "total_models": len(request.models),
+        "completed_models": 0,
+        "results": [],
+        "problem_type": None,
+        "error": None,
+        "stop_requested": False,
+        "revision": 0,
+        "started_at": datetime.now().isoformat(),
+        "finished_at": None,
+    }
+    with TRAINING_JOBS_LOCK:
+        TRAINING_JOBS[job_id] = job
+
+    _store_training_metadata(
+        session_id,
+        target_column=request.target_column,
+        results=[],
+        active_job_id=job_id,
+    )
+    return job_id
+
+
+def _get_job_snapshot(job_id: str) -> Optional[Dict[str, Any]]:
+    with TRAINING_JOBS_LOCK:
+        job = TRAINING_JOBS.get(job_id)
+        if job is None:
+            return None
+        return {
+            "job_id": job["job_id"],
+            "session_id": job["session_id"],
+            "target_column": job["target_column"],
+            "models": list(job["models"]),
+            "test_size": job["test_size"],
+            "params": dict(job["params"]),
+            "status": job["status"],
+            "current_model": job["current_model"],
+            "total_models": job["total_models"],
+            "completed_models": job["completed_models"],
+            "results": list(job["results"]),
+            "problem_type": job["problem_type"],
+            "error": job["error"],
+            "stop_requested": job["stop_requested"],
+            "revision": job["revision"],
+            "started_at": job["started_at"],
+            "finished_at": job["finished_at"],
+        }
+
+
+def _update_job(job_id: str, **changes: Any) -> Optional[Dict[str, Any]]:
+    with TRAINING_JOBS_LOCK:
+        job = TRAINING_JOBS.get(job_id)
+        if job is None:
+            return None
+        job.update(changes)
+        job["revision"] += 1
+        return dict(job)
+
+
+def _find_active_job_for_session(session_id: str) -> Optional[Dict[str, Any]]:
+    active_job_id = session_manager.get_metadata(session_id, "active_training_job_id")
+    if not active_job_id:
+        return None
+    return _get_job_snapshot(active_job_id)
+
+
+def _prepare_training_bundle(df: pd.DataFrame, target_column: str, test_size: float) -> Dict[str, Any]:
+    from sklearn.model_selection import train_test_split
+
+    if target_column not in df.columns:
+        raise HTTPException(status_code=404, detail=f"Target column '{target_column}' not found")
+
+    X = df.drop(columns=[target_column])
+    y = df[target_column]
+    original_target = y.copy()
+    class_label_lookup: Optional[List[str]] = None
+
+    X = pd.get_dummies(X, drop_first=True)
+
+    if y.dtype == 'object' or y.dtype.name == 'category':
+        categorical_target = y.astype('category')
+        class_label_lookup = [str(label) for label in categorical_target.cat.categories.tolist()]
+        y = categorical_target.cat.codes
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=test_size, random_state=42
+    )
+
+    unique_count = y.nunique()
+    is_classification = unique_count <= 10 or original_target.dtype == 'object' or original_target.dtype.name == 'category'
+
+    return {
+        "X": X,
+        "X_train": X_train,
+        "X_test": X_test,
+        "y_train": y_train,
+        "y_test": y_test,
+        "is_classification": is_classification,
+        "problem_type": _get_problem_type_label(is_classification),
+        "class_label_lookup": class_label_lookup,
+    }
+
+
+def _train_single_model(
+    model_id: str,
+    model: Any,
+    bundle: Dict[str, Any],
+) -> Dict[str, Any]:
+    from sklearn.metrics import (
+        accuracy_score,
+        confusion_matrix,
+        f1_score,
+        mean_absolute_error,
+        mean_squared_error,
+        precision_score,
+        r2_score,
+        recall_score,
+        roc_auc_score,
+    )
+
+    model_names = {
+        "logistic_regression": "Logistic Regression",
+        "random_forest_clf": "Random Forest",
+        "xgboost_clf": "XGBoost",
+        "decision_tree_clf": "Decision Tree",
+        "svc": "SVC",
+        "linear_regression": "Linear Regression",
+        "ridge": "Ridge",
+        "lasso": "Lasso",
+        "random_forest_reg": "Random Forest Regressor",
+        "xgboost_reg": "XGBoost Regressor",
+        "svr": "SVR",
+    }
+
+    start_time = datetime.now()
+    model.fit(bundle["X_train"], bundle["y_train"])
+    y_pred = model.predict(bundle["X_test"])
+    training_time = (datetime.now() - start_time).total_seconds()
+
+    if bundle["is_classification"]:
+        metrics = {
+            "accuracy": round(accuracy_score(bundle["y_test"], y_pred), 4),
+            "precision": round(precision_score(bundle["y_test"], y_pred, average='weighted', zero_division=0), 4),
+            "recall": round(recall_score(bundle["y_test"], y_pred, average='weighted', zero_division=0), 4),
+            "f1_score": round(f1_score(bundle["y_test"], y_pred, average='weighted', zero_division=0), 4),
+        }
+
+        try:
+            if hasattr(model, 'predict_proba'):
+                y_prob = model.predict_proba(bundle["X_test"])
+                if y_prob.shape[1] == 2:
+                    metrics["auc"] = round(roc_auc_score(bundle["y_test"], y_prob[:, 1]), 4)
+        except Exception:
+            pass
+
+        class_labels = np.unique(np.concatenate([np.asarray(bundle["y_test"]), np.asarray(y_pred)]))
+        confusion = confusion_matrix(bundle["y_test"], y_pred, labels=class_labels).tolist()
+        if bundle["class_label_lookup"] is not None:
+            confusion_labels = [
+                bundle["class_label_lookup"][int(label)]
+                if int(label) < len(bundle["class_label_lookup"])
+                else str(label)
+                for label in class_labels.tolist()
+            ]
+        else:
+            confusion_labels = [str(label) for label in class_labels.tolist()]
+    else:
+        metrics = {
+            "mse": round(mean_squared_error(bundle["y_test"], y_pred), 4),
+            "rmse": round(np.sqrt(mean_squared_error(bundle["y_test"], y_pred)), 4),
+            "mae": round(mean_absolute_error(bundle["y_test"], y_pred), 4),
+            "r2": round(r2_score(bundle["y_test"], y_pred), 4),
+        }
+        confusion = None
+        confusion_labels = None
+
+    feature_importance: List[Dict[str, Any]] = []
+    if hasattr(model, 'feature_importances_'):
+        importances = model.feature_importances_
+        for i, col in enumerate(bundle["X"].columns):
+            feature_importance.append({
+                "feature": col,
+                "importance": round(float(importances[i]), 4),
+            })
+        feature_importance.sort(key=lambda x: x["importance"], reverse=True)
+    elif hasattr(model, 'coef_'):
+        coefs = np.abs(model.coef_).flatten() if model.coef_.ndim > 1 else np.abs(model.coef_)
+        for i, col in enumerate(bundle["X"].columns[:len(coefs)]):
+            feature_importance.append({
+                "feature": col,
+                "importance": round(float(coefs[i]), 4),
+            })
+        feature_importance.sort(key=lambda x: x["importance"], reverse=True)
+
+    return {
+        "model_id": model_id,
+        "model_name": model_names.get(model_id, model_id),
+        "metrics": metrics,
+        "confusion_matrix": confusion,
+        "confusion_labels": confusion_labels,
+        "feature_importance": feature_importance[:10],
+        "training_time": round(training_time, 2),
+    }
+
+
+def _run_training_job(job_id: str):
+    snapshot = _get_job_snapshot(job_id)
+    if snapshot is None:
+        return
+
+    session_id = snapshot["session_id"]
+
+    try:
+        df = session_manager.get_dataframe(session_id)
+        if df is None:
+            raise HTTPException(status_code=400, detail="No data loaded")
+
+        bundle = _prepare_training_bundle(df, snapshot["target_column"], float(snapshot["test_size"]) if "test_size" in snapshot else 0.2)
+        problem_type = bundle["problem_type"]
+        _update_job(job_id, status="running", problem_type=problem_type)
+        _store_training_metadata(
+            session_id,
+            target_column=snapshot["target_column"],
+            problem_type=problem_type,
+            results=[],
+            active_job_id=job_id,
+        )
+
+        results: List[Dict[str, Any]] = []
+        raw_params = snapshot.get("params", {})
+        model_ids = snapshot.get("models", [])
+
+        for model_id in model_ids:
+            current_snapshot = _get_job_snapshot(job_id)
+            if current_snapshot is None:
+                return
+            if current_snapshot["stop_requested"]:
+                _update_job(
+                    job_id,
+                    status="stopped",
+                    current_model=None,
+                    finished_at=datetime.now().isoformat(),
+                )
+                _store_training_metadata(
+                    session_id,
+                    problem_type=problem_type,
+                    results=_sort_training_results(results, problem_type),
+                    active_job_id=None,
+                )
+                return
+
+            model = _build_model(model_id, raw_params.get(model_id))
+            if model is None:
+                continue
+
+            _update_job(job_id, current_model=model_id)
+            result = _train_single_model(model_id, model, bundle)
+            results.append(result)
+            sorted_results = _sort_training_results(results, problem_type)
+            _update_job(
+                job_id,
+                completed_models=len(results),
+                results=sorted_results,
+            )
+            _store_training_metadata(
+                session_id,
+                problem_type=problem_type,
+                results=sorted_results,
+                active_job_id=job_id,
+            )
+
+        if not results:
+            raise HTTPException(status_code=400, detail="No supported models were trained")
+
+        final_results = _sort_training_results(results, problem_type)
+        _update_job(
+            job_id,
+            status="completed",
+            current_model=None,
+            completed_models=len(final_results),
+            results=final_results,
+            finished_at=datetime.now().isoformat(),
+        )
+        _store_training_metadata(
+            session_id,
+            problem_type=problem_type,
+            results=final_results,
+            active_job_id=None,
+        )
+    except HTTPException as exc:
+        _update_job(
+            job_id,
+            status="failed",
+            current_model=None,
+            error=exc.detail,
+            finished_at=datetime.now().isoformat(),
+        )
+        _store_training_metadata(session_id, active_job_id=None)
+    except Exception as exc:
+        _update_job(
+            job_id,
+            status="failed",
+            current_model=None,
+            error=str(exc),
+            finished_at=datetime.now().isoformat(),
+        )
+        _store_training_metadata(session_id, active_job_id=None)
+
+
 @router.get("/detect-problem")
 async def detect_problem_type(
     target_column: str,
@@ -177,6 +533,101 @@ async def get_available_models(
         return {"models": regression_models}
     else:
         raise HTTPException(status_code=400, detail="Invalid problem type")
+
+
+@router.post("/train/start")
+async def start_training(
+    request: TrainRequest,
+    session_id: str = Depends(require_session)
+):
+    """Start model training in background and return a job id."""
+    df = session_manager.get_dataframe(session_id)
+    if df is None:
+        raise HTTPException(status_code=400, detail="No data loaded")
+    if request.target_column not in df.columns:
+        raise HTTPException(status_code=404, detail=f"Target column '{request.target_column}' not found")
+
+    active_job = _find_active_job_for_session(session_id)
+    if active_job and active_job["status"] in {"queued", "running", "stopping"}:
+        raise HTTPException(status_code=409, detail="A training job is already running for this session")
+
+    job_id = _create_job(session_id, request)
+    worker = threading.Thread(target=_run_training_job, args=(job_id,), daemon=True)
+    worker.start()
+
+    return {"success": True, "job_id": job_id}
+
+
+@router.get("/train/stream")
+async def stream_training(
+    request: Request,
+    job_id: str,
+    session_id: str = Query(...),
+):
+    """Stream training progress for a job via SSE."""
+    if not session_manager.get_session(session_id):
+        raise HTTPException(status_code=400, detail="Valid session ID required. Upload data first.")
+
+    snapshot = _get_job_snapshot(job_id)
+    if snapshot is None or snapshot["session_id"] != session_id:
+        raise HTTPException(status_code=404, detail="Training job not found")
+
+    async def event_generator():
+        last_revision = -1
+        while True:
+            if await request.is_disconnected():
+                break
+
+            current = _get_job_snapshot(job_id)
+            if current is None:
+                break
+
+            if current["revision"] != last_revision:
+                payload = {
+                    "job_id": current["job_id"],
+                    "target_column": current["target_column"],
+                    "status": current["status"],
+                    "current_model": current["current_model"],
+                    "total_models": current["total_models"],
+                    "completed_models": current["completed_models"],
+                    "results": current["results"],
+                    "problem_type": current["problem_type"],
+                    "error": current["error"],
+                    "stop_requested": current["stop_requested"],
+                }
+                yield f"data: {json.dumps(payload)}\n\n"
+                last_revision = current["revision"]
+
+            if current["status"] in {"completed", "failed", "stopped"}:
+                break
+
+            await asyncio.sleep(0.5)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.post("/train/stop")
+async def stop_training(
+    request: StopTrainingRequest,
+    session_id: str = Depends(require_session)
+):
+    """Request background training to stop after the current checkpoint."""
+    snapshot = _get_job_snapshot(request.job_id)
+    if snapshot is None or snapshot["session_id"] != session_id:
+        raise HTTPException(status_code=404, detail="Training job not found")
+    if snapshot["status"] not in {"queued", "running"}:
+        raise HTTPException(status_code=400, detail="Training job is not running")
+
+    _update_job(request.job_id, stop_requested=True, status="stopping")
+    return {"success": True, "job_id": request.job_id}
 
 
 @router.post("/train")
@@ -350,11 +801,18 @@ async def get_results(session_id: str = Depends(require_session)):
     """Get training results"""
     results = session_manager.get_metadata(session_id, "training_results")
     problem_type = session_manager.get_metadata(session_id, "problem_type")
+    target_column = session_manager.get_metadata(session_id, "training_target_column")
+    active_job = _find_active_job_for_session(session_id)
     
-    if not results:
-        return {"results": [], "problem_type": None}
+    if not results and not active_job:
+        return {"results": [], "problem_type": None, "target_column": target_column, "job": None}
     
-    return {"results": results, "problem_type": problem_type}
+    return {
+        "results": results or (active_job["results"] if active_job else []),
+        "problem_type": problem_type or (active_job["problem_type"] if active_job else None),
+        "target_column": target_column,
+        "job": active_job,
+    }
 
 
 @router.get("/comparison")

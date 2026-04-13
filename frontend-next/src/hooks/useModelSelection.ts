@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
     ProblemType,
     ModelInfo,
@@ -29,6 +29,10 @@ interface UseModelSelectionReturn {
     trainingResults: TrainingResult[];
     isLoading: boolean;
     isTraining: boolean;
+    trainingStatus: 'idle' | 'queued' | 'running' | 'stopping' | 'completed' | 'failed' | 'stopped';
+    currentTrainingModel: string | null;
+    completedTrainingModels: number;
+    totalTrainingModels: number;
     error: string | null;
     columns: ColumnInfo[];
     availableModels: ModelInfo[];
@@ -43,7 +47,66 @@ interface UseModelSelectionReturn {
     toggleModelSelection: (modelId: string) => void;
     updateModelParams: (modelId: string, params: Record<string, unknown>) => void;
     trainModels: () => Promise<void>;
+    stopTraining: () => Promise<void>;
     resetAll: () => void;
+}
+
+function getStaticModels(problemType: ProblemType | null): ModelInfo[] {
+    if (problemType === 'classification') return CLASSIFICATION_MODELS;
+    if (problemType === 'regression') return REGRESSION_MODELS;
+    return [];
+}
+
+function mergeAvailableModels(
+    problemType: ProblemType | null,
+    apiModels?: Awaited<ReturnType<typeof api.getAvailableModels>>['models']
+): ModelInfo[] {
+    const catalog = getStaticModels(problemType);
+    if (!apiModels || apiModels.length === 0) {
+        return catalog;
+    }
+
+    const apiModelIds = new Set(apiModels.map((model) => model.id));
+    return catalog.filter((model) => apiModelIds.has(model.id));
+}
+
+function mapTrainingResults(
+    problemType: ProblemType | null,
+    results: api.TrainingResult[]
+): TrainingResult[] {
+    return results.map((result) => {
+        const metrics: ModelMetrics =
+            problemType === 'classification'
+                ? {
+                      accuracy: result.metrics.accuracy || 0,
+                      precision: result.metrics.precision || 0,
+                      recall: result.metrics.recall || 0,
+                      f1Score: result.metrics.f1_score || 0,
+                      auc: result.metrics.auc,
+                  }
+                : {
+                      mse: result.metrics.mse || 0,
+                      rmse: result.metrics.rmse || 0,
+                      mae: result.metrics.mae || 0,
+                      r2: result.metrics.r2 || 0,
+                  };
+
+        const featureImportance: FeatureImportance[] = result.feature_importance.map((fi) => ({
+            feature: fi.feature,
+            importance: fi.importance,
+        }));
+
+        return {
+            modelId: result.model_id,
+            modelName: result.model_name,
+            metrics,
+            featureImportance,
+            confusionMatrix: result.confusion_matrix || undefined,
+            confusionLabels: result.confusion_labels || undefined,
+            trainingTime: result.training_time,
+            timestamp: new Date(),
+        };
+    });
 }
 
 export function useModelSelection(): UseModelSelectionReturn {
@@ -57,13 +120,122 @@ export function useModelSelection(): UseModelSelectionReturn {
     const [trainingResults, setTrainingResults] = useState<TrainingResult[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isTraining, setIsTraining] = useState(false);
+    const [trainingStatus, setTrainingStatus] = useState<'idle' | 'queued' | 'running' | 'stopping' | 'completed' | 'failed' | 'stopped'>('idle');
+    const [currentTrainingModel, setCurrentTrainingModel] = useState<string | null>(null);
+    const [completedTrainingModels, setCompletedTrainingModels] = useState(0);
+    const [totalTrainingModels, setTotalTrainingModels] = useState(0);
     const [error, setError] = useState<string | null>(null);
     const [columns, setColumns] = useState<ColumnInfo[]>([]);
+    const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
+    const [trainingJobId, setTrainingJobId] = useState<string | null>(null);
+    const eventSourceRef = useRef<EventSource | null>(null);
+    const trainingStatusRef = useRef<'idle' | 'queued' | 'running' | 'stopping' | 'completed' | 'failed' | 'stopped'>('idle');
+
+    useEffect(() => {
+        trainingStatusRef.current = trainingStatus;
+    }, [trainingStatus]);
+
+    const closeTrainingStream = useCallback(() => {
+        if (eventSourceRef.current) {
+            eventSourceRef.current.close();
+            eventSourceRef.current = null;
+        }
+    }, []);
+
+    const loadAvailableModels = useCallback(async (nextProblemType: ProblemType | null) => {
+        if (!nextProblemType) {
+            setAvailableModels([]);
+            return;
+        }
+
+        try {
+            const response = await api.getAvailableModels(nextProblemType);
+            const merged = mergeAvailableModels(nextProblemType, response.models);
+            setAvailableModels(merged.length > 0 ? merged : getStaticModels(nextProblemType));
+        } catch (err) {
+            console.error('Load available models error:', err);
+            setAvailableModels(getStaticModels(nextProblemType));
+        }
+    }, []);
+
+    const applyTrainingSnapshot = useCallback((snapshot: api.TrainingJobSnapshot) => {
+        const nextProblemType =
+            snapshot.problem_type === 'classification' || snapshot.problem_type === 'regression'
+                ? snapshot.problem_type
+                : null;
+
+        setTrainingJobId(snapshot.job_id);
+        setTrainingStatus(snapshot.status);
+        setIsTraining(snapshot.status === 'queued' || snapshot.status === 'running' || snapshot.status === 'stopping');
+        setCurrentTrainingModel(snapshot.current_model);
+        setCompletedTrainingModels(snapshot.completed_models);
+        setTotalTrainingModels(snapshot.total_models);
+        setTargetColumnState(snapshot.target_column);
+        if (nextProblemType) {
+            setProblemType(nextProblemType);
+            void loadAvailableModels(nextProblemType);
+            setTrainingResults(mapTrainingResults(nextProblemType, snapshot.results));
+        } else {
+            setTrainingResults([]);
+        }
+
+        if (snapshot.status === 'completed') {
+            setError(null);
+            setCurrentStep(4);
+            setCompletedSteps((prev) => (prev.includes(3) ? prev : [...prev, 3]));
+            closeTrainingStream();
+            return;
+        }
+
+        if (snapshot.status === 'failed') {
+            setError(snapshot.error ?? 'Egitim sirasinda hata olustu');
+            setCurrentStep(3);
+            closeTrainingStream();
+            return;
+        }
+
+        if (snapshot.status === 'stopped') {
+            setError('Egitim durduruldu');
+            setCurrentStep(3);
+            closeTrainingStream();
+            return;
+        }
+
+        setError(null);
+        setCurrentStep(3);
+    }, [closeTrainingStream, loadAvailableModels]);
+
+    const connectToTrainingStream = useCallback((jobId: string) => {
+        closeTrainingStream();
+
+        const stream = new EventSource(api.getModelTrainingStreamUrl(jobId));
+        eventSourceRef.current = stream;
+
+        stream.onmessage = (event) => {
+            try {
+                const snapshot = JSON.parse(event.data) as api.TrainingJobSnapshot;
+                applyTrainingSnapshot(snapshot);
+            } catch (err) {
+                console.error('Training stream parse error:', err);
+            }
+        };
+
+        stream.onerror = () => {
+            const terminalStatuses = new Set(['completed', 'failed', 'stopped']);
+            if (!terminalStatuses.has(trainingStatusRef.current)) {
+                setError((prev) => prev ?? 'Egitim akisi baglantisi koptu');
+            }
+            closeTrainingStream();
+        };
+    }, [applyTrainingSnapshot, closeTrainingStream]);
 
     const loadColumns = useCallback(async () => {
         try {
             setIsLoading(true);
-            const columnTypes = await api.getColumnTypes();
+            const [columnTypes, trainingState] = await Promise.all([
+                api.getColumnTypes(),
+                api.getTrainingResults(),
+            ]);
 
             const cols: ColumnInfo[] = columnTypes.columns.map((col) => ({
                 name: col.name,
@@ -72,9 +244,37 @@ export function useModelSelection(): UseModelSelectionReturn {
             }));
 
             setColumns(cols);
+
+            const hydratedProblemType =
+                trainingState.problem_type === 'classification' || trainingState.problem_type === 'regression'
+                    ? trainingState.problem_type
+                    : null;
+            setProblemType(hydratedProblemType);
+            setTargetColumnState(trainingState.target_column ?? null);
+            await loadAvailableModels(hydratedProblemType);
+
+            if (trainingState.job) {
+                applyTrainingSnapshot(trainingState.job);
+                if (trainingState.job.status === 'queued' || trainingState.job.status === 'running' || trainingState.job.status === 'stopping') {
+                    connectToTrainingStream(trainingState.job.job_id);
+                }
+            } else if (hydratedProblemType && trainingState.results.length > 0) {
+                const comparisonState = await api.getModelComparison().catch(() => null);
+                const hydratedResults =
+                    comparisonState?.comparison && comparisonState.comparison.length > 0
+                        ? comparisonState.comparison
+                        : trainingState.results;
+
+                setTrainingStatus('completed');
+                setTrainingResults(mapTrainingResults(hydratedProblemType, hydratedResults));
+                setCompletedTrainingModels(hydratedResults.length);
+                setTotalTrainingModels(hydratedResults.length);
+                setCurrentStep(4);
+            }
         } catch (err) {
             if (api.isSessionRequiredError(err)) {
                 setColumns([]);
+                setAvailableModels([]);
                 setError(null);
                 return;
             }
@@ -84,13 +284,7 @@ export function useModelSelection(): UseModelSelectionReturn {
         } finally {
             setIsLoading(false);
         }
-    }, []);
-
-    const availableModels = useMemo(() => {
-        if (problemType === 'classification') return CLASSIFICATION_MODELS;
-        if (problemType === 'regression') return REGRESSION_MODELS;
-        return [];
-    }, [problemType]);
+    }, [applyTrainingSnapshot, connectToTrainingStream, loadAvailableModels]);
 
     const goToStep = useCallback((step: number) => {
         if (step >= 0 && step <= 4) {
@@ -149,22 +343,32 @@ export function useModelSelection(): UseModelSelectionReturn {
             try {
                 const result = await api.detectProblemType(column);
                 setProblemType(result.problem_type);
+                await loadAvailableModels(result.problem_type);
             } catch {
                 const col = columns.find((item) => item.name === column);
                 if (col) {
                     if (col.type === 'categorical' || col.uniqueValues <= 10) {
                         setProblemType('classification');
+                        await loadAvailableModels('classification');
                     } else {
                         setProblemType('regression');
+                        await loadAvailableModels('regression');
                     }
                 }
             }
 
+            closeTrainingStream();
+            setTrainingJobId(null);
+            setTrainingStatus('idle');
+            setIsTraining(false);
+            setCurrentTrainingModel(null);
+            setCompletedTrainingModels(0);
+            setTotalTrainingModels(0);
             setSelectedModels([]);
             setModelParams({});
             setTrainingResults([]);
         },
-        [columns]
+        [closeTrainingStream, columns, loadAvailableModels]
     );
 
     const toggleModelSelection = useCallback((modelId: string) => {
@@ -189,69 +393,64 @@ export function useModelSelection(): UseModelSelectionReturn {
         try {
             setIsTraining(true);
             setError(null);
+            setTrainingStatus('queued');
+            setCurrentTrainingModel(null);
+            setCompletedTrainingModels(0);
+            setTotalTrainingModels(selectedModels.length);
+            setTrainingResults([]);
+            setCurrentStep(3);
 
-            const response = await api.trainModels(targetColumn, selectedModels, 0.2, modelParams);
-            if (response.results.length === 0) {
-                setTrainingResults([]);
-                setError('Secilen modeller icin egitim sonucu olusmadi');
-                return;
-            }
-
-            const results: TrainingResult[] = response.results.map((result) => {
-                const metrics: ModelMetrics =
-                    response.problem_type === 'classification'
-                        ? {
-                              accuracy: result.metrics.accuracy || 0,
-                              precision: result.metrics.precision || 0,
-                              recall: result.metrics.recall || 0,
-                              f1Score: result.metrics.f1_score || 0,
-                              auc: result.metrics.auc,
-                          }
-                        : {
-                              mse: result.metrics.mse || 0,
-                              rmse: result.metrics.rmse || 0,
-                              mae: result.metrics.mae || 0,
-                              r2: result.metrics.r2 || 0,
-                          };
-
-                const featureImportance: FeatureImportance[] = result.feature_importance.map((fi) => ({
-                    feature: fi.feature,
-                    importance: fi.importance,
-                }));
-
-                return {
-                    modelId: result.model_id,
-                    modelName: result.model_name,
-                    metrics,
-                    featureImportance,
-                    confusionMatrix: result.confusion_matrix || undefined,
-                    confusionLabels: result.confusion_labels || undefined,
-                    trainingTime: result.training_time,
-                    timestamp: new Date(),
-                };
-            });
-
-            setTrainingResults(results);
-            nextStep();
+            const response = await api.startModelTraining(targetColumn, selectedModels, 0.2, modelParams);
+            setTrainingJobId(response.job_id);
+            connectToTrainingStream(response.job_id);
         } catch (err) {
             console.error('Training error:', err);
             setError(err instanceof Error ? err.message : 'Egitim sirasinda hata olustu');
-        } finally {
             setIsTraining(false);
+            setTrainingStatus('failed');
         }
-    }, [modelParams, nextStep, selectedModels, targetColumn]);
+    }, [connectToTrainingStream, modelParams, selectedModels, targetColumn]);
+
+    const stopTraining = useCallback(async () => {
+        if (!trainingJobId) {
+            return;
+        }
+
+        try {
+            setError(null);
+            await api.stopModelTraining(trainingJobId);
+            setTrainingStatus('stopping');
+        } catch (err) {
+            console.error('Stop training error:', err);
+            setError(err instanceof Error ? err.message : 'Egitim durdurulamadi');
+        }
+    }, [trainingJobId]);
 
     const resetAll = useCallback(() => {
+        closeTrainingStream();
         setCurrentStep(0);
         setCompletedSteps([]);
         setSkippedSteps([]);
         setTargetColumnState(null);
         setProblemType(null);
+        setAvailableModels([]);
         setSelectedModels([]);
         setModelParams({});
         setTrainingResults([]);
+        setTrainingJobId(null);
+        setTrainingStatus('idle');
+        setIsTraining(false);
+        setCurrentTrainingModel(null);
+        setCompletedTrainingModels(0);
+        setTotalTrainingModels(0);
         setError(null);
-    }, []);
+    }, [closeTrainingStream]);
+
+    useEffect(() => {
+        return () => {
+            closeTrainingStream();
+        };
+    }, [closeTrainingStream]);
 
     return {
         currentStep,
@@ -264,6 +463,10 @@ export function useModelSelection(): UseModelSelectionReturn {
         trainingResults,
         isLoading,
         isTraining,
+        trainingStatus,
+        currentTrainingModel,
+        completedTrainingModels,
+        totalTrainingModels,
         error,
         columns,
         availableModels,
@@ -278,6 +481,7 @@ export function useModelSelection(): UseModelSelectionReturn {
         toggleModelSelection,
         updateModelParams,
         trainModels,
+        stopTraining,
         resetAll,
     };
 }

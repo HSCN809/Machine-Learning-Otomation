@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useSyncExternalStore } from 'react';
+import { Target, BrainCircuit, SlidersHorizontal, Rocket, BarChart3, ChevronLeft, ChevronRight, Play, SkipForward } from 'lucide-react';
 import { Sidebar, Header } from '@/components/layout';
 import {
     TargetSelector,
@@ -17,18 +18,17 @@ import { NoDataWarning, SessionPageSkeleton, StepProgress } from '@/components/c
 import { useModelSelection } from '@/hooks/useModelSelection';
 import { hasStoredSession } from '@/lib/api';
 import { theme } from '@/styles/theme';
-import { Target, BrainCircuit, SlidersHorizontal, Rocket, BarChart3, ChevronLeft, ChevronRight, Play, SkipForward } from 'lucide-react';
 
 const subscribeToSession = () => () => {};
 const getSessionSnapshot = () => hasStoredSession();
 const getServerSessionSnapshot = (): boolean | null => null;
 
 const STEPS = [
-    { id: 0, name: 'Target Seçimi', icon: <Target className="w-5 h-5" /> },
-    { id: 1, name: 'Model Seçimi', icon: <BrainCircuit className="w-5 h-5" /> },
-    { id: 2, name: 'Hiperparametreler', icon: <SlidersHorizontal className="w-5 h-5" /> },
-    { id: 3, name: 'Eğitim', icon: <Rocket className="w-5 h-5" /> },
-    { id: 4, name: 'Sonuçlar', icon: <BarChart3 className="w-5 h-5" /> },
+    { id: 0, name: 'Target Secimi', icon: <Target className="h-5 w-5" /> },
+    { id: 1, name: 'Model Secimi', icon: <BrainCircuit className="h-5 w-5" /> },
+    { id: 2, name: 'Hiperparametreler', icon: <SlidersHorizontal className="h-5 w-5" /> },
+    { id: 3, name: 'Egitim', icon: <Rocket className="h-5 w-5" /> },
+    { id: 4, name: 'Sonuclar', icon: <BarChart3 className="h-5 w-5" /> },
 ];
 
 export default function ModelSelectionPage() {
@@ -50,6 +50,10 @@ export default function ModelSelectionPage() {
         trainingResults,
         isLoading,
         isTraining,
+        trainingStatus,
+        currentTrainingModel,
+        completedTrainingModels,
+        totalTrainingModels,
         error,
         columns,
         availableModels,
@@ -64,6 +68,7 @@ export default function ModelSelectionPage() {
         toggleModelSelection,
         updateModelParams,
         trainModels,
+        stopTraining,
     } = useModelSelection();
 
     useEffect(() => {
@@ -75,6 +80,10 @@ export default function ModelSelectionPage() {
     const hasData = hasSession === true && columns.length > 0;
     const currentStepInfo = STEPS[currentStep];
     const canSkip = currentStep < STEPS.length - 1;
+    const currentTrainingModelName =
+        availableModels.find((model) => model.id === currentTrainingModel)?.name ??
+        currentTrainingModel ??
+        undefined;
 
     const renderStepContent = () => {
         switch (currentStep) {
@@ -109,25 +118,39 @@ export default function ModelSelectionPage() {
                     <div className="space-y-6">
                         <TrainingProgress
                             isTraining={isTraining}
-                            totalModels={selectedModels.length}
-                            completedModels={trainingResults.length}
+                            status={trainingStatus}
+                            currentModel={currentTrainingModelName}
+                            totalModels={totalTrainingModels || selectedModels.length}
+                            completedModels={completedTrainingModels}
                         />
 
                         {!isTraining && trainingResults.length === 0 && (
-                            <div className="text-center py-8">
-                                <p className="text-gray-400 mb-4">
-                                    {selectedModels.length} model eğitime hazır
+                            <div className="py-8 text-center">
+                                <p className="mb-4 text-gray-400">
+                                    {selectedModels.length} model egitime hazir
                                 </p>
                                 <button
                                     onClick={trainModels}
-                                    className="inline-flex cursor-pointer items-center gap-2 px-8 py-3 rounded-xl font-medium text-white transition-all hover:scale-105"
+                                    className="inline-flex cursor-pointer items-center gap-2 rounded-xl px-8 py-3 font-medium text-white transition-all hover:scale-105"
                                     style={{
                                         background: theme.gradients.primary,
                                         boxShadow: theme.glow.cyan,
                                     }}
                                 >
-                                    <Play className="w-5 h-5" />
-                                    Eğitimi Başlat
+                                    <Play className="h-5 w-5" />
+                                    Egitimi Baslat
+                                </button>
+                            </div>
+                        )}
+
+                        {isTraining && (
+                            <div className="flex justify-center">
+                                <button
+                                    onClick={stopTraining}
+                                    disabled={trainingStatus === 'stopping'}
+                                    className="inline-flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-6 py-3 font-medium text-red-300 transition-all hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    {trainingStatus === 'stopping' ? 'Durduruluyor...' : 'Egitimi Durdur'}
                                 </button>
                             </div>
                         )}
@@ -139,8 +162,8 @@ export default function ModelSelectionPage() {
                         {trainingResults.length > 0 && problemType && (
                             <>
                                 <div>
-                                    <h3 className="text-lg font-semibold text-white mb-3">
-                                        🏆 En İyi Model: {trainingResults[0]?.modelName}
+                                    <h3 className="mb-3 text-lg font-semibold text-white">
+                                        En Iyi Model: {trainingResults[0]?.modelName}
                                     </h3>
                                     <MetricsDisplay
                                         metrics={trainingResults[0].metrics}
@@ -184,17 +207,17 @@ export default function ModelSelectionPage() {
                 }}
             >
                 <Header
-                    title="Model Seçimi"
-                    subtitle="Verilerinize uygun modelleri seçin, eğitin ve karşılaştırın."
+                    title="Model Secimi"
+                    subtitle="Verilerinize uygun modelleri secin, egitin ve karsilastirin."
                 />
 
-                <main className="p-6 space-y-6">
+                <main className="space-y-6 p-6">
                     {hasSession === true && isLoading && !hasData && <SessionPageSkeleton variant="wizard" />}
 
                     {hasSession !== null && !isLoading && !hasData && (
                         <NoDataWarning
-                            title="Veri Yüklenmedi"
-                            description="Model seçimi ve eğitimi yapabilmek için önce veri yüklemeniz gerekmektedir."
+                            title="Veri Yuklenmedi"
+                            description="Model secimi ve egitimi yapabilmek icin once veri yuklemeniz gerekmektedir."
                         />
                     )}
 
@@ -211,33 +234,33 @@ export default function ModelSelectionPage() {
                             />
 
                             {error && (
-                                <div className="p-4 rounded-xl border border-red-500/30 bg-red-500/10">
-                                    <p className="text-red-400">❌ {error}</p>
+                                <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4">
+                                    <p className="text-red-400">{error}</p>
                                 </div>
                             )}
 
                             <div
-                                className="p-6 rounded-2xl border border-white/10"
+                                className="rounded-2xl border border-white/10 p-6"
                                 style={{
                                     background:
                                         'linear-gradient(135deg, rgba(17, 24, 39, 0.6) 0%, rgba(31, 41, 55, 0.4) 100%)',
                                 }}
                             >
-                                <div className="flex items-center gap-3 mb-6 pb-4 border-b border-white/10">
+                                <div className="mb-6 flex items-center gap-3 border-b border-white/10 pb-4">
                                     <div className="text-cyan-400">{currentStepInfo?.icon}</div>
                                     <h2 className="text-xl font-bold text-white">{currentStepInfo?.name}</h2>
                                 </div>
 
                                 {renderStepContent()}
 
-                                <div className="flex items-center justify-between pt-6 mt-6 border-t border-white/10">
+                                <div className="mt-6 flex items-center justify-between border-t border-white/10 pt-6">
                                     <div className="flex items-center gap-2">
                                         <button
                                             onClick={prevStep}
                                             disabled={!canGoPrev || isTraining}
-                                            className="flex cursor-pointer items-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-white hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                            className="flex cursor-pointer items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-white transition-all hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
                                         >
-                                            <ChevronLeft className="w-4 h-4" />
+                                            <ChevronLeft className="h-4 w-4" />
                                             Geri
                                         </button>
                                     </div>
@@ -247,45 +270,45 @@ export default function ModelSelectionPage() {
                                             <button
                                                 onClick={skipStep}
                                                 disabled={isTraining}
-                                                className="flex cursor-pointer items-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-gray-400 hover:text-white hover:bg-white/5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                                className="flex cursor-pointer items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-gray-400 transition-all hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                                             >
                                                 Atla
-                                                <SkipForward className="w-4 h-4" />
+                                                <SkipForward className="h-4 w-4" />
                                             </button>
                                         )}
 
-                                    {currentStep < 3 && (
-                                        <button
-                                            onClick={nextStep}
-                                            disabled={!canGoNext || isTraining}
-                                            className="flex cursor-pointer items-center gap-2 px-6 py-2 rounded-xl font-medium text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105"
-                                            style={{
-                                                background:
-                                                    canGoNext && !isTraining
-                                                        ? theme.gradients.primary
-                                                        : 'rgba(255,255,255,0.1)',
-                                                boxShadow:
-                                                    canGoNext && !isTraining ? theme.glow.cyan : undefined,
-                                            }}
-                                        >
-                                            İleri
-                                            <ChevronRight className="w-4 h-4" />
-                                        </button>
-                                    )}
+                                        {currentStep < 3 && (
+                                            <button
+                                                onClick={nextStep}
+                                                disabled={!canGoNext || isTraining}
+                                                className="flex cursor-pointer items-center gap-2 rounded-xl px-6 py-2 font-medium text-white transition-all hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50"
+                                                style={{
+                                                    background:
+                                                        canGoNext && !isTraining
+                                                            ? theme.gradients.primary
+                                                            : 'rgba(255,255,255,0.1)',
+                                                    boxShadow:
+                                                        canGoNext && !isTraining ? theme.glow.cyan : undefined,
+                                                }}
+                                            >
+                                                Ileri
+                                                <ChevronRight className="h-4 w-4" />
+                                            </button>
+                                        )}
 
-                                    {currentStep === 3 && !isTraining && trainingResults.length === 0 && (
-                                        <button
-                                            onClick={trainModels}
-                                            className="flex cursor-pointer items-center gap-2 px-6 py-2 rounded-xl font-medium text-white transition-all hover:scale-105"
-                                            style={{
-                                                background: theme.gradients.primary,
-                                                boxShadow: theme.glow.cyan,
-                                            }}
-                                        >
-                                            <Play className="w-4 h-4" />
-                                            Eğit
-                                        </button>
-                                    )}
+                                        {currentStep === 3 && !isTraining && trainingResults.length === 0 && (
+                                            <button
+                                                onClick={trainModels}
+                                                className="flex cursor-pointer items-center gap-2 rounded-xl px-6 py-2 font-medium text-white transition-all hover:scale-105"
+                                                style={{
+                                                    background: theme.gradients.primary,
+                                                    boxShadow: theme.glow.cyan,
+                                                }}
+                                            >
+                                                <Play className="h-4 w-4" />
+                                                Egit
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             </div>
