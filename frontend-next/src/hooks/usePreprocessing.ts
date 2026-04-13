@@ -338,7 +338,8 @@ export function usePreprocessing(): UsePreprocessingReturn {
             await api.applyEncoding(
                 config.method,
                 config.columns,
-                config.dropFirst
+                config.dropFirst,
+                config.ordinalMapping
             );
 
             await refreshColumnsAndHistory();
@@ -354,7 +355,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
             setIsLoading(true);
             setError(null);
 
-            await api.applyScaling(config.method, config.columns);
+            await api.applyScaling(config.method, config.columns, config.featureRange);
 
             await refreshColumnsAndHistory();
         } catch (err) {
@@ -449,7 +450,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
 
         for (const item of history) {
             if (item.stepKey === 'encoding') {
-                if (item.method === 'onehot') {
+                if (item.method === 'onehot' || item.method === 'binary') {
                     item.newColumns?.forEach((column) => encodedColumnNames.add(column));
                     continue;
                 }

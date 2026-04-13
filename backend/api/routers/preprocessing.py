@@ -25,6 +25,7 @@ from backend.modules.data_preprocessing.feature_engineering.processor import (
     create_numeric_feature,
     drop_columns,
 )
+from backend.modules.data_preprocessing.encoding.processor import binary_encode
 from backend.modules.data_preprocessing.missing_values.processor import (
     fill_missing_values_interpolation,
     fill_missing_values_knn,
@@ -32,6 +33,7 @@ from backend.modules.data_preprocessing.missing_values.processor import (
 )
 from backend.modules.data_preprocessing.outlier.analyzer import analyze_outliers
 from backend.modules.data_preprocessing.outlier.processor import apply_outlier_method
+from backend.modules.data_preprocessing.scaling.processor import apply_scaling_method
 
 router = APIRouter()
 
@@ -60,11 +62,13 @@ class EncodingRequest(BaseModel):
     method: str  # label, onehot, ordinal
     columns: List[str]
     drop_first: Optional[bool] = True
+    ordinal_mapping: Optional[dict[str, int]] = None
 
 
 class ScalingRequest(BaseModel):
     method: str  # standard, minmax, robust
     columns: List[str]
+    feature_range: Optional[tuple[float, float]] = None
 
 
 class FeatureRequest(BaseModel):
@@ -432,10 +436,21 @@ async def handle_encoding(
                 df = pd.concat([df, dummies], axis=1)
                 new_columns.extend(dummies.columns.tolist())
             elif request.method == "ordinal":
-                df[col] = df[col].astype('category').cat.codes
+                if request.ordinal_mapping:
+                    df[col] = df[col].map(request.ordinal_mapping)
+                else:
+                    df[col] = df[col].astype('category').cat.codes
+            elif request.method == "binary":
+                previous_columns = set(df.columns.tolist())
+                df = binary_encode(df, [col])
+                new_columns.extend(
+                    [column_name for column_name in df.columns if column_name not in previous_columns]
+                )
             elif request.method == "frequency":
                 freq_map = df[col].value_counts(normalize=True).to_dict()
                 df[col] = df[col].map(freq_map)
+            else:
+                raise HTTPException(status_code=400, detail=f"Unsupported encoding method: {request.method}")
         
         session_manager.set_dataframe(session_id, df)
         session_manager.add_history_snapshot(session_id, previous_df)
@@ -444,6 +459,10 @@ async def handle_encoding(
             "action": request.method,
             "columns": request.columns,
             "new_columns": new_columns,
+            "params": {
+                "drop_first": request.drop_first if request.method == "onehot" else None,
+                "ordinal_mapping": request.ordinal_mapping if request.method == "ordinal" else None,
+            },
         })
         
         return {
@@ -470,40 +489,41 @@ async def handle_scaling(
     
     try:
         previous_df = df.copy(deep=True)
-        for col in request.columns:
-            if col not in df.columns or not np.issubdtype(df[col].dtype, np.number):
-                continue
-            
-            if request.method == "standard":
-                mean = df[col].mean()
-                std = df[col].std()
-                if std > 0:
-                    df[col] = (df[col] - mean) / std
-            elif request.method == "minmax":
-                min_val = df[col].min()
-                max_val = df[col].max()
-                if max_val > min_val:
-                    df[col] = (df[col] - min_val) / (max_val - min_val)
-            elif request.method == "robust":
-                median = df[col].median()
-                q1 = df[col].quantile(0.25)
-                q3 = df[col].quantile(0.75)
-                iqr = q3 - q1
-                if iqr > 0:
-                    df[col] = (df[col] - median) / iqr
+        valid_columns = [
+            col for col in request.columns if col in df.columns and np.issubdtype(df[col].dtype, np.number)
+        ]
+
+        if request.method == "standard":
+            df = apply_scaling_method(df, valid_columns, "standard_scaler")
+        elif request.method == "minmax":
+            scaling_kwargs: dict[str, Any] = {}
+            if request.feature_range is not None:
+                scaling_kwargs["feature_range"] = tuple(request.feature_range)
+            df = apply_scaling_method(df, valid_columns, "minmax_scaler", **scaling_kwargs)
+        elif request.method == "robust":
+            df = apply_scaling_method(df, valid_columns, "robust_scaler")
+        elif request.method == "maxabs":
+            df = apply_scaling_method(df, valid_columns, "maxabs_scaler")
+        elif request.method == "normalizer":
+            df = apply_scaling_method(df, valid_columns, "normalizer")
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported scaling method: {request.method}")
         
         session_manager.set_dataframe(session_id, df)
         session_manager.add_history_snapshot(session_id, previous_df)
         session_manager.add_history(session_id, {
             "step": "scaling",
             "action": request.method,
-            "columns": request.columns,
+            "columns": valid_columns,
+            "params": {
+                "feature_range": list(request.feature_range) if request.feature_range is not None else None,
+            },
         })
         
         return {
             "success": True,
             "method": request.method,
-            "columns": request.columns,
+            "columns": valid_columns,
         }
         
     except Exception as e:

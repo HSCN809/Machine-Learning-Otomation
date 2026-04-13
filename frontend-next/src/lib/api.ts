@@ -396,23 +396,34 @@ export async function analyzeOutliers(
 export async function applyEncoding(
     method: string,
     columns: string[],
-    dropFirst?: boolean
+    dropFirst?: boolean,
+    ordinalMapping?: Record<string, number>
 ): Promise<PreprocessingResponse> {
     return apiFetch('/api/preprocessing/encoding', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ method, columns, drop_first: dropFirst }),
+        body: JSON.stringify({
+            method,
+            columns,
+            drop_first: dropFirst,
+            ordinal_mapping: ordinalMapping,
+        }),
     });
 }
 
 export async function applyScaling(
     method: string,
-    columns: string[]
+    columns: string[],
+    featureRange?: [number, number]
 ): Promise<PreprocessingResponse> {
     return apiFetch('/api/preprocessing/scaling', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ method, columns }),
+        body: JSON.stringify({
+            method,
+            columns,
+            feature_range: featureRange,
+        }),
     });
 }
 

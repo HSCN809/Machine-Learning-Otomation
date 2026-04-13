@@ -1,10 +1,11 @@
 """Scaling processor functions."""
 
-import pandas as pd
-import numpy as np
-from typing import List, Optional
-from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler, Normalizer, PowerTransformer
 import logging
+from typing import List, Optional
+
+import numpy as np
+import pandas as pd
+from sklearn.preprocessing import MaxAbsScaler, MinMaxScaler, Normalizer, PowerTransformer, RobustScaler, StandardScaler
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +82,25 @@ def robust_scale(df: pd.DataFrame, columns: List[str]) -> pd.DataFrame:
     return df
 
 
+def maxabs_scale(df: pd.DataFrame, columns: List[str]) -> pd.DataFrame:
+    """Scale specified numeric columns by their maximum absolute value."""
+    df = df.copy()
+    numeric_cols = [col for col in columns if col in df.columns and pd.api.types.is_numeric_dtype(df[col])]
+
+    if not numeric_cols:
+        logger.warning("No numeric columns found for max-abs scaling")
+        return df
+
+    try:
+        scaler = MaxAbsScaler()
+        df[numeric_cols] = scaler.fit_transform(df[numeric_cols])
+        logger.info(f"✅ Max-Abs scaled columns: {', '.join(numeric_cols)}")
+    except Exception as e:
+        logger.error(f"Error max-abs scaling columns: {e}", exc_info=True)
+
+    return df
+
+
 def normalize(df: pd.DataFrame, columns: List[str], norm: str = 'l2') -> pd.DataFrame:
     """Normalize specified numeric columns.
     
@@ -150,6 +170,7 @@ def apply_scaling_method(df: pd.DataFrame, columns: List[str], method: str, **kw
             - 'standard_scaler': Standard scaling (Z-score)
             - 'minmax_scaler': Min-Max scaling
             - 'robust_scaler': Robust scaling
+            - 'maxabs_scaler': Max-Abs scaling
             - 'normalizer': Normalization
             - 'power_transform': Power transformation
         **kwargs: Additional parameters for specific methods
@@ -164,6 +185,7 @@ def apply_scaling_method(df: pd.DataFrame, columns: List[str], method: str, **kw
         'standard_scaler': standard_scale,
         'minmax_scaler': minmax_scale,
         'robust_scaler': robust_scale,
+        'maxabs_scaler': maxabs_scale,
         'normalizer': normalize,
         'power_transform': power_transform
     }

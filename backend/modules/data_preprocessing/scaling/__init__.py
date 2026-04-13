@@ -4,6 +4,7 @@ from .processor import (
     standard_scale,
     minmax_scale,
     robust_scale,
+    maxabs_scale,
     normalize,
     power_transform,
     apply_scaling_method
@@ -21,6 +22,7 @@ __all__ = [
     'standard_scale',
     'minmax_scale',
     'robust_scale',
+    'maxabs_scale',
     'normalize',
     'power_transform',
     'apply_scaling_method',
