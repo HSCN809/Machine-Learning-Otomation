@@ -57,6 +57,23 @@ MODEL_PARAM_CASTERS: Dict[str, Dict[str, Any]] = {
     "svr": {"C": float, "kernel": str},
 }
 
+CLASSIFICATION_MODEL_IDS = {
+    "logistic_regression",
+    "random_forest_clf",
+    "xgboost_clf",
+    "svc",
+    "decision_tree_clf",
+}
+
+REGRESSION_MODEL_IDS = {
+    "linear_regression",
+    "ridge",
+    "lasso",
+    "random_forest_reg",
+    "xgboost_reg",
+    "svr",
+}
+
 
 def _normalize_model_params(model_id: str, raw_params: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     if not raw_params:
@@ -130,6 +147,47 @@ def _build_model(model_id: str, custom_params: Optional[Dict[str, Any]]):
 
 def _get_problem_type_label(is_classification: bool) -> str:
     return "classification" if is_classification else "regression"
+
+
+def _is_integer_like_series(series: pd.Series) -> bool:
+    numeric = pd.to_numeric(series, errors="coerce").dropna()
+    if numeric.empty:
+        return False
+    return bool(np.allclose(numeric, np.round(numeric)))
+
+
+def _infer_problem_type(target: pd.Series) -> str:
+    non_null_target = target.dropna()
+    if non_null_target.empty:
+        return "regression"
+
+    if (
+        non_null_target.dtype == "object"
+        or non_null_target.dtype.name == "category"
+        or non_null_target.dtype == "bool"
+    ):
+        return "classification"
+
+    unique_count = non_null_target.nunique()
+    unique_ratio = unique_count / len(non_null_target) if len(non_null_target) > 0 else 0
+
+    if _is_integer_like_series(non_null_target) and unique_count <= 20 and unique_ratio <= 0.2:
+        return "classification"
+
+    return "regression"
+
+
+def _validate_models_for_problem_type(model_ids: List[str], problem_type: str):
+    allowed_models = CLASSIFICATION_MODEL_IDS if problem_type == "classification" else REGRESSION_MODEL_IDS
+    invalid_models = [model_id for model_id in model_ids if model_id not in allowed_models]
+    if invalid_models:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Secilen modeller hedef kolon icin uygun degil: {', '.join(invalid_models)}. "
+                f"Beklenen problem tipi: {problem_type}."
+            ),
+        )
 
 
 def _sort_training_results(results: List[Dict[str, Any]], problem_type: str) -> List[Dict[str, Any]]:
@@ -252,8 +310,8 @@ def _prepare_training_bundle(df: pd.DataFrame, target_column: str, test_size: fl
         X, y, test_size=test_size, random_state=42
     )
 
-    unique_count = y.nunique()
-    is_classification = unique_count <= 10 or original_target.dtype == 'object' or original_target.dtype.name == 'category'
+    problem_type = _infer_problem_type(original_target)
+    is_classification = problem_type == "classification"
 
     return {
         "X": X,
@@ -262,7 +320,7 @@ def _prepare_training_bundle(df: pd.DataFrame, target_column: str, test_size: fl
         "y_train": y_train,
         "y_test": y_test,
         "is_classification": is_classification,
-        "problem_type": _get_problem_type_label(is_classification),
+        "problem_type": problem_type,
         "class_label_lookup": class_label_lookup,
     }
 
@@ -383,6 +441,7 @@ def _run_training_job(job_id: str):
 
         bundle = _prepare_training_bundle(df, snapshot["target_column"], float(snapshot["test_size"]) if "test_size" in snapshot else 0.2)
         problem_type = bundle["problem_type"]
+        _validate_models_for_problem_type(model_ids=snapshot.get("models", []), problem_type=problem_type)
         _update_job(job_id, status="running", problem_type=problem_type)
         _store_training_metadata(
             session_id,
@@ -488,14 +547,7 @@ async def detect_problem_type(
     
     target = df[target_column]
     unique_count = target.nunique()
-    
-    # Determine problem type
-    if target.dtype == 'object' or target.dtype.name == 'category':
-        problem_type = "classification"
-    elif unique_count <= 10:
-        problem_type = "classification"
-    else:
-        problem_type = "regression"
+    problem_type = _infer_problem_type(target)
     
     return {
         "target_column": target_column,
@@ -670,9 +722,9 @@ async def train_models(
             X, y, test_size=request.test_size, random_state=42
         )
         
-        # Detect problem type
-        unique_count = y.nunique()
-        is_classification = unique_count <= 10 or original_target.dtype == 'object' or original_target.dtype.name == 'category'
+        problem_type = _infer_problem_type(original_target)
+        is_classification = problem_type == "classification"
+        _validate_models_for_problem_type(request.models, problem_type)
         
         model_names = {
             "logistic_regression": "Logistic Regression",
@@ -780,11 +832,11 @@ async def train_models(
         
         # Store results in session
         session_manager.set_metadata(session_id, "training_results", results)
-        session_manager.set_metadata(session_id, "problem_type", "classification" if is_classification else "regression")
+        session_manager.set_metadata(session_id, "problem_type", problem_type)
         
         return {
             "success": True,
-            "problem_type": "classification" if is_classification else "regression",
+            "problem_type": problem_type,
             "results": results,
         }
         
