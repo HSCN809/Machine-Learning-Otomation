@@ -65,6 +65,7 @@ export default function ModelSelectionPage() {
         canGoPrev,
         loadColumns,
         setTargetColumn,
+        setProblemType,
         toggleModelSelection,
         updateModelParams,
         trainModels,
@@ -94,6 +95,7 @@ export default function ModelSelectionPage() {
                         selectedColumn={targetColumn}
                         problemType={problemType}
                         onSelect={setTargetColumn}
+                        onProblemTypeChange={setProblemType}
                     />
                 );
             case 1:

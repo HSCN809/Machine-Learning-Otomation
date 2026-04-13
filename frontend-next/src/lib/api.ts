@@ -565,6 +565,7 @@ export interface TrainingJobSnapshot {
 
 export async function trainModels(
     targetColumn: string,
+    problemType: string,
     models: string[],
     testSize: number = 0.2,
     params?: Record<string, Record<string, unknown>>
@@ -574,6 +575,7 @@ export async function trainModels(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             target_column: targetColumn,
+            problem_type: problemType,
             models,
             test_size: testSize,
             params,
@@ -600,6 +602,7 @@ export async function getModelComparison(): Promise<{
 
 export async function startModelTraining(
     targetColumn: string,
+    problemType: string,
     models: string[],
     testSize: number = 0.2,
     params?: Record<string, Record<string, unknown>>
@@ -609,6 +612,7 @@ export async function startModelTraining(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             target_column: targetColumn,
+            problem_type: problemType,
             models,
             test_size: testSize,
             params,

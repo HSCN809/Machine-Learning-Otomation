@@ -44,6 +44,7 @@ interface UseModelSelectionReturn {
     canGoPrev: boolean;
     loadColumns: () => Promise<void>;
     setTargetColumn: (column: string) => void;
+    setProblemType: (problemType: ProblemType) => void;
     toggleModelSelection: (modelId: string) => void;
     updateModelParams: (modelId: string, params: Record<string, unknown>) => void;
     trainModels: () => Promise<void>;
@@ -114,7 +115,7 @@ export function useModelSelection(): UseModelSelectionReturn {
     const [completedSteps, setCompletedSteps] = useState<number[]>([]);
     const [skippedSteps, setSkippedSteps] = useState<number[]>([]);
     const [targetColumn, setTargetColumnState] = useState<string | null>(null);
-    const [problemType, setProblemType] = useState<ProblemType | null>(null);
+    const [problemType, setProblemTypeState] = useState<ProblemType | null>(null);
     const [selectedModels, setSelectedModels] = useState<string[]>([]);
     const [modelParams, setModelParams] = useState<Record<string, Record<string, unknown>>>({});
     const [trainingResults, setTrainingResults] = useState<TrainingResult[]>([]);
@@ -172,7 +173,7 @@ export function useModelSelection(): UseModelSelectionReturn {
         setTotalTrainingModels(snapshot.total_models);
         setTargetColumnState(snapshot.target_column);
         if (nextProblemType) {
-            setProblemType(nextProblemType);
+            setProblemTypeState(nextProblemType);
             void loadAvailableModels(nextProblemType);
             setTrainingResults(mapTrainingResults(nextProblemType, snapshot.results));
         } else {
@@ -249,7 +250,7 @@ export function useModelSelection(): UseModelSelectionReturn {
                 trainingState.problem_type === 'classification' || trainingState.problem_type === 'regression'
                     ? trainingState.problem_type
                     : null;
-            setProblemType(hydratedProblemType);
+            setProblemTypeState(hydratedProblemType);
             setTargetColumnState(trainingState.target_column ?? null);
             await loadAvailableModels(hydratedProblemType);
 
@@ -336,26 +337,9 @@ export function useModelSelection(): UseModelSelectionReturn {
     const canGoPrev = currentStep > 0;
 
     const setTargetColumn = useCallback(
-        async (column: string) => {
+        (column: string) => {
             setTargetColumnState(column);
             setError(null);
-
-            try {
-                const result = await api.detectProblemType(column);
-                setProblemType(result.problem_type);
-                await loadAvailableModels(result.problem_type);
-            } catch {
-                const col = columns.find((item) => item.name === column);
-                if (col) {
-                    if (col.type === 'categorical' || col.uniqueValues <= 10) {
-                        setProblemType('classification');
-                        await loadAvailableModels('classification');
-                    } else {
-                        setProblemType('regression');
-                        await loadAvailableModels('regression');
-                    }
-                }
-            }
 
             closeTrainingStream();
             setTrainingJobId(null);
@@ -364,11 +348,32 @@ export function useModelSelection(): UseModelSelectionReturn {
             setCurrentTrainingModel(null);
             setCompletedTrainingModels(0);
             setTotalTrainingModels(0);
+            setProblemTypeState(null);
+            setAvailableModels([]);
             setSelectedModels([]);
             setModelParams({});
             setTrainingResults([]);
         },
-        [closeTrainingStream, columns, loadAvailableModels]
+        [closeTrainingStream]
+    );
+
+    const setProblemType = useCallback(
+        (nextProblemType: ProblemType) => {
+            setProblemTypeState(nextProblemType);
+            setError(null);
+            void loadAvailableModels(nextProblemType);
+            setSelectedModels([]);
+            setModelParams({});
+            setTrainingResults([]);
+            setTrainingJobId(null);
+            setTrainingStatus('idle');
+            setIsTraining(false);
+            setCurrentTrainingModel(null);
+            setCompletedTrainingModels(0);
+            setTotalTrainingModels(0);
+            closeTrainingStream();
+        },
+        [closeTrainingStream, loadAvailableModels]
     );
 
     const toggleModelSelection = useCallback((modelId: string) => {
@@ -388,7 +393,7 @@ export function useModelSelection(): UseModelSelectionReturn {
     }, []);
 
     const trainModels = useCallback(async () => {
-        if (selectedModels.length === 0 || !targetColumn) return;
+        if (selectedModels.length === 0 || !targetColumn || !problemType) return;
 
         try {
             setIsTraining(true);
@@ -400,7 +405,7 @@ export function useModelSelection(): UseModelSelectionReturn {
             setTrainingResults([]);
             setCurrentStep(3);
 
-            const response = await api.startModelTraining(targetColumn, selectedModels, 0.2, modelParams);
+            const response = await api.startModelTraining(targetColumn, problemType, selectedModels, 0.2, modelParams);
             setTrainingJobId(response.job_id);
             connectToTrainingStream(response.job_id);
         } catch (err) {
@@ -409,7 +414,7 @@ export function useModelSelection(): UseModelSelectionReturn {
             setIsTraining(false);
             setTrainingStatus('failed');
         }
-    }, [connectToTrainingStream, modelParams, selectedModels, targetColumn]);
+    }, [connectToTrainingStream, modelParams, problemType, selectedModels, targetColumn]);
 
     const stopTraining = useCallback(async () => {
         if (!trainingJobId) {
@@ -432,7 +437,7 @@ export function useModelSelection(): UseModelSelectionReturn {
         setCompletedSteps([]);
         setSkippedSteps([]);
         setTargetColumnState(null);
-        setProblemType(null);
+        setProblemTypeState(null);
         setAvailableModels([]);
         setSelectedModels([]);
         setModelParams({});
@@ -478,6 +483,7 @@ export function useModelSelection(): UseModelSelectionReturn {
         canGoPrev,
         loadColumns,
         setTargetColumn,
+        setProblemType,
         toggleModelSelection,
         updateModelParams,
         trainModels,

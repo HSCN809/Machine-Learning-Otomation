@@ -34,6 +34,7 @@ TRAINING_JOBS_LOCK = threading.Lock()
 # Request schemas
 class TrainRequest(BaseModel):
     target_column: str
+    problem_type: Optional[str] = None
     models: List[str]
     test_size: float = 0.2
     params: Optional[Dict[str, Dict[str, Any]]] = None
@@ -177,6 +178,40 @@ def _infer_problem_type(target: pd.Series) -> str:
     return "regression"
 
 
+def _resolve_problem_type(requested_problem_type: Optional[str], target: pd.Series) -> str:
+    if requested_problem_type in {"classification", "regression"}:
+        return requested_problem_type
+    return _infer_problem_type(target)
+
+
+def _validate_target_for_problem_type(target: pd.Series, problem_type: str):
+    non_null_target = target.dropna()
+    if non_null_target.empty:
+        raise HTTPException(status_code=400, detail="Hedef kolonda gecerli veri bulunamadi")
+
+    if problem_type == "regression":
+        numeric_target = pd.to_numeric(non_null_target, errors="coerce")
+        if numeric_target.isna().any():
+            raise HTTPException(
+                status_code=400,
+                detail="Regresyon icin hedef kolon sayisal olmalidir",
+            )
+        return
+
+    if (
+        non_null_target.dtype == "object"
+        or non_null_target.dtype.name == "category"
+        or non_null_target.dtype == "bool"
+    ):
+        return
+
+    if not _is_integer_like_series(non_null_target):
+        raise HTTPException(
+            status_code=400,
+            detail="Siniflandirma icin hedef kolon ayrik siniflardan olusmalidir",
+        )
+
+
 def _validate_models_for_problem_type(model_ids: List[str], problem_type: str):
     allowed_models = CLASSIFICATION_MODEL_IDS if problem_type == "classification" else REGRESSION_MODEL_IDS
     invalid_models = [model_id for model_id in model_ids if model_id not in allowed_models]
@@ -218,6 +253,7 @@ def _create_job(session_id: str, request: TrainRequest) -> str:
         "job_id": job_id,
         "session_id": session_id,
         "target_column": request.target_column,
+        "problem_type": request.problem_type,
         "models": request.models,
         "test_size": request.test_size,
         "params": request.params or {},
@@ -226,7 +262,6 @@ def _create_job(session_id: str, request: TrainRequest) -> str:
         "total_models": len(request.models),
         "completed_models": 0,
         "results": [],
-        "problem_type": None,
         "error": None,
         "stop_requested": False,
         "revision": 0,
@@ -254,6 +289,7 @@ def _get_job_snapshot(job_id: str) -> Optional[Dict[str, Any]]:
             "job_id": job["job_id"],
             "session_id": job["session_id"],
             "target_column": job["target_column"],
+            "problem_type": job["problem_type"],
             "models": list(job["models"]),
             "test_size": job["test_size"],
             "params": dict(job["params"]),
@@ -262,7 +298,6 @@ def _get_job_snapshot(job_id: str) -> Optional[Dict[str, Any]]:
             "total_models": job["total_models"],
             "completed_models": job["completed_models"],
             "results": list(job["results"]),
-            "problem_type": job["problem_type"],
             "error": job["error"],
             "stop_requested": job["stop_requested"],
             "revision": job["revision"],
@@ -288,7 +323,12 @@ def _find_active_job_for_session(session_id: str) -> Optional[Dict[str, Any]]:
     return _get_job_snapshot(active_job_id)
 
 
-def _prepare_training_bundle(df: pd.DataFrame, target_column: str, test_size: float) -> Dict[str, Any]:
+def _prepare_training_bundle(
+    df: pd.DataFrame,
+    target_column: str,
+    test_size: float,
+    problem_type: str,
+) -> Dict[str, Any]:
     from sklearn.model_selection import train_test_split
 
     if target_column not in df.columns:
@@ -301,16 +341,18 @@ def _prepare_training_bundle(df: pd.DataFrame, target_column: str, test_size: fl
 
     X = pd.get_dummies(X, drop_first=True)
 
-    if y.dtype == 'object' or y.dtype.name == 'category':
+    _validate_target_for_problem_type(original_target, problem_type)
+
+    if problem_type == "classification" and (y.dtype == 'object' or y.dtype.name == 'category'):
         categorical_target = y.astype('category')
         class_label_lookup = [str(label) for label in categorical_target.cat.categories.tolist()]
         y = categorical_target.cat.codes
+    elif problem_type == "regression":
+        y = pd.to_numeric(y, errors="coerce")
 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=test_size, random_state=42
     )
-
-    problem_type = _infer_problem_type(original_target)
     is_classification = problem_type == "classification"
 
     return {
@@ -439,8 +481,14 @@ def _run_training_job(job_id: str):
         if df is None:
             raise HTTPException(status_code=400, detail="No data loaded")
 
-        bundle = _prepare_training_bundle(df, snapshot["target_column"], float(snapshot["test_size"]) if "test_size" in snapshot else 0.2)
-        problem_type = bundle["problem_type"]
+        target = df[snapshot["target_column"]]
+        problem_type = _resolve_problem_type(snapshot.get("problem_type"), target)
+        bundle = _prepare_training_bundle(
+            df,
+            snapshot["target_column"],
+            float(snapshot["test_size"]) if "test_size" in snapshot else 0.2,
+            problem_type,
+        )
         _validate_models_for_problem_type(model_ids=snapshot.get("models", []), problem_type=problem_type)
         _update_job(job_id, status="running", problem_type=problem_type)
         _store_training_metadata(
@@ -696,34 +744,20 @@ async def train_models(
         raise HTTPException(status_code=404, detail=f"Target column '{request.target_column}' not found")
     
     try:
-        from sklearn.model_selection import train_test_split
         from sklearn.metrics import (
             accuracy_score, precision_score, recall_score, f1_score, roc_auc_score,
             mean_squared_error, mean_absolute_error, r2_score
         )
-        
-        # Prepare data
-        X = df.drop(columns=[request.target_column])
-        y = df[request.target_column]
-        original_target = y.copy()
-        class_label_lookup: Optional[List[str]] = None
-        
-        # Handle categorical features
-        X = pd.get_dummies(X, drop_first=True)
-        
-        # Handle categorical target for classification
-        if y.dtype == 'object' or y.dtype.name == 'category':
-            categorical_target = y.astype('category')
-            class_label_lookup = [str(label) for label in categorical_target.cat.categories.tolist()]
-            y = categorical_target.cat.codes
-        
-        # Split data
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=request.test_size, random_state=42
-        )
-        
-        problem_type = _infer_problem_type(original_target)
-        is_classification = problem_type == "classification"
+        target = df[request.target_column]
+        problem_type = _resolve_problem_type(request.problem_type, target)
+        bundle = _prepare_training_bundle(df, request.target_column, request.test_size, problem_type)
+        X = bundle["X"]
+        X_train = bundle["X_train"]
+        X_test = bundle["X_test"]
+        y_train = bundle["y_train"]
+        y_test = bundle["y_test"]
+        class_label_lookup = bundle["class_label_lookup"]
+        is_classification = bundle["is_classification"]
         _validate_models_for_problem_type(request.models, problem_type)
         
         model_names = {

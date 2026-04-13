@@ -11,6 +11,7 @@ interface TargetSelectorProps {
     selectedColumn: string | null;
     problemType: ProblemType | null;
     onSelect: (column: string) => void;
+    onProblemTypeChange: (problemType: ProblemType) => void;
     disabled?: boolean;
 }
 
@@ -22,6 +23,7 @@ export function TargetSelectorClean({
     selectedColumn,
     problemType,
     onSelect,
+    onProblemTypeChange,
     disabled = false,
 }: TargetSelectorProps) {
     const hasColumns = columns.length > 0;
@@ -47,32 +49,35 @@ export function TargetSelectorClean({
         }
     }, []);
 
-    const handleSelectColumn = useCallback((index: number, nextDirection: 'forward' | 'backward') => {
-        if (disabled || columns.length === 0 || isAnimating) {
-            return;
-        }
+    const handleSelectColumn = useCallback(
+        (index: number, nextDirection: 'forward' | 'backward') => {
+            if (disabled || columns.length === 0 || isAnimating) {
+                return;
+            }
 
-        const wrappedIndex = (index + columns.length) % columns.length;
-        const nextColumn = columns[wrappedIndex];
+            const wrappedIndex = (index + columns.length) % columns.length;
+            const nextColumn = columns[wrappedIndex];
 
-        if (!nextColumn || wrappedIndex === visibleIndex) {
-            return;
-        }
+            if (!nextColumn || wrappedIndex === visibleIndex) {
+                return;
+            }
 
-        clearAnimationTimers();
-        setDirection(nextDirection);
-        setPhase('exit');
+            clearAnimationTimers();
+            setDirection(nextDirection);
+            setPhase('exit');
 
-        exitTimerRef.current = setTimeout(() => {
-            setAnimatedIndex(wrappedIndex);
-            onSelect(nextColumn.name);
-            setPhase('enter');
+            exitTimerRef.current = setTimeout(() => {
+                setAnimatedIndex(wrappedIndex);
+                onSelect(nextColumn.name);
+                setPhase('enter');
 
-            enterTimerRef.current = setTimeout(() => {
-                setPhase('idle');
-            }, ENTER_DURATION_MS);
-        }, EXIT_DURATION_MS);
-    }, [clearAnimationTimers, columns, disabled, isAnimating, onSelect, visibleIndex]);
+                enterTimerRef.current = setTimeout(() => {
+                    setPhase('idle');
+                }, ENTER_DURATION_MS);
+            }, EXIT_DURATION_MS);
+        },
+        [clearAnimationTimers, columns, disabled, isAnimating, onSelect, visibleIndex]
+    );
 
     const handlePrevious = useCallback(() => {
         handleSelectColumn(visibleIndex - 1, 'backward');
@@ -138,7 +143,7 @@ export function TargetSelectorClean({
             <div className="space-y-6">
                 <div className="space-y-3">
                     <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-10 text-center text-gray-400">
-                        Kullanılabilir sütun bulunamadı.
+                        Kullanilabilir sutun bulunamadi.
                     </div>
                 </div>
             </div>
@@ -152,12 +157,13 @@ export function TargetSelectorClean({
     return (
         <div className="space-y-6">
             <div className="space-y-3">
+                <label className="text-sm font-medium text-gray-300">Hedef Degisken (Target)</label>
                 <div className="mx-auto flex max-w-5xl items-center gap-3">
                     <button
                         type="button"
                         onClick={handlePrevious}
                         disabled={disabled || isAnimating}
-                        aria-label="Önceki hedef değişkene geç"
+                        aria-label="Onceki hedef degiskene gec"
                         className={cn(
                             'flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-gray-300 transition-all duration-200',
                             !disabled && 'cursor-pointer hover:border-cyan-500/30 hover:bg-white/10 hover:text-white',
@@ -173,7 +179,7 @@ export function TargetSelectorClean({
                             type="button"
                             disabled={disabled}
                             className={cn(
-                                'w-full rounded-xl border-2 p-4 md:p-5 text-left transition-all duration-200',
+                                'w-full rounded-xl border-2 p-4 text-left transition-all duration-200 md:p-5',
                                 isCurrentSelected
                                     ? 'border-cyan-500 bg-cyan-500/10'
                                     : 'border-white/10 bg-white/5 hover:border-cyan-500/30 hover:bg-white/10',
@@ -185,7 +191,12 @@ export function TargetSelectorClean({
                         >
                             <div className="flex items-start justify-between gap-4">
                                 <div>
-                                    <p className={cn('text-2xl font-semibold tracking-tight md:text-[2rem]', isCurrentSelected ? 'text-cyan-400' : 'text-white')}>
+                                    <p
+                                        className={cn(
+                                            'text-2xl font-semibold tracking-tight md:text-[2rem]',
+                                            isCurrentSelected ? 'text-cyan-400' : 'text-white'
+                                        )}
+                                    >
                                         {currentColumn.name}
                                     </p>
                                     <div className="mt-3 flex flex-wrap items-center gap-2.5 text-sm">
@@ -195,7 +206,7 @@ export function TargetSelectorClean({
                                                 isNumeric ? 'bg-blue-500/20 text-blue-400' : 'bg-green-500/20 text-green-400'
                                             )}
                                         >
-                                            {isNumeric ? 'Sayısal' : 'Kategorik'}
+                                            {isNumeric ? 'Sayisal' : 'Kategorik'}
                                         </span>
                                         <span className="text-gray-400">{currentColumn.uniqueValues} unique</span>
                                         <span className="text-gray-500">
@@ -213,7 +224,7 @@ export function TargetSelectorClean({
                         type="button"
                         onClick={handleNext}
                         disabled={disabled || isAnimating}
-                        aria-label="Sonraki hedef değişkene geç"
+                        aria-label="Sonraki hedef degiskene gec"
                         className={cn(
                             'flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-gray-300 transition-all duration-200',
                             !disabled && 'cursor-pointer hover:border-cyan-500/30 hover:bg-white/10 hover:text-white',
@@ -225,33 +236,74 @@ export function TargetSelectorClean({
                 </div>
             </div>
 
-            {selectedColumn && problemType && (
+            {selectedColumn && (
                 <div className="mx-auto max-w-5xl">
-                    <div
-                        className="p-6 rounded-xl border animate-fadeIn"
-                        style={{
-                            borderColor: problemType === 'classification'
-                                ? `${theme.colors.secondary.green}50`
-                                : `${theme.colors.primary.cyan}50`,
-                            background: problemType === 'classification'
-                                ? `${theme.colors.secondary.green}10`
-                                : `${theme.colors.primary.cyan}10`,
-                        }}
-                    >
-                        <div className="flex items-center gap-4">
-                            <span className="text-5xl">
-                                {problemType === 'classification' ? '🏷️' : '📈'}
-                            </span>
-                            <div>
-                                <h3 className="text-xl font-bold text-white">
-                                    {problemType === 'classification' ? 'Sınıflandırma Problemi' : 'Regresyon Problemi'}
-                                </h3>
-                                <p className="mt-1 text-sm text-gray-400">
-                                    {problemType === 'classification'
-                                        ? 'Hedef değişken kategorik. Sınıflandırma modelleri önerilir.'
-                                        : 'Hedef değişken sayısal. Regresyon modelleri önerilir.'}
-                                </p>
-                            </div>
+                    <div className="space-y-3 rounded-xl border border-white/10 bg-white/5 p-6 animate-fadeIn">
+                        <label className="text-sm font-medium text-gray-300">Problem Secimi</label>
+                        <div className="grid gap-4 md:grid-cols-2">
+                            <button
+                                type="button"
+                                onClick={() => onProblemTypeChange('classification')}
+                                disabled={disabled}
+                                className={cn(
+                                    'rounded-xl border p-5 text-left transition-all duration-200',
+                                    problemType === 'classification'
+                                        ? 'border-emerald-400 bg-emerald-500/10'
+                                        : 'border-white/10 bg-transparent hover:border-emerald-400/40 hover:bg-white/5',
+                                    disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+                                )}
+                            >
+                                <div className="mb-3 flex items-center justify-between gap-3">
+                                    <div>
+                                        <p className="text-lg font-semibold text-white">Siniflandirma</p>
+                                        <p className="mt-1 text-sm text-gray-400">
+                                            Ayrik siniflar veya kategoriler icin classifier modelleri kullanir.
+                                        </p>
+                                    </div>
+                                    <span
+                                        className={cn(
+                                            'flex h-6 w-6 items-center justify-center rounded border text-sm',
+                                            problemType === 'classification'
+                                                ? 'border-emerald-400 bg-emerald-400 text-slate-950'
+                                                : 'border-white/20 text-transparent'
+                                        )}
+                                    >
+                                        ✓
+                                    </span>
+                                </div>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => onProblemTypeChange('regression')}
+                                disabled={disabled}
+                                className={cn(
+                                    'rounded-xl border p-5 text-left transition-all duration-200',
+                                    problemType === 'regression'
+                                        ? 'border-cyan-400 bg-cyan-500/10'
+                                        : 'border-white/10 bg-transparent hover:border-cyan-400/40 hover:bg-white/5',
+                                    disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+                                )}
+                            >
+                                <div className="mb-3 flex items-center justify-between gap-3">
+                                    <div>
+                                        <p className="text-lg font-semibold text-white">Regresyon</p>
+                                        <p className="mt-1 text-sm text-gray-400">
+                                            Sayisal hedefler icin regression modelleri kullanir.
+                                        </p>
+                                    </div>
+                                    <span
+                                        className={cn(
+                                            'flex h-6 w-6 items-center justify-center rounded border text-sm',
+                                            problemType === 'regression'
+                                                ? 'border-cyan-400 bg-cyan-400 text-slate-950'
+                                                : 'border-white/20 text-transparent'
+                                        )}
+                                    >
+                                        ✓
+                                    </span>
+                                </div>
+                            </button>
                         </div>
                     </div>
                 </div>
