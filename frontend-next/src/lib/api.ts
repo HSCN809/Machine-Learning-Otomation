@@ -85,6 +85,47 @@ async function apiFetch<T>(
     return response.json();
 }
 
+function getDownloadFilename(response: Response, fallback: string): string {
+    const contentDisposition = response.headers.get('Content-Disposition');
+    if (!contentDisposition) {
+        return fallback;
+    }
+
+    const match = contentDisposition.match(/filename="?([^"]+)"?/i);
+    return match?.[1] || fallback;
+}
+
+async function downloadWithSession(endpoint: string, fallbackFilename: string): Promise<void> {
+    const headers: HeadersInit = {};
+    const sid = getSessionId();
+    if (sid) {
+        (headers as Record<string, string>)['X-Session-Id'] = sid;
+    }
+
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, { headers });
+
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+        const detail = typeof error.detail === 'string' ? error.detail : `HTTP ${response.status}`;
+
+        if (SESSION_ERROR_MESSAGES.has(detail)) {
+            clearStoredSession();
+            throw new SessionRequiredError();
+        }
+
+        throw new Error(detail);
+    }
+
+    const blob = await response.blob();
+    const filename = getDownloadFilename(response, fallbackFilename);
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+    URL.revokeObjectURL(url);
+}
+
 // ============== Upload API ==============
 
 export interface UploadResponse {
@@ -467,6 +508,10 @@ export async function resetPreprocessing(): Promise<{ success: boolean; message:
     return apiFetch('/api/preprocessing/reset', { method: 'POST' });
 }
 
+export async function downloadProcessedData(): Promise<void> {
+    return downloadWithSession('/api/preprocessing/export', 'processed_data.xlsx');
+}
+
 export interface DropColumnsResponse {
     success: boolean;
     dropped_columns: string[];
@@ -626,6 +671,10 @@ export async function stopModelTraining(jobId: string): Promise<{ success: boole
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ job_id: jobId }),
     });
+}
+
+export async function downloadTrainedModel(modelId: string): Promise<void> {
+    return downloadWithSession(`/api/model/download-model?model_id=${encodeURIComponent(modelId)}`, `${modelId}_model.pkl`);
 }
 
 export function getModelTrainingStreamUrl(jobId: string): string {

@@ -19,18 +19,17 @@ interface FeatureImportanceProps {
 }
 
 export function FeatureImportance({ data, title = 'Feature Importance' }: FeatureImportanceProps) {
-    // Sort by importance and take top 10
     const sortedData = [...data]
         .sort((a, b) => b.importance - a.importance)
         .slice(0, 10)
-        .map(d => ({
-            ...d,
-            importance: Math.round(d.importance * 100) / 100,
+        .map((item) => ({
+            ...item,
+            importance: Math.round(item.importance * 100) / 100,
         }));
 
     return (
-        <div className="p-6 rounded-xl border border-white/10 bg-white/5">
-            <h4 className="font-semibold text-white mb-4">{title}</h4>
+        <div className="rounded-xl border border-white/10 bg-white/5 p-6">
+            <h4 className="mb-4 font-semibold text-white">{title}</h4>
 
             <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
@@ -60,20 +59,27 @@ export function FeatureImportance({ data, title = 'Feature Importance' }: Featur
                                 borderRadius: '8px',
                                 color: theme.colors.text.primary,
                             }}
-                            formatter={(value: number) => [`${(value * 100).toFixed(1)}%`, 'Önem']}
+                            itemStyle={{ color: theme.colors.text.primary }}
+                            labelStyle={{ color: theme.colors.text.primary }}
+                            cursor={{ fill: 'rgba(255, 255, 255, 0.06)' }}
+                            formatter={(value: number) => [`${(value * 100).toFixed(1)}%`, 'Onem']}
                         />
                         <Bar dataKey="importance" radius={[0, 4, 4, 0]}>
                             {sortedData.map((entry, index) => (
                                 <Cell
-                                    key={`cell-${index}`}
-                                    fill={index === 0
-                                        ? theme.colors.primary.cyan
-                                        : index < 3
-                                            ? theme.colors.secondary.green
-                                            : theme.colors.accent.purple
+                                    key={`cell-${entry.feature}-${index}`}
+                                    fill={
+                                        index === 0
+                                            ? theme.colors.primary.cyan
+                                            : index < 3
+                                              ? theme.colors.secondary.green
+                                              : theme.colors.accent.purple
                                     }
                                     style={{
-                                        filter: index < 3 ? `drop-shadow(0 0 6px ${theme.colors.primary.cyan}40)` : undefined,
+                                        filter:
+                                            index < 3
+                                                ? `drop-shadow(0 0 6px ${theme.colors.primary.cyan}40)`
+                                                : undefined,
                                     }}
                                 />
                             ))}

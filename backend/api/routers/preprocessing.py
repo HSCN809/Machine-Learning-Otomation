@@ -3,6 +3,7 @@ Preprocessing Router - Data preprocessing endpoints
 """
 
 import ast
+from io import BytesIO
 import logging
 import os
 import sys
@@ -12,6 +13,7 @@ import numpy as np
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from starlette.responses import StreamingResponse
 
 logger = logging.getLogger(__name__)
 
@@ -810,3 +812,24 @@ async def reset_data(session_id: str = Depends(require_session)):
         "rows": len(original_df),
         "columns": len(original_df.columns),
     }
+
+
+@router.get("/export")
+async def export_processed_data(session_id: str = Depends(require_session)):
+    """Export the current processed dataframe as an Excel file."""
+    df = session_manager.get_dataframe(session_id)
+    if df is None:
+        raise HTTPException(status_code=400, detail="No data loaded")
+
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="processed_data")
+    output.seek(0)
+
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": 'attachment; filename="processed_data.xlsx"',
+        },
+    )

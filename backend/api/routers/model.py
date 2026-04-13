@@ -5,10 +5,12 @@ Model Router - Model training and evaluation endpoints
 import asyncio
 import json
 import os
+import pickle
 import sys
 import threading
 import uuid
 from datetime import datetime
+from io import BytesIO
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -230,6 +232,33 @@ def _sort_training_results(results: List[Dict[str, Any]], problem_type: str) -> 
     return sorted(results, key=lambda item: item["metrics"].get(primary_metric, 0), reverse=True)
 
 
+def _store_trained_model_artifact(
+    session_id: str,
+    *,
+    model_id: str,
+    model_name: str,
+    model: Any,
+    target_column: str,
+    problem_type: str,
+    feature_columns: List[str],
+):
+    artifact_payload = {
+        "model_id": model_id,
+        "model_name": model_name,
+        "target_column": target_column,
+        "problem_type": problem_type,
+        "feature_columns": feature_columns,
+        "trained_at": datetime.now().isoformat(),
+        "model": model,
+    }
+    artifacts = session_manager.get_metadata(session_id, "trained_model_artifacts") or {}
+    artifacts[model_id] = {
+        "filename": f"{model_id}_model.pkl",
+        "payload": pickle.dumps(artifact_payload),
+    }
+    session_manager.set_metadata(session_id, "trained_model_artifacts", artifacts)
+
+
 def _store_training_metadata(
     session_id: str,
     *,
@@ -277,6 +306,7 @@ def _create_job(session_id: str, request: TrainRequest) -> str:
         results=[],
         active_job_id=job_id,
     )
+    session_manager.set_metadata(session_id, "trained_model_artifacts", {})
     return job_id
 
 
@@ -528,6 +558,15 @@ def _run_training_job(job_id: str):
 
             _update_job(job_id, current_model=model_id)
             result = _train_single_model(model_id, model, bundle)
+            _store_trained_model_artifact(
+                session_id,
+                model_id=model_id,
+                model_name=result["model_name"],
+                model=model,
+                target_column=snapshot["target_column"],
+                problem_type=problem_type,
+                feature_columns=bundle["X"].columns.tolist(),
+            )
             results.append(result)
             sorted_results = _sort_training_results(results, problem_type)
             _update_job(
@@ -748,6 +787,7 @@ async def train_models(
             accuracy_score, precision_score, recall_score, f1_score, roc_auc_score,
             mean_squared_error, mean_absolute_error, r2_score
         )
+        session_manager.set_metadata(session_id, "trained_model_artifacts", {})
         target = df[request.target_column]
         problem_type = _resolve_problem_type(request.problem_type, target)
         bundle = _prepare_training_bundle(df, request.target_column, request.test_size, problem_type)
@@ -857,6 +897,15 @@ async def train_models(
                 "feature_importance": feature_importance[:10],  # Top 10
                 "training_time": round(training_time, 2),
             })
+            _store_trained_model_artifact(
+                session_id,
+                model_id=model_id,
+                model_name=model_names.get(model_id, model_id),
+                model=model,
+                target_column=request.target_column,
+                problem_type=problem_type,
+                feature_columns=X.columns.tolist(),
+            )
 
         if not results:
             raise HTTPException(status_code=400, detail="No supported models were trained")
@@ -923,3 +972,23 @@ async def get_comparison(session_id: str = Depends(require_session)):
         "best_model": sorted_results[0] if sorted_results else None,
         "primary_metric": primary_metric,
     }
+
+
+@router.get("/download-model")
+async def download_trained_model(
+    model_id: str,
+    session_id: str = Depends(require_session)
+):
+    """Download a trained model artifact as a pickle file."""
+    artifacts = session_manager.get_metadata(session_id, "trained_model_artifacts") or {}
+    artifact = artifacts.get(model_id)
+    if not artifact:
+        raise HTTPException(status_code=404, detail="Requested trained model was not found")
+
+    return StreamingResponse(
+        BytesIO(artifact["payload"]),
+        media_type="application/octet-stream",
+        headers={
+            "Content-Disposition": f'attachment; filename="{artifact["filename"]}"',
+        },
+    )

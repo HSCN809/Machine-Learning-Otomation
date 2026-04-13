@@ -245,13 +245,14 @@ export function useModelSelection(): UseModelSelectionReturn {
             }));
 
             setColumns(cols);
+            const initialTargetColumn = trainingState.target_column ?? cols[0]?.name ?? null;
 
             const hydratedProblemType =
                 trainingState.problem_type === 'classification' || trainingState.problem_type === 'regression'
                     ? trainingState.problem_type
                     : null;
             setProblemTypeState(hydratedProblemType);
-            setTargetColumnState(trainingState.target_column ?? null);
+            setTargetColumnState(initialTargetColumn);
             await loadAvailableModels(hydratedProblemType);
 
             if (trainingState.job) {
