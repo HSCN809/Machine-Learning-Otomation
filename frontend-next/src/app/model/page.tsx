@@ -24,11 +24,11 @@ const getSessionSnapshot = () => hasStoredSession();
 const getServerSessionSnapshot = (): boolean | null => null;
 
 const STEPS = [
-    { id: 0, name: 'Target Secimi', icon: <Target className="h-5 w-5" /> },
-    { id: 1, name: 'Model Secimi', icon: <BrainCircuit className="h-5 w-5" /> },
+    { id: 0, name: 'Target Seçimi', icon: <Target className="h-5 w-5" /> },
+    { id: 1, name: 'Model Seçimi', icon: <BrainCircuit className="h-5 w-5" /> },
     { id: 2, name: 'Hiperparametreler', icon: <SlidersHorizontal className="h-5 w-5" /> },
-    { id: 3, name: 'Egitim', icon: <Rocket className="h-5 w-5" /> },
-    { id: 4, name: 'Sonuclar', icon: <BarChart3 className="h-5 w-5" /> },
+    { id: 3, name: 'Eğitim', icon: <Rocket className="h-5 w-5" /> },
+    { id: 4, name: 'Sonuçlar', icon: <BarChart3 className="h-5 w-5" /> },
 ];
 
 export default function ModelSelectionPage() {
@@ -129,7 +129,7 @@ export default function ModelSelectionPage() {
                         {!isTraining && trainingResults.length === 0 && (
                             <div className="py-8 text-center">
                                 <p className="mb-4 text-gray-400">
-                                    {selectedModels.length} model egitime hazir
+                                    {selectedModels.length} model eğitime hazır
                                 </p>
                                 <button
                                     onClick={trainModels}
@@ -140,7 +140,7 @@ export default function ModelSelectionPage() {
                                     }}
                                 >
                                     <Play className="h-5 w-5" />
-                                    Egitimi Baslat
+                                    Eğitimi Başlat
                                 </button>
                             </div>
                         )}
@@ -152,7 +152,7 @@ export default function ModelSelectionPage() {
                                     disabled={trainingStatus === 'stopping'}
                                     className="inline-flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-6 py-3 font-medium text-red-300 transition-all hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
-                                    {trainingStatus === 'stopping' ? 'Durduruluyor...' : 'Egitimi Durdur'}
+                                    {trainingStatus === 'stopping' ? 'Durduruluyor...' : 'Eğitimi Durdur'}
                                 </button>
                             </div>
                         )}
@@ -165,7 +165,7 @@ export default function ModelSelectionPage() {
                             <>
                                 <div>
                                     <h3 className="mb-3 text-lg font-semibold text-white">
-                                        En Iyi Model: {trainingResults[0]?.modelName}
+                                        En İyi Model: {trainingResults[0]?.modelName}
                                     </h3>
                                     <MetricsDisplay
                                         metrics={trainingResults[0].metrics}
@@ -209,8 +209,8 @@ export default function ModelSelectionPage() {
                 }}
             >
                 <Header
-                    title="Model Secimi"
-                    subtitle="Verilerinize uygun modelleri secin, egitin ve karsilastirin."
+                    title="Model Seçimi"
+                    subtitle="Verilerinize uygun modelleri seçin, eğitin ve karşılaştırın."
                 />
 
                 <main className="space-y-6 p-6">
@@ -218,8 +218,8 @@ export default function ModelSelectionPage() {
 
                     {hasSession !== null && !isLoading && !hasData && (
                         <NoDataWarning
-                            title="Veri Yuklenmedi"
-                            description="Model secimi ve egitimi yapabilmek icin once veri yuklemeniz gerekmektedir."
+                            title="Veri Yüklenmedi"
+                            description="Model seçimi ve eğitimi yapabilmek için önce veri yüklemeniz gerekmektedir."
                         />
                     )}
 
@@ -293,7 +293,7 @@ export default function ModelSelectionPage() {
                                                         canGoNext && !isTraining ? theme.glow.cyan : undefined,
                                                 }}
                                             >
-                                                Ileri
+                                                İleri
                                                 <ChevronRight className="h-4 w-4" />
                                             </button>
                                         )}
@@ -308,7 +308,7 @@ export default function ModelSelectionPage() {
                                                 }}
                                             >
                                                 <Play className="h-4 w-4" />
-                                                Egit
+                                                Eğit
                                             </button>
                                         )}
                                     </div>

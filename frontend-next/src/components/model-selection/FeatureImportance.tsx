@@ -18,7 +18,7 @@ interface FeatureImportanceProps {
     title?: string;
 }
 
-export function FeatureImportance({ data, title = 'Feature Importance' }: FeatureImportanceProps) {
+export function FeatureImportance({ data, title = 'Özellik Önemi' }: FeatureImportanceProps) {
     const sortedData = [...data]
         .sort((a, b) => b.importance - a.importance)
         .slice(0, 10)
@@ -62,7 +62,7 @@ export function FeatureImportance({ data, title = 'Feature Importance' }: Featur
                             itemStyle={{ color: theme.colors.text.primary }}
                             labelStyle={{ color: theme.colors.text.primary }}
                             cursor={{ fill: 'rgba(255, 255, 255, 0.06)' }}
-                            formatter={(value: number) => [`${(value * 100).toFixed(1)}%`, 'Onem']}
+                            formatter={(value: number) => [`${(value * 100).toFixed(1)}%`, 'Önem']}
                         />
                         <Bar dataKey="importance" radius={[0, 4, 4, 0]}>
                             {sortedData.map((entry, index) => (

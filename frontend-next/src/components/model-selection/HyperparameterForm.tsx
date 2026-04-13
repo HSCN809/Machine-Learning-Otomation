@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { ModelInfo, ModelParameter } from '@/types/model-selection';
 import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ModelInfo, ModelParameter } from '@/types/model-selection';
 
 interface HyperparameterFormProps {
     models: ModelInfo[];
@@ -17,11 +17,8 @@ export function HyperparameterForm({
     params,
     onUpdateParams,
 }: HyperparameterFormProps) {
-    const [expandedModel, setExpandedModel] = useState<string | null>(
-        selectedModels[0] || null
-    );
-
-    const selectedModelInfos = models.filter(m => selectedModels.includes(m.id));
+    const [expandedModel, setExpandedModel] = useState<string | null>(selectedModels[0] || null);
+    const selectedModelInfos = models.filter((model) => selectedModels.includes(model.id));
 
     const renderParamInput = (model: ModelInfo, param: ModelParameter) => {
         const currentValue = params[model.id]?.[param.name] ?? param.default;
@@ -37,7 +34,7 @@ export function HyperparameterForm({
                         min={param.min}
                         max={param.max}
                         step={param.step}
-                        className="w-full px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-white outline-none focus:border-cyan-500/50"
+                        className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-cyan-500/50"
                     />
                 );
             case 'select':
@@ -45,23 +42,23 @@ export function HyperparameterForm({
                     <select
                         value={currentValue as string}
                         onChange={(e) => onUpdateParams(model.id, { [param.name]: e.target.value })}
-                        className="w-full px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-white outline-none focus:border-cyan-500/50"
+                        className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-cyan-500/50"
                     >
-                        {param.options?.map(opt => (
-                            <option key={opt.value} value={opt.value} className="bg-gray-800">
-                                {opt.label}
+                        {param.options?.map((option) => (
+                            <option key={option.value} value={option.value} className="bg-gray-800">
+                                {option.label}
                             </option>
                         ))}
                     </select>
                 );
             case 'boolean':
                 return (
-                    <label className="flex items-center gap-2 cursor-pointer">
+                    <label className="flex cursor-pointer items-center gap-2">
                         <input
                             type="checkbox"
                             checked={currentValue as boolean}
                             onChange={(e) => onUpdateParams(model.id, { [param.name]: e.target.checked })}
-                            className="w-4 h-4 rounded border-white/30 bg-white/5"
+                            className="h-4 w-4 rounded border-white/30 bg-white/5"
                         />
                         <span className="text-sm text-gray-400">Aktif</span>
                     </label>
@@ -73,7 +70,7 @@ export function HyperparameterForm({
 
     if (selectedModelInfos.length === 0) {
         return (
-            <div className="p-6 rounded-xl border border-white/10 bg-white/5 text-center">
+            <div className="rounded-xl border border-white/10 bg-white/5 p-6 text-center">
                 <p className="text-gray-400">Hiçbir model seçilmedi</p>
             </div>
         );
@@ -82,7 +79,7 @@ export function HyperparameterForm({
     return (
         <div className="space-y-4">
             <p className="text-sm text-gray-400">
-                💡 Parametreleri varsayılan değerlerde bırakabilir veya özelleştirebilirsiniz.
+                Parametreleri varsayılan değerlerde bırakabilir veya özelleştirebilirsiniz.
             </p>
 
             {selectedModelInfos.map((model) => {
@@ -90,36 +87,30 @@ export function HyperparameterForm({
                 const hasParams = model.params.length > 0;
 
                 return (
-                    <div
-                        key={model.id}
-                        className="rounded-xl border border-white/10 overflow-hidden"
-                    >
-                        {/* Header */}
+                    <div key={model.id} className="overflow-hidden rounded-xl border border-white/10">
                         <button
                             onClick={() => setExpandedModel(isExpanded ? null : model.id)}
-                            className="w-full cursor-pointer flex items-center justify-between px-4 py-3 bg-white/5 hover:bg-white/10 transition-colors"
+                            className="flex w-full cursor-pointer items-center justify-between bg-white/5 px-4 py-3 transition-colors hover:bg-white/10"
                         >
                             <div className="flex items-center gap-3">
                                 <span className="text-xl">{model.icon}</span>
                                 <span className="font-medium text-white">{model.name}</span>
                                 {!hasParams && (
-                                    <span className="text-xs px-2 py-0.5 rounded bg-gray-500/20 text-gray-400">
+                                    <span className="rounded bg-gray-500/20 px-2 py-0.5 text-xs text-gray-400">
                                         Parametre yok
                                     </span>
                                 )}
                             </div>
-                            {hasParams && (
-                                isExpanded ? (
-                                    <ChevronUp className="w-5 h-5 text-gray-400" />
+                            {hasParams &&
+                                (isExpanded ? (
+                                    <ChevronUp className="h-5 w-5 text-gray-400" />
                                 ) : (
-                                    <ChevronDown className="w-5 h-5 text-gray-400" />
-                                )
-                            )}
+                                    <ChevronDown className="h-5 w-5 text-gray-400" />
+                                ))}
                         </button>
 
-                        {/* Parameters */}
                         {isExpanded && hasParams && (
-                            <div className="p-4 border-t border-white/10 space-y-4">
+                            <div className="space-y-4 border-t border-white/10 p-4">
                                 {model.params.map((param) => (
                                     <div key={param.name} className="space-y-2">
                                         <div className="flex items-center justify-between">

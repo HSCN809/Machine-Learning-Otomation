@@ -47,14 +47,11 @@ export interface TrainingResult {
 }
 
 export interface ModelMetrics {
-    // Classification
     accuracy?: number;
     precision?: number;
     recall?: number;
     f1Score?: number;
     auc?: number;
-
-    // Regression
     mse?: number;
     rmse?: number;
     mae?: number;
@@ -80,78 +77,81 @@ export interface ModelSelectionState {
     currentStep: number;
 }
 
-// Model definitions
 export const CLASSIFICATION_MODELS: ModelInfo[] = [
     {
         id: 'logistic_regression',
-        name: 'Logistic Regression',
+        name: 'Lojistik Regresyon',
         category: 'linear',
-        description: 'İkili ve çoklu sınıflandırma için lineer model',
+        description: 'İkili ve çoklu sınıflandırma için lineer model.',
         problemTypes: ['classification'],
         icon: '📈',
         color: '#4299e1',
         params: [
-            { name: 'C', label: 'Regularization (C)', type: 'number', default: 1.0, min: 0.01, max: 100, step: 0.1 },
-            { name: 'max_iter', label: 'Max Iterations', type: 'number', default: 100, min: 50, max: 1000, step: 50 },
+            { name: 'C', label: 'Düzenlileştirme (C)', type: 'number', default: 1.0, min: 0.01, max: 100, step: 0.1 },
+            { name: 'max_iter', label: 'Maksimum İterasyon', type: 'number', default: 100, min: 50, max: 1000, step: 50 },
         ],
     },
     {
         id: 'random_forest_clf',
-        name: 'Random Forest',
+        name: 'Rastgele Orman',
         category: 'tree',
-        description: 'Birden fazla karar ağacının ortalaması',
+        description: 'Birden fazla karar ağacının ortalamasıyla çalışan sınıflandırma modeli.',
         problemTypes: ['classification'],
         icon: '🌲',
         color: '#48bb78',
         params: [
             { name: 'n_estimators', label: 'Ağaç Sayısı', type: 'number', default: 100, min: 10, max: 500, step: 10 },
-            { name: 'max_depth', label: 'Max Derinlik', type: 'number', default: 10, min: 1, max: 50, step: 1 },
+            { name: 'max_depth', label: 'Maksimum Derinlik', type: 'number', default: 10, min: 1, max: 50, step: 1 },
         ],
     },
     {
         id: 'xgboost_clf',
         name: 'XGBoost',
         category: 'tree',
-        description: 'Gradient boosting ile güçlü performans',
+        description: 'Gradient boosting ile güçlü sınıflandırma performansı sunar.',
         problemTypes: ['classification'],
         icon: '🚀',
         color: '#ed8936',
         params: [
             { name: 'n_estimators', label: 'Ağaç Sayısı', type: 'number', default: 100, min: 10, max: 500, step: 10 },
-            { name: 'learning_rate', label: 'Learning Rate', type: 'number', default: 0.1, min: 0.01, max: 1, step: 0.01 },
-            { name: 'max_depth', label: 'Max Derinlik', type: 'number', default: 6, min: 1, max: 20, step: 1 },
+            { name: 'learning_rate', label: 'Öğrenme Oranı', type: 'number', default: 0.1, min: 0.01, max: 1, step: 0.01 },
+            { name: 'max_depth', label: 'Maksimum Derinlik', type: 'number', default: 6, min: 1, max: 20, step: 1 },
         ],
     },
     {
         id: 'svc',
-        name: 'Support Vector Classifier',
+        name: 'Destek Vektör Sınıflandırıcısı',
         category: 'svm',
-        description: 'Yüksek boyutlu verilerde etkili',
+        description: 'Yüksek boyutlu verilerde etkili sınıflandırma modeli.',
         problemTypes: ['classification'],
         icon: '🎯',
         color: '#9f7aea',
         params: [
-            { name: 'C', label: 'Regularization (C)', type: 'number', default: 1.0, min: 0.01, max: 100, step: 0.1 },
+            { name: 'C', label: 'Düzenlileştirme (C)', type: 'number', default: 1.0, min: 0.01, max: 100, step: 0.1 },
             {
-                name: 'kernel', label: 'Kernel', type: 'select', default: 'rbf', options: [
+                name: 'kernel',
+                label: 'Çekirdek',
+                type: 'select',
+                default: 'rbf',
+                options: [
                     { value: 'rbf', label: 'RBF' },
-                    { value: 'linear', label: 'Linear' },
-                    { value: 'poly', label: 'Polynomial' },
-                ]
+                    { value: 'linear', label: 'Doğrusal' },
+                    { value: 'poly', label: 'Polinom' },
+                ],
             },
         ],
     },
     {
         id: 'decision_tree_clf',
-        name: 'Decision Tree',
+        name: 'Karar Ağacı',
         category: 'tree',
-        description: 'Yorumlanabilir ağaç yapısı',
+        description: 'Yorumlanabilir ağaç yapısıyla sınıflandırma yapar.',
         problemTypes: ['classification'],
         icon: '🌳',
         color: '#38a169',
         params: [
-            { name: 'max_depth', label: 'Max Derinlik', type: 'number', default: 10, min: 1, max: 50, step: 1 },
-            { name: 'min_samples_split', label: 'Min Samples Split', type: 'number', default: 2, min: 2, max: 20, step: 1 },
+            { name: 'max_depth', label: 'Maksimum Derinlik', type: 'number', default: 10, min: 1, max: 50, step: 1 },
+            { name: 'min_samples_split', label: 'Minimum Bölünme Örneği', type: 'number', default: 2, min: 2, max: 20, step: 1 },
         ],
     },
 ];
@@ -159,9 +159,9 @@ export const CLASSIFICATION_MODELS: ModelInfo[] = [
 export const REGRESSION_MODELS: ModelInfo[] = [
     {
         id: 'linear_regression',
-        name: 'Linear Regression',
+        name: 'Lineer Regresyon',
         category: 'linear',
-        description: 'Basit ve yorumlanabilir lineer model',
+        description: 'Basit ve yorumlanabilir doğrusal regresyon modeli.',
         problemTypes: ['regression'],
         icon: '📊',
         color: '#4299e1',
@@ -169,9 +169,9 @@ export const REGRESSION_MODELS: ModelInfo[] = [
     },
     {
         id: 'ridge',
-        name: 'Ridge Regression',
+        name: 'Ridge Regresyon',
         category: 'linear',
-        description: 'L2 regularization ile lineer regresyon',
+        description: 'L2 düzenlileştirme ile çalışan doğrusal regresyon modeli.',
         problemTypes: ['regression'],
         icon: '📈',
         color: '#63b3ed',
@@ -181,9 +181,9 @@ export const REGRESSION_MODELS: ModelInfo[] = [
     },
     {
         id: 'lasso',
-        name: 'Lasso Regression',
+        name: 'Lasso Regresyon',
         category: 'linear',
-        description: 'L1 regularization ile özellik seçimi yapabilen regresyon',
+        description: 'L1 düzenlileştirme ile özellik seçimi yapabilen regresyon modeli.',
         problemTypes: ['regression'],
         icon: '🪢',
         color: '#38b2ac',
@@ -193,45 +193,49 @@ export const REGRESSION_MODELS: ModelInfo[] = [
     },
     {
         id: 'random_forest_reg',
-        name: 'Random Forest Regressor',
+        name: 'Rastgele Orman Regresörü',
         category: 'tree',
-        description: 'Ensemble ağaç tabanlı regresyon',
+        description: 'Topluluk ağaç yapısıyla regresyon tahmini yapar.',
         problemTypes: ['regression'],
         icon: '🌲',
         color: '#48bb78',
         params: [
             { name: 'n_estimators', label: 'Ağaç Sayısı', type: 'number', default: 100, min: 10, max: 500, step: 10 },
-            { name: 'max_depth', label: 'Max Derinlik', type: 'number', default: 10, min: 1, max: 50, step: 1 },
+            { name: 'max_depth', label: 'Maksimum Derinlik', type: 'number', default: 10, min: 1, max: 50, step: 1 },
         ],
     },
     {
         id: 'xgboost_reg',
-        name: 'XGBoost Regressor',
+        name: 'XGBoost Regresörü',
         category: 'tree',
-        description: 'Yüksek performanslı gradient boosting',
+        description: 'Yüksek performanslı gradient boosting regresyon modeli.',
         problemTypes: ['regression'],
         icon: '🚀',
         color: '#ed8936',
         params: [
             { name: 'n_estimators', label: 'Ağaç Sayısı', type: 'number', default: 100, min: 10, max: 500, step: 10 },
-            { name: 'learning_rate', label: 'Learning Rate', type: 'number', default: 0.1, min: 0.01, max: 1, step: 0.01 },
+            { name: 'learning_rate', label: 'Öğrenme Oranı', type: 'number', default: 0.1, min: 0.01, max: 1, step: 0.01 },
         ],
     },
     {
         id: 'svr',
-        name: 'Support Vector Regressor',
+        name: 'Destek Vektör Regresörü',
         category: 'svm',
-        description: 'SVM tabanlı regresyon',
+        description: 'SVM tabanlı regresyon modeli.',
         problemTypes: ['regression'],
         icon: '🎯',
         color: '#9f7aea',
         params: [
-            { name: 'C', label: 'Regularization (C)', type: 'number', default: 1.0, min: 0.01, max: 100, step: 0.1 },
+            { name: 'C', label: 'Düzenlileştirme (C)', type: 'number', default: 1.0, min: 0.01, max: 100, step: 0.1 },
             {
-                name: 'kernel', label: 'Kernel', type: 'select', default: 'rbf', options: [
+                name: 'kernel',
+                label: 'Çekirdek',
+                type: 'select',
+                default: 'rbf',
+                options: [
                     { value: 'rbf', label: 'RBF' },
-                    { value: 'linear', label: 'Linear' },
-                ]
+                    { value: 'linear', label: 'Doğrusal' },
+                ],
             },
         ],
     },

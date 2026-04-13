@@ -21,18 +21,18 @@ export function TrainingProgress({
     const progress = totalModels > 0 ? (completedModels / totalModels) * 100 : 0;
     const title =
         status === 'queued'
-            ? 'Egitim kuyruga alindi'
+            ? 'Eğitim kuyruğa alındı'
             : status === 'stopping'
-              ? 'Egitim durduruluyor...'
+              ? 'Eğitim durduruluyor...'
               : status === 'completed'
-                ? 'Egitim tamamlandi'
+                ? 'Eğitim tamamlandı'
                 : status === 'stopped'
-                  ? 'Egitim durduruldu'
+                  ? 'Eğitim durduruldu'
                   : status === 'failed'
-                    ? 'Egitim basarisiz oldu'
+                    ? 'Eğitim başarısız oldu'
                     : isTraining
-                      ? 'Modeller egitiliyor...'
-                      : 'Egitim tamamlandi';
+                      ? 'Modeller eğitiliyor...'
+                      : 'Eğitim tamamlandı';
 
     if (!isTraining && completedModels === 0) {
         return null;
@@ -56,14 +56,14 @@ export function TrainingProgress({
                 <div>
                     <h3 className="font-semibold text-white">{title}</h3>
                     {currentModel && isTraining && (
-                        <p className="text-sm text-gray-400">Su an: {currentModel}</p>
+                        <p className="text-sm text-gray-400">Şu an: {currentModel}</p>
                     )}
                 </div>
             </div>
 
             <div className="space-y-2">
                 <div className="flex justify-between text-sm">
-                    <span className="text-gray-400">Ilerleme</span>
+                    <span className="text-gray-400">İlerleme</span>
                     <span className="text-cyan-400">
                         {completedModels} / {totalModels} model
                     </span>

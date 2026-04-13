@@ -143,7 +143,7 @@ export function TargetSelectorClean({
             <div className="space-y-6">
                 <div className="space-y-3">
                     <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-10 text-center text-gray-400">
-                        Kullanilabilir sutun bulunamadi.
+                        Kullanılabilir sütun bulunamadı.
                     </div>
                 </div>
             </div>
@@ -158,15 +158,15 @@ export function TargetSelectorClean({
         <div className="space-y-6">
             <div className="space-y-3">
                 <div>
-                    <h3 className="text-xl font-semibold text-white">Hedef Degisken Secimi</h3>
-                    <p className="mt-1 text-sm text-gray-400">Model egitimi icin hedef kolonu belirleyin.</p>
+                    <h3 className="text-xl font-semibold text-white">Hedef Değişken Seçimi</h3>
+                    <p className="mt-1 text-sm text-gray-400">Model eğitimi için hedef kolonu belirleyin.</p>
                 </div>
                 <div className="mx-auto flex max-w-5xl items-center gap-3">
                     <button
                         type="button"
                         onClick={handlePrevious}
                         disabled={disabled || isAnimating}
-                        aria-label="Onceki hedef degiskene gec"
+                        aria-label="Önceki hedef değişkene geç"
                         className={cn(
                             'flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-gray-300 transition-all duration-200',
                             !disabled && 'cursor-pointer hover:border-cyan-500/30 hover:bg-white/10 hover:text-white',
@@ -209,9 +209,9 @@ export function TargetSelectorClean({
                                                 isNumeric ? 'bg-blue-500/20 text-blue-400' : 'bg-green-500/20 text-green-400'
                                             )}
                                         >
-                                            {isNumeric ? 'Sayisal' : 'Kategorik'}
+                                            {isNumeric ? 'Sayısal' : 'Kategorik'}
                                         </span>
-                                        <span className="text-gray-400">{currentColumn.uniqueValues} unique</span>
+                                        <span className="text-gray-400">{currentColumn.uniqueValues} benzersiz</span>
                                         <span className="text-gray-500">
                                             {visibleIndex + 1} / {columns.length}
                                         </span>
@@ -227,7 +227,7 @@ export function TargetSelectorClean({
                         type="button"
                         onClick={handleNext}
                         disabled={disabled || isAnimating}
-                        aria-label="Sonraki hedef degiskene gec"
+                        aria-label="Sonraki hedef değişkene geç"
                         className={cn(
                             'flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-gray-300 transition-all duration-200',
                             !disabled && 'cursor-pointer hover:border-cyan-500/30 hover:bg-white/10 hover:text-white',
@@ -243,8 +243,8 @@ export function TargetSelectorClean({
                 <div className="mx-auto max-w-5xl">
                     <div className="space-y-3 rounded-xl border border-white/10 bg-white/5 p-6 animate-fadeIn">
                         <div>
-                            <h3 className="text-xl font-semibold text-white">Problem Secimi</h3>
-                            <p className="mt-1 text-sm text-gray-400">Bu hedef kolon icin problem turunu manuel olarak secin.</p>
+                            <h3 className="text-xl font-semibold text-white">Problem Seçimi</h3>
+                            <p className="mt-1 text-sm text-gray-400">Bu hedef kolon için problem türünü manuel olarak seçin.</p>
                         </div>
                         <div className="grid gap-4 md:grid-cols-2">
                             <button
@@ -261,9 +261,9 @@ export function TargetSelectorClean({
                             >
                                 <div className="mb-3 flex items-center justify-between gap-3">
                                     <div>
-                                        <p className="text-lg font-semibold text-white">Siniflandirma</p>
+                                        <p className="text-lg font-semibold text-white">Sınıflandırma</p>
                                         <p className="mt-1 text-sm text-gray-400">
-                                            Ayrik siniflar veya kategoriler icin classifier modelleri kullanir.
+                                            Ayrık sınıflar veya kategoriler için sınıflandırma modelleri kullanır.
                                         </p>
                                     </div>
                                     <span
@@ -294,9 +294,7 @@ export function TargetSelectorClean({
                                 <div className="mb-3 flex items-center justify-between gap-3">
                                     <div>
                                         <p className="text-lg font-semibold text-white">Regresyon</p>
-                                        <p className="mt-1 text-sm text-gray-400">
-                                            Sayisal hedefler icin regression modelleri kullanir.
-                                        </p>
+                                        <p className="mt-1 text-sm text-gray-400">Sayısal hedefler için regresyon modelleri kullanır.</p>
                                     </div>
                                     <span
                                         className={cn(

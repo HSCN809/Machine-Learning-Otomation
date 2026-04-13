@@ -11,7 +11,6 @@ interface ModelGridProps {
 }
 
 export function ModelGrid({ models, selectedModels, onToggle, disabled = false }: ModelGridProps) {
-    // Group models by category
     const modelsByCategory = models.reduce((acc, model) => {
         if (!acc[model.category]) acc[model.category] = [];
         acc[model.category].push(model);
@@ -19,26 +18,22 @@ export function ModelGrid({ models, selectedModels, onToggle, disabled = false }
     }, {} as Record<string, ModelInfo[]>);
 
     const categoryLabels = {
-        linear: { label: 'Linear Modeller', icon: '📈' },
-        tree: { label: 'Tree-based Modeller', icon: '🌲' },
-        svm: { label: 'SVM Modeller', icon: '🎯' },
-        ensemble: { label: 'Ensemble Modeller', icon: '🔗' },
+        linear: { label: 'Lineer Modeller', icon: '📈' },
+        tree: { label: 'Ağaç Tabanlı Modeller', icon: '🌲' },
+        svm: { label: 'SVM Modelleri', icon: '🎯' },
+        ensemble: { label: 'Topluluk Modelleri', icon: '🔗' },
     };
 
     const categoryOrder = ['linear', 'tree', 'svm', 'ensemble'];
 
     return (
         <div className="space-y-6">
-            {/* Selection summary */}
-            <div className="flex items-center justify-between py-3 px-4 rounded-lg bg-white/5 border border-white/10">
+            <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-4 py-3">
                 <span className="text-gray-400">Seçilen model sayısı:</span>
-                <span className="font-bold text-cyan-400 text-xl">
-                    {selectedModels.length}
-                </span>
+                <span className="text-xl font-bold text-cyan-400">{selectedModels.length}</span>
             </div>
 
-            {/* Models by category */}
-            {categoryOrder.map(category => {
+            {categoryOrder.map((category) => {
                 const categoryModels = modelsByCategory[category];
                 if (!categoryModels || categoryModels.length === 0) return null;
 
@@ -46,12 +41,12 @@ export function ModelGrid({ models, selectedModels, onToggle, disabled = false }
 
                 return (
                     <div key={category}>
-                        <h3 className="text-sm font-medium text-gray-400 mb-3 flex items-center gap-2">
+                        <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-gray-400">
                             <span>{categoryInfo.icon}</span>
                             {categoryInfo.label}
                         </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {categoryModels.map(model => (
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                            {categoryModels.map((model) => (
                                 <ModelCard
                                     key={model.id}
                                     model={model}

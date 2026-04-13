@@ -1,8 +1,8 @@
 'use client';
 
+import { Check } from 'lucide-react';
 import { ModelInfo } from '@/types/model-selection';
 import { cn } from '@/lib/utils';
-import { Check } from 'lucide-react';
 
 interface ModelCardProps {
     model: ModelInfo;
@@ -13,17 +13,17 @@ interface ModelCardProps {
 
 export function ModelCard({ model, isSelected, onToggle, disabled = false }: ModelCardProps) {
     const categoryColors = {
-        linear: { bg: 'bg-blue-500/10', border: 'border-blue-500/30', text: 'text-blue-400' },
-        tree: { bg: 'bg-green-500/10', border: 'border-green-500/30', text: 'text-green-400' },
-        svm: { bg: 'bg-purple-500/10', border: 'border-purple-500/30', text: 'text-purple-400' },
-        ensemble: { bg: 'bg-orange-500/10', border: 'border-orange-500/30', text: 'text-orange-400' },
+        linear: { bg: 'bg-blue-500/10', text: 'text-blue-400' },
+        tree: { bg: 'bg-green-500/10', text: 'text-green-400' },
+        svm: { bg: 'bg-purple-500/10', text: 'text-purple-400' },
+        ensemble: { bg: 'bg-orange-500/10', text: 'text-orange-400' },
     };
 
     const categoryLabels = {
-        linear: 'Linear',
-        tree: 'Tree-based',
+        linear: 'Lineer',
+        tree: 'Ağaç',
         svm: 'SVM',
-        ensemble: 'Ensemble',
+        ensemble: 'Topluluk',
     };
 
     const colors = categoryColors[model.category];
@@ -33,56 +33,38 @@ export function ModelCard({ model, isSelected, onToggle, disabled = false }: Mod
             onClick={onToggle}
             disabled={disabled}
             className={cn(
-                'relative cursor-pointer p-5 rounded-xl border-2 text-left transition-all duration-300',
+                'relative rounded-xl border-2 p-5 text-left transition-all duration-300',
                 'hover:scale-[1.02] hover:shadow-lg',
                 isSelected
                     ? 'border-cyan-500 bg-cyan-500/10'
                     : 'border-white/10 bg-white/5 hover:border-cyan-500/30',
-                disabled && 'opacity-50 cursor-not-allowed'
+                disabled && 'cursor-not-allowed opacity-50',
+                !disabled && 'cursor-pointer'
             )}
-            style={
-                isSelected
-                    ? { boxShadow: `0 0 20px rgba(0, 217, 255, 0.2)` }
-                    : undefined
-            }
+            style={isSelected ? { boxShadow: '0 0 20px rgba(0, 217, 255, 0.2)' } : undefined}
         >
-            {/* Selection indicator */}
             {isSelected && (
-                <div className="absolute top-3 right-3 w-6 h-6 rounded-full bg-cyan-500 flex items-center justify-center">
-                    <Check className="w-4 h-4 text-white" />
+                <div className="absolute right-3 top-3 flex h-6 w-6 items-center justify-center rounded-full bg-cyan-500">
+                    <Check className="h-4 w-4 text-white" />
                 </div>
             )}
 
-            {/* Icon and title */}
-            <div className="flex items-center gap-3 mb-3">
+            <div className="mb-3 flex items-center gap-3">
                 <span className="text-3xl">{model.icon}</span>
                 <div>
-                    <h3 className={cn(
-                        'font-semibold',
-                        isSelected ? 'text-cyan-400' : 'text-white'
-                    )}>
+                    <h3 className={cn('font-semibold', isSelected ? 'text-cyan-400' : 'text-white')}>
                         {model.name}
                     </h3>
-                    <span className={cn(
-                        'text-xs px-2 py-0.5 rounded-full',
-                        colors.bg,
-                        colors.text
-                    )}>
+                    <span className={cn('rounded-full px-2 py-0.5 text-xs', colors.bg, colors.text)}>
                         {categoryLabels[model.category]}
                     </span>
                 </div>
             </div>
 
-            {/* Description */}
-            <p className="text-sm text-gray-400 line-clamp-2">
-                {model.description}
-            </p>
+            <p className="line-clamp-2 text-sm text-gray-400">{model.description}</p>
 
-            {/* Params count */}
             {model.params.length > 0 && (
-                <p className="text-xs text-gray-500 mt-3">
-                    ⚙️ {model.params.length} ayarlanabilir parametre
-                </p>
+                <p className="mt-3 text-xs text-gray-500">⚙️ {model.params.length} ayarlanabilir parametre</p>
             )}
         </button>
     );

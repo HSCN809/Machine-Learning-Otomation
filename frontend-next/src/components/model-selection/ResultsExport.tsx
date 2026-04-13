@@ -26,7 +26,7 @@ export function ResultsExport({ results }: ResultsExportProps) {
     };
 
     const exportCSV = () => {
-        const headers = ['Model', 'Accuracy', 'Precision', 'Recall', 'F1', 'AUC', 'R2', 'MSE', 'RMSE', 'MAE', 'Training Time'];
+        const headers = ['Model', 'Doğruluk', 'Kesinlik', 'Duyarlılık', 'F1', 'AUC', 'R2', 'MSE', 'RMSE', 'MAE', 'Eğitim Süresi'];
         const rows = results.map((result) => [
             result.modelName,
             result.metrics.accuracy ?? '',
@@ -72,7 +72,7 @@ export function ResultsExport({ results }: ResultsExportProps) {
         <div className="rounded-xl border border-white/10 bg-white/5 p-6">
             <h4 className="mb-4 flex items-center gap-2 font-semibold text-white">
                 <Download className="h-5 w-5" />
-                Sonuclari Disa Aktar
+                Sonuçları Dışa Aktar
             </h4>
 
             <div className="flex flex-wrap gap-3">
@@ -92,7 +92,7 @@ export function ResultsExport({ results }: ResultsExportProps) {
             </div>
 
             <div className="mt-6 space-y-3">
-                <p className="text-sm font-medium text-gray-300">Egitilmis Modeller</p>
+                <p className="text-sm font-medium text-gray-300">Eğitilmiş Modeller</p>
                 <div className="grid gap-3 md:grid-cols-2">
                     {results.map((result) => (
                         <button
@@ -108,7 +108,7 @@ export function ResultsExport({ results }: ResultsExportProps) {
                             <div className="flex items-center gap-2 text-cyan-300">
                                 <Package className="h-4 w-4" />
                                 <span className="text-sm">
-                                    {downloadingModelId === result.modelId ? 'Indiriliyor...' : 'Modeli Indir'}
+                                    {downloadingModelId === result.modelId ? 'İndiriliyor...' : 'Modeli İndir'}
                                 </span>
                             </div>
                         </button>
@@ -119,7 +119,7 @@ export function ResultsExport({ results }: ResultsExportProps) {
             {downloadError && <p className="mt-3 text-sm text-red-400">{downloadError}</p>}
 
             <p className="mt-3 text-xs text-gray-500">
-                Sonuc raporlarini ve egitilmis modelleri farkli projelerde kullanmak icin indirebilirsiniz.
+                Sonuç raporlarını ve eğitilmiş modelleri farklı projelerde kullanmak için indirebilirsiniz.
             </p>
         </div>
     );
