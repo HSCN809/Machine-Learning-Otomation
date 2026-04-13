@@ -15,11 +15,6 @@ from .analyzer import (
     get_feature_engineering_summary
 )
 
-# LLM enhancer removed - will be added back later if needed
-# from .llm_enhancer import (
-#     suggest_feature_engineering_steps
-# )
-
 __all__ = [
     # Processor functions
     'remove_duplicate_rows',
@@ -32,7 +27,5 @@ __all__ = [
     'analyze_duplicate_rows',
     'analyze_irrelevant_columns',
     'get_feature_engineering_summary',
-    # LLM enhancer functions - removed, will be added back later if needed
-    # 'suggest_feature_engineering_steps'
 ]
 

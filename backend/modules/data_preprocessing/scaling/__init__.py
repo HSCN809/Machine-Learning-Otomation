@@ -15,8 +15,6 @@ from .analyzer import (
     get_scaling_statistics
 )
 
-from .llm_enhancer import suggest_scaling_steps
-
 __all__ = [
     # Processor functions
     'standard_scale',
@@ -29,7 +27,5 @@ __all__ = [
     # Analyzer functions
     'analyze_numeric_columns',
     'get_scaling_statistics',
-    # LLM enhancer
-    'suggest_scaling_steps'
 ]
 

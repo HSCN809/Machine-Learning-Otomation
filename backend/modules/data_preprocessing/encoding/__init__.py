@@ -13,8 +13,6 @@ from .analyzer import (
     get_categorical_statistics
 )
 
-from .llm_enhancer import suggest_encoding_steps
-
 __all__ = [
     # Processor functions
     'label_encode',
@@ -25,7 +23,5 @@ __all__ = [
     # Analyzer functions
     'analyze_categorical_columns',
     'get_categorical_statistics',
-    # LLM enhancer
-    'suggest_encoding_steps'
 ]
 
