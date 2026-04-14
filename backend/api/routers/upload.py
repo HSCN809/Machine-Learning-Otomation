@@ -79,6 +79,12 @@ def _clear_downstream_metadata(session_id: str):
         session["metadata"].pop(key, None)
 
 
+def _read_excel_content(content: bytes, filename: str) -> pd.DataFrame:
+    lower_filename = filename.lower()
+    engine = "xlrd" if lower_filename.endswith(".xls") else "openpyxl"
+    return pd.read_excel(io.BytesIO(content), engine=engine)
+
+
 @router.post("/file")
 async def upload_file(
     file: UploadFile = File(...),
@@ -95,7 +101,7 @@ async def upload_file(
         if filename.endswith('.csv'):
             df = pd.read_csv(io.BytesIO(content))
         elif filename.endswith(('.xls', '.xlsx')):
-            df = pd.read_excel(io.BytesIO(content))
+            df = _read_excel_content(content, filename)
         elif filename.endswith('.json'):
             df = pd.read_json(io.BytesIO(content))
         else:

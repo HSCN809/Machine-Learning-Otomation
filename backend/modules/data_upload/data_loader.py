@@ -61,9 +61,12 @@ def load_excel(file_path: Union[str, Path], **kwargs) -> Optional[pd.DataFrame]:
         pd.DataFrame or None if error
     """
     try:
+        file_path = Path(file_path)
+        engine = 'xlrd' if file_path.suffix.lower() == '.xls' else 'openpyxl'
+
         # Default options
         default_kwargs = {
-            'engine': 'openpyxl'
+            'engine': engine
         }
         default_kwargs.update(kwargs)
         
@@ -110,4 +113,3 @@ def load_data(file_path: Union[str, Path], file_format: Optional[str] = None) ->
         st.error(f"Desteklenmeyen format: {file_format}")
         logger.error(f"Desteklenmeyen format: {file_format}")
         return None
-
