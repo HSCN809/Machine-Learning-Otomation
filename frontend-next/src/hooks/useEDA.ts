@@ -125,6 +125,7 @@ export function useEDA(): UseEDAReturn {
                 correlationMatrix: transformedCorrelation,
                 numericColumns: filteredNumericColumns,
                 categoricalColumns: filteredCategoricalColumns,
+                duplicateRows: summary.duplicate_rows,
             };
 
             setEdaData(data);

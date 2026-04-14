@@ -48,7 +48,7 @@ const chartSelectClassName =
 export default function EDAPage() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [activeTab, setActiveTab] = useState<TabId>('summary');
-    const [hasSession, setHasSession] = useState<boolean | null>(null);
+    const [hasSession] = useState(() => hasStoredSession());
 
     const {
         edaData,
@@ -70,13 +70,10 @@ export default function EDAPage() {
     const activeTabIndex = tabs.findIndex((tab) => tab.id === activeTab);
 
     useEffect(() => {
-        const sessionExists = hasStoredSession();
-        setHasSession(sessionExists);
-
-        if (sessionExists) {
+        if (hasSession) {
             loadEDAData();
         }
-    }, [loadEDAData]);
+    }, [hasSession, loadEDAData]);
 
     return (
         <div className="min-h-screen">
@@ -126,6 +123,7 @@ export default function EDAPage() {
                                         numericStats={edaData.numericStats}
                                         categoricalStats={edaData.categoricalStats}
                                         columnTypes={edaData.columnTypes}
+                                        duplicateRows={edaData.duplicateRows}
                                     />
                                     <DataTypesTable columnTypes={edaData.columnTypes} />
                                 </div>

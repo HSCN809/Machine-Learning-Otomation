@@ -69,6 +69,7 @@ export interface EDAData {
     correlationMatrix: CorrelationData[];
     numericColumns: string[];
     categoricalColumns: string[];
+    duplicateRows: number;
 }
 
 export type ChartType = 'histogram' | 'boxplot' | 'scatter' | 'bar' | 'correlation';

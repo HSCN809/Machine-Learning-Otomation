@@ -1,6 +1,6 @@
 'use client';
 
-import { BarChart3, Hash, FileText, AlertTriangle } from 'lucide-react';
+import { BarChart3, Hash, FileText, AlertTriangle, Copy } from 'lucide-react';
 import { theme } from '@/styles/theme';
 import { NumericStats, CategoricalStats, ColumnType } from '@/types/eda';
 
@@ -8,9 +8,15 @@ interface StatsSummaryProps {
     numericStats: NumericStats[];
     categoricalStats: CategoricalStats[];
     columnTypes: ColumnType[];
+    duplicateRows: number;
 }
 
-export function StatsSummary({ numericStats, categoricalStats, columnTypes }: StatsSummaryProps) {
+export function StatsSummary({
+    numericStats,
+    categoricalStats,
+    columnTypes,
+    duplicateRows,
+}: StatsSummaryProps) {
     const totalRows = numericStats[0]?.count || categoricalStats[0]?.count || 0;
     const totalColumns = columnTypes.length;
     const numericCount = numericStats.length;
@@ -49,10 +55,16 @@ export function StatsSummary({ numericStats, categoricalStats, columnTypes }: St
             icon: AlertTriangle,
             color: nullPercentage > 5 ? theme.colors.status.warning : theme.colors.status.success,
         },
+        {
+            label: 'Tekrarlayan Satır',
+            value: duplicateRows.toLocaleString('tr-TR'),
+            icon: Copy,
+            color: duplicateRows > 0 ? theme.colors.status.warning : theme.colors.status.success,
+        },
     ];
 
     return (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
             {stats.map((stat) => {
                 const Icon = stat.icon;
                 return (
