@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
     ChevronLeft,
     ChevronRight,
@@ -15,6 +15,7 @@ import { useDataEditor } from '@/hooks/useDataEditor';
 
 interface DataEditorProps {
     onSaved?: () => Promise<void> | void;
+    onDelete?: () => Promise<void> | void;
 }
 
 function getButtonClassName(disabled: boolean, tone: 'default' | 'danger' | 'primary' = 'default') {
@@ -38,7 +39,8 @@ function stringifyValue(value: unknown): string {
     return String(value);
 }
 
-export function DataEditor({ onSaved }: DataEditorProps) {
+export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
+    const [isDeleting, setIsDeleting] = useState(false);
     const {
         pageData,
         page,
@@ -64,6 +66,27 @@ export function DataEditor({ onSaved }: DataEditorProps) {
         discardChanges,
         saveChanges,
     } = useDataEditor({ onSaved });
+
+    const handleDeleteDataset = async () => {
+        if (!onDelete || isDeleting || isSaving) {
+            return;
+        }
+
+        const confirmed = window.confirm(
+            'Yüklenen veri seti silinecek ve bu oturumdaki düzenlemeler kaybolacak. Devam etmek istiyor musunuz?'
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        try {
+            setIsDeleting(true);
+            await onDelete();
+        } finally {
+            setIsDeleting(false);
+        }
+    };
 
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
@@ -159,6 +182,17 @@ export function DataEditor({ onSaved }: DataEditorProps) {
                     >
                         <Save className="h-4 w-4" />
                         {isSaving ? 'Kaydediliyor...' : 'Kaydet'}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            void handleDeleteDataset();
+                        }}
+                        disabled={!onDelete || isDeleting || isSaving}
+                        className={getButtonClassName(!onDelete || isDeleting || isSaving, 'danger')}
+                    >
+                        <Trash2 className="h-4 w-4" />
+                        {isDeleting ? 'Siliniyor...' : 'Sil'}
                     </button>
                 </div>
             </div>

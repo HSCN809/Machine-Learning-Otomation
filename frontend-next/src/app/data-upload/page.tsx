@@ -27,6 +27,7 @@ export default function DataUploadPage() {
         uploadFile,
         loadSampleDataset,
         hydrateSession,
+        reset,
     } = useDataUpload();
 
     useEffect(() => {
@@ -136,7 +137,7 @@ export default function DataUploadPage() {
                                     'linear-gradient(135deg, rgba(17, 24, 39, 0.6) 0%, rgba(31, 41, 55, 0.4) 100%)',
                             }}
                         >
-                            <DataEditor onSaved={hydrateSession} />
+                            <DataEditor onSaved={hydrateSession} onDelete={reset} />
                         </section>
                     )}
                 </main>
