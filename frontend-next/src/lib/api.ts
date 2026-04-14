@@ -2,6 +2,11 @@
  * API Client for FastAPI Backend
  */
 
+import type {
+    DataEditorCommitResponse,
+    DataEditorDraft,
+    DataEditorPageResponse,
+} from '@/types/data-upload';
 import type { FeatureConfig } from '@/types/preprocessing';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -221,6 +226,81 @@ export async function getDataValidation(): Promise<ValidationResponse> {
 
 export async function resetUpload(): Promise<{ success: boolean; message: string }> {
     return apiFetch('/api/upload/reset', { method: 'DELETE' });
+}
+
+interface EditorPreviewResponse {
+    page: number;
+    page_size: number;
+    total_rows: number;
+    total_pages: number;
+    columns: string[];
+    rows: {
+        row_id: number;
+        values: Record<string, unknown>;
+    }[];
+}
+
+export async function getDataEditorPage(
+    page: number = 1,
+    pageSize: number = 25
+): Promise<DataEditorPageResponse> {
+    const response = await apiFetch<EditorPreviewResponse>(
+        `/api/upload/editor-preview?page=${page}&page_size=${pageSize}`
+    );
+
+    return {
+        page: response.page,
+        pageSize: response.page_size,
+        totalRows: response.total_rows,
+        totalPages: response.total_pages,
+        columns: response.columns,
+        rows: response.rows.map((row) => ({
+            rowId: row.row_id,
+            values: row.values,
+        })),
+    };
+}
+
+interface EditorCommitApiResponse {
+    success: boolean;
+    rows: number;
+    columns: number;
+    updated_cells: number;
+    cleared_cells: number;
+    deleted_rows: number;
+    trimmed_columns: number;
+}
+
+export async function commitDataEditorChanges(
+    draft: DataEditorDraft
+): Promise<DataEditorCommitResponse> {
+    const response = await apiFetch<EditorCommitApiResponse>('/api/upload/editor/commit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            updated_cells: draft.updatedCells.map((cell) => ({
+                row_id: cell.rowId,
+                column: cell.column,
+                value: cell.value,
+            })),
+            cleared_cells: draft.clearedCells.map((cell) => ({
+                row_id: cell.rowId,
+                column: cell.column,
+            })),
+            deleted_row_ids: draft.deletedRowIds,
+            trim_columns: draft.trimColumns,
+        }),
+    });
+
+    return {
+        success: response.success,
+        rows: response.rows,
+        columns: response.columns,
+        updatedCells: response.updated_cells,
+        clearedCells: response.cleared_cells,
+        deletedRows: response.deleted_rows,
+        trimmedColumns: response.trimmed_columns,
+    };
 }
 
 // ============== EDA API ==============

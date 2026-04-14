@@ -58,6 +58,46 @@ export interface DataSummary {
     preview: Record<string, unknown>[];
 }
 
+export interface EditableRow {
+    rowId: number;
+    values: Record<string, unknown>;
+}
+
+export interface DataEditorPageResponse {
+    page: number;
+    pageSize: number;
+    totalRows: number;
+    totalPages: number;
+    columns: string[];
+    rows: EditableRow[];
+}
+
+export interface DataEditorCellRef {
+    rowId: number;
+    column: string;
+}
+
+export interface DataEditorCellUpdate extends DataEditorCellRef {
+    value: string;
+}
+
+export interface DataEditorDraft {
+    updatedCells: DataEditorCellUpdate[];
+    clearedCells: DataEditorCellRef[];
+    deletedRowIds: number[];
+    trimColumns: string[];
+}
+
+export interface DataEditorCommitResponse {
+    success: boolean;
+    rows: number;
+    columns: number;
+    updatedCells: number;
+    clearedCells: number;
+    deletedRows: number;
+    trimmedColumns: number;
+}
+
 export interface SampleDataset {
     id: string;
     name: string;

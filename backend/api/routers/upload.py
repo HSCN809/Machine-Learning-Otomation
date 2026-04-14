@@ -2,12 +2,16 @@
 Upload Router - File upload and data loading endpoints
 """
 
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
-from typing import Optional
+from datetime import date, datetime
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
+from typing import Any, Optional
 import pandas as pd
+import numpy as np
 import io
 import os
 import sys
+import math
 
 # Add parent paths for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
@@ -15,6 +19,64 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 from ..dependencies import session_manager, get_session_id, require_session
 
 router = APIRouter()
+
+
+class EditorCellUpdate(BaseModel):
+    row_id: int
+    column: str
+    value: Any = None
+
+
+class EditorCellRef(BaseModel):
+    row_id: int
+    column: str
+
+
+class EditorCommitRequest(BaseModel):
+    updated_cells: list[EditorCellUpdate] = Field(default_factory=list)
+    cleared_cells: list[EditorCellRef] = Field(default_factory=list)
+    deleted_row_ids: list[int] = Field(default_factory=list)
+    trim_columns: list[str] = Field(default_factory=list)
+
+
+def _serialize_editor_value(value: Any) -> Any:
+    if pd.isna(value):
+        return ""
+    if isinstance(value, (pd.Timestamp, datetime, date)):
+        return value.isoformat()
+    if isinstance(value, (np.integer, np.floating, np.bool_)):
+        return value.item()
+    return value
+
+
+def _empty_cell_value(series: pd.Series) -> Any:
+    if pd.api.types.is_datetime64_any_dtype(series.dtype):
+        return pd.NaT
+    if pd.api.types.is_numeric_dtype(series.dtype):
+        return np.nan
+    return pd.NA
+
+
+def _get_editor_dataframe(session_id: str) -> pd.DataFrame:
+    df = session_manager.get_dataframe(session_id)
+    if df is None:
+        raise HTTPException(status_code=400, detail="No data loaded")
+    return df.reset_index(drop=True).copy(deep=True)
+
+
+def _clear_downstream_metadata(session_id: str):
+    session = session_manager.get_session(session_id)
+    if not session:
+        return
+
+    for key in (
+        "training_target_column",
+        "problem_type",
+        "training_results",
+        "active_training_job_id",
+        "trained_model_artifacts",
+    ):
+        session["metadata"].pop(key, None)
 
 
 @router.post("/file")
@@ -196,6 +258,111 @@ async def get_preview(
         "columns": preview_df.columns.tolist(),
         "data": preview_df.fillna("").to_dict(orient="records"),
         "total_rows": len(df),
+    }
+
+
+@router.get("/editor-preview")
+async def get_editor_preview(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25, ge=1, le=100),
+    session_id: str = Depends(require_session)
+):
+    """Get paginated rows for the manual data editor."""
+    df = _get_editor_dataframe(session_id)
+
+    total_rows = len(df)
+    total_pages = max(1, math.ceil(total_rows / page_size)) if page_size > 0 else 1
+    current_page = min(page, total_pages)
+    start = (current_page - 1) * page_size
+    end = start + page_size
+
+    rows = []
+    for row_id, (_, row) in enumerate(df.iloc[start:end].iterrows(), start=start):
+        rows.append({
+            "row_id": row_id,
+            "values": {
+                column: _serialize_editor_value(value)
+                for column, value in row.items()
+            },
+        })
+
+    return {
+        "page": current_page,
+        "page_size": page_size,
+        "total_rows": total_rows,
+        "total_pages": total_pages,
+        "columns": df.columns.tolist(),
+        "rows": rows,
+    }
+
+
+@router.post("/editor/commit")
+async def commit_editor_changes(
+    request: EditorCommitRequest,
+    session_id: str = Depends(require_session)
+):
+    """Apply manual editor changes to the session dataframe."""
+    df = _get_editor_dataframe(session_id)
+
+    valid_columns = set(df.columns)
+    max_row_id = len(df) - 1
+
+    def ensure_valid_row(row_id: int):
+        if row_id < 0 or row_id > max_row_id:
+            raise HTTPException(status_code=400, detail=f"Invalid row id: {row_id}")
+
+    def ensure_valid_column(column: str):
+        if column not in valid_columns:
+            raise HTTPException(status_code=400, detail=f"Invalid column: {column}")
+
+    for column in request.trim_columns:
+        ensure_valid_column(column)
+
+    for cell in request.cleared_cells:
+        ensure_valid_row(cell.row_id)
+        ensure_valid_column(cell.column)
+
+    for cell in request.updated_cells:
+        ensure_valid_row(cell.row_id)
+        ensure_valid_column(cell.column)
+
+    deleted_row_ids = sorted(set(request.deleted_row_ids))
+    for row_id in deleted_row_ids:
+        ensure_valid_row(row_id)
+
+    for column in request.trim_columns:
+        df[column] = df[column].map(lambda value: value.strip() if isinstance(value, str) else value)
+
+    for cell in request.cleared_cells:
+        df.at[cell.row_id, cell.column] = _empty_cell_value(df[cell.column])
+
+    for cell in request.updated_cells:
+        df.at[cell.row_id, cell.column] = cell.value
+
+    if deleted_row_ids:
+        df = df.drop(index=deleted_row_ids).reset_index(drop=True)
+
+    session_manager.set_dataframe(session_id, df, is_original=True)
+    _clear_downstream_metadata(session_id)
+
+    editor_commits = session_manager.get_metadata(session_id, "editor_commits") or []
+    editor_commits.append({
+        "action": "manual_edit_commit",
+        "updated_cells": len(request.updated_cells),
+        "cleared_cells": len(request.cleared_cells),
+        "deleted_rows": len(deleted_row_ids),
+        "trim_columns": request.trim_columns,
+    })
+    session_manager.set_metadata(session_id, "editor_commits", editor_commits)
+
+    return {
+        "success": True,
+        "rows": len(df),
+        "columns": len(df.columns),
+        "updated_cells": len(request.updated_cells),
+        "cleared_cells": len(request.cleared_cells),
+        "deleted_rows": len(deleted_row_ids),
+        "trimmed_columns": len(request.trim_columns),
     }
 
 

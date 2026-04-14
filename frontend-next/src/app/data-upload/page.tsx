@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Sidebar, Header } from '@/components/layout';
 import {
+    DataEditor,
     FileDropzone,
     SampleDatasets,
     UploadProgress,
@@ -59,6 +60,7 @@ export default function DataUploadPage() {
     }, [dataSummary, hydrateSession, status, validationReport]);
 
     const isLoading = status === 'uploading' || status === 'validating';
+    const showEditor = status === 'success' && dataSummary && validationReport;
     const showSessionSkeleton = isBootstrapping;
 
     return (
@@ -124,6 +126,18 @@ export default function DataUploadPage() {
                             file={uploadedFile}
                             error={error}
                         />
+                    )}
+
+                    {!showSessionSkeleton && showEditor && (
+                        <section
+                            className="p-6 rounded-2xl border border-white/10"
+                            style={{
+                                background:
+                                    'linear-gradient(135deg, rgba(17, 24, 39, 0.6) 0%, rgba(31, 41, 55, 0.4) 100%)',
+                            }}
+                        >
+                            <DataEditor onSaved={hydrateSession} />
+                        </section>
                     )}
                 </main>
             </div>

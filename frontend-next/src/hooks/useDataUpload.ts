@@ -9,7 +9,6 @@ import {
     DataSummary,
     ValidationReport,
     UploadStatus,
-    SampleDataset
 } from '@/types/data-upload';
 
 // Re-export SAMPLE_DATASETS for compatibility
@@ -24,7 +23,6 @@ interface UseDataUploadReturn {
     dataSummary: DataSummary | null;
     validationReport: ValidationReport | null;
     isInitializing: boolean;
-    setValidationReport: React.Dispatch<React.SetStateAction<ValidationReport | null>>;
 
     // Actions
     uploadFile: (file: File) => Promise<void>;

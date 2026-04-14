@@ -4,4 +4,5 @@ export { SampleDatasets } from './SampleDatasets';
 export { UploadProgress } from './UploadProgress';
 export { ValidationReport } from './ValidationReport';
 export { DataPreview } from './DataPreview';
+export { DataEditor } from './DataEditor';
 export { IssueCard } from './IssueCard';
