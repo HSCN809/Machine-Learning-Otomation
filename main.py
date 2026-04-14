@@ -65,7 +65,7 @@ def start_backend_process(port: int = 8000):
     project_root = Path(__file__).parent
     subprocess.Popen(
         [sys.executable, "-m", "uvicorn", "backend.api.main:app", 
-         "--host", "0.0.0.0", "--port", str(port), "--reload"],
+         "--host", "0.0.0.0", "--port", str(port)],
         cwd=project_root
     )
 
