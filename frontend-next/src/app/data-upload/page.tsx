@@ -6,7 +6,6 @@ import {
     FileDropzone,
     SampleDatasets,
     UploadProgress,
-    ValidationReport,
     DataPreview,
 } from '@/components/data-upload';
 import { SessionPageSkeleton } from '@/components/common';
@@ -28,7 +27,6 @@ export default function DataUploadPage() {
         uploadFile,
         loadSampleDataset,
         hydrateSession,
-        reset,
     } = useDataUpload();
 
     useEffect(() => {
@@ -131,30 +129,15 @@ export default function DataUploadPage() {
                     )}
 
                     {!showSessionSkeleton && showResults && (
-                        <>
-                            <section
-                                className="p-6 rounded-2xl border border-white/10"
-                                style={{
-                                    background:
-                                        'linear-gradient(135deg, rgba(17, 24, 39, 0.6) 0%, rgba(31, 41, 55, 0.4) 100%)',
-                                }}
-                            >
-                                <DataPreview summary={dataSummary} />
-                            </section>
-
-                            <section
-                                className="p-6 rounded-2xl border border-white/10"
-                                style={{
-                                    background:
-                                        'linear-gradient(135deg, rgba(17, 24, 39, 0.6) 0%, rgba(31, 41, 55, 0.4) 100%)',
-                                }}
-                            >
-                                <ValidationReport
-                                    report={validationReport}
-                                    onDelete={reset}
-                                />
-                            </section>
-                        </>
+                        <section
+                            className="p-6 rounded-2xl border border-white/10"
+                            style={{
+                                background:
+                                    'linear-gradient(135deg, rgba(17, 24, 39, 0.6) 0%, rgba(31, 41, 55, 0.4) 100%)',
+                            }}
+                        >
+                            <DataPreview summary={dataSummary} />
+                        </section>
                     )}
                 </main>
             </div>
