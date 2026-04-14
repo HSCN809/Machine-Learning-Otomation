@@ -57,7 +57,6 @@ export function DataEditor({ onSaved }: DataEditorProps) {
         updateCell,
         clearActiveCell,
         deleteSelectedRows,
-        restoreDeletedRow,
         toggleTrimColumnSelection,
         applyTrimSelection,
         removeTrimColumn,
@@ -256,19 +255,7 @@ export function DataEditor({ onSaved }: DataEditorProps) {
                                                     />
                                                 </td>
                                                 <td className="px-4 py-3 text-gray-400">
-                                                    <div className="flex min-w-[72px] flex-col gap-2">
-                                                        <span>{row.rowId + 1}</span>
-                                                        {isDeleted && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => restoreDeletedRow(row.rowId)}
-                                                                disabled={isSaving}
-                                                                className={getButtonClassName(isSaving)}
-                                                            >
-                                                                Geri Yükle
-                                                            </button>
-                                                        )}
-                                                    </div>
+                                                    <span>{row.rowId + 1}</span>
                                                 </td>
                                                 {columns.map((column) => {
                                                     const cellKey = `${row.rowId}:${column}`;

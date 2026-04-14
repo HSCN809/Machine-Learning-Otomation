@@ -55,7 +55,6 @@ interface UseDataEditorReturn {
     updateCell: (rowId: number, column: string, value: string) => void;
     clearActiveCell: () => void;
     deleteSelectedRows: () => void;
-    restoreDeletedRow: (rowId: number) => void;
     toggleTrimColumnSelection: (column: string) => void;
     applyTrimSelection: () => void;
     removeTrimColumn: (column: string) => void;
@@ -206,16 +205,6 @@ export function useDataEditor({ onSaved }: UseDataEditorOptions = {}): UseDataEd
         setSelectedRows([]);
     }, [activeCell, applyDraftChange, selectedRows]);
 
-    const restoreDeletedRow = useCallback(
-        (rowId: number) => {
-            applyDraftChange((currentDraft) => {
-                currentDraft.deletedRowIds = currentDraft.deletedRowIds.filter((value) => value !== rowId);
-                return currentDraft;
-            });
-        },
-        [applyDraftChange]
-    );
-
     const toggleTrimColumnSelection = useCallback((column: string) => {
         setSelectedTrimColumns((previousColumns) =>
             previousColumns.includes(column)
@@ -324,7 +313,6 @@ export function useDataEditor({ onSaved }: UseDataEditorOptions = {}): UseDataEd
         updateCell,
         clearActiveCell,
         deleteSelectedRows,
-        restoreDeletedRow,
         toggleTrimColumnSelection,
         applyTrimSelection,
         removeTrimColumn,
