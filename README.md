@@ -91,6 +91,25 @@ Veya Python ile:
 ```bash
 python main.py
 ```
+
+## Docker Compose
+
+Tum stack artik Docker Compose ile ayaga kaldirilabilir:
+
+```bash
+docker compose up --build
+```
+
+Servisler:
+- Frontend: `http://localhost:3000`
+- Backend API: `http://localhost:8000`
+- PostgreSQL: `localhost:5432`
+
+Notlar:
+- Compose, `db + backend + frontend` servisini birlikte kurar.
+- Backend container icinde `DATABASE_URL` otomatik olarak `db` servisine baglanir.
+- Frontend, backend'e ayni-origin proxy uzerinden gider.
+- Docker Desktop / Docker daemon acik olmali.
 ## Dosya Yapısı
 
 data_science_copilot/
