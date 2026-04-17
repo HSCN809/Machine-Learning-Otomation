@@ -292,6 +292,7 @@ export default function SignupClient({ nextPath }: SignupClientProps) {
                                                 value={password}
                                                 onChange={(event) => setPassword(event.target.value)}
                                                 disabled={isFormDisabled}
+                                                minLength={3}
                                                 className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none transition focus:border-cyan-300/50 focus:ring-2 focus:ring-cyan-400/20 disabled:cursor-not-allowed disabled:opacity-60"
                                                 placeholder="En az 10 karakter, büyük/küçük harf ve rakam"
                                             />

@@ -14,7 +14,7 @@ from fastapi import HTTPException, status
 from backend.modules.config import settings
 
 
-PASSWORD_PATTERN = re.compile(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{10,}$")
+PASSWORD_PATTERN = re.compile(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{3,}$")
 
 
 def normalize_email(email: str) -> str:
