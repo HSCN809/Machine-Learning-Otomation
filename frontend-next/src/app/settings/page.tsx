@@ -351,14 +351,14 @@ export default function SettingsPage() {
                                 )}
 
                                 <div className="grid gap-4 lg:grid-cols-[minmax(0,360px)_1fr] lg:items-end">
-                                    <label className="block">
-                                        <span className="mb-2 block text-sm text-slate-300">Parolanızı doğrulayın</span>
+                                    <label className="grid w-full grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
+                                        <span className="text-sm text-slate-300">Parolanızı doğrulayın:</span>
                                         <input
                                             type="password"
                                             value={deletePassword}
                                             onChange={(event) => setDeletePassword(event.target.value)}
                                             disabled={deletePending}
-                                            className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none transition focus:border-rose-300/50 focus:ring-2 focus:ring-rose-400/20 disabled:cursor-not-allowed disabled:opacity-60"
+                                            className="min-w-0 w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none transition focus:border-rose-300/50 focus:ring-2 focus:ring-rose-400/20 disabled:cursor-not-allowed disabled:opacity-60"
                                         />
                                     </label>
 
