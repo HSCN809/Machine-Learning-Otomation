@@ -301,7 +301,7 @@ export default function SignupClient({ nextPath }: SignupClientProps) {
                                         <button
                                             type="submit"
                                             disabled={isFormDisabled}
-                                            className="inline-flex w-full items-center justify-center gap-3 rounded-full bg-[linear-gradient(135deg,#00D9FF_0%,#00FF88_100%)] px-5 py-3.5 text-sm font-semibold text-slate-950 transition-transform duration-300 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                                            className="inline-flex w-full cursor-pointer items-center justify-center gap-3 rounded-full bg-[linear-gradient(135deg,#00D9FF_0%,#00FF88_100%)] px-5 py-3.5 text-sm font-semibold text-slate-950 transition-transform duration-300 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
                                         >
                                             {isSubmitting ? 'İşleniyor...' : 'Kayıt ol'}
                                             <ArrowRight className="h-4 w-4" />
