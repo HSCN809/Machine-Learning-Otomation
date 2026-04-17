@@ -41,7 +41,6 @@ export default function LoginClient({ nextPath }: LoginClientProps) {
     const [isPending, startTransition] = useTransition();
 
     const [pageState, setPageState] = useState<LoadState>('bootstrap');
-    const [requiresSetup, setRequiresSetup] = useState(false);
     const [authenticatedUser, setAuthenticatedUser] = useState<{ full_name: string; email: string } | null>(null);
 
     const [email, setEmail] = useState('');
@@ -59,8 +58,6 @@ export default function LoginClient({ nextPath }: LoginClientProps) {
                 if (cancelled) {
                     return;
                 }
-
-                setRequiresSetup(status.requires_setup);
 
                 if (status.user && status.authenticated) {
                     setAuthenticatedUser(status.user);
@@ -272,21 +269,6 @@ export default function LoginClient({ nextPath }: LoginClientProps) {
                                                 Landing sayfası
                                             </Link>
                                         </div>
-                                    </div>
-                                ) : requiresSetup ? (
-                                    <div className="space-y-5 rounded-[1.5rem] border border-cyan-400/20 bg-cyan-400/10 p-6">
-                                        <h3 className="text-xl font-semibold text-white">
-                                            İlk hesap henüz oluşturulmadı
-                                        </h3>
-                                        <p className="text-sm leading-7 text-slate-200">
-                                            Giriş yapabilmek için önce yönetici hesabını oluşturman gerekiyor.
-                                        </p>
-                                        <Link
-                                            href={`/signup?next=${encodeURIComponent(nextPath)}`}
-                                            className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-cyan-200 underline underline-offset-4 transition hover:text-cyan-100"
-                                        >
-                                            Kayıt ol sayfasına git
-                                        </Link>
                                     </div>
                                 ) : (
                                     <form className="space-y-4" onSubmit={handleSubmit}>
