@@ -1,7 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { usePathname } from 'next/navigation';
 import { Sidebar, Header } from '@/components/layout';
+import { ProtectedRouteBoundary } from '@/components/auth/ProtectedRouteBoundary';
 import {
     ChartCarousel,
     StatsSummary,
@@ -14,7 +16,8 @@ import {
 } from '@/components/eda';
 import { NoDataWarning, SessionPageSkeleton, StepProgress } from '@/components/common';
 import { useEDA } from '@/hooks/useEDA';
-import { hasStoredSession } from '@/lib/api';
+import { hasStoredSession, subscribeToStoredSession } from '@/lib/api';
+import { buildDataUploadHref } from '@/lib/routing';
 import { BarChart3, TrendingUp, GitBranch, Layers } from 'lucide-react';
 
 type TabId = 'summary' | 'numeric' | 'correlation' | 'categorical';
@@ -48,7 +51,8 @@ const chartSelectClassName =
 export default function EDAPage() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [activeTab, setActiveTab] = useState<TabId>('summary');
-    const [hasSession] = useState(() => hasStoredSession());
+    const pathname = usePathname();
+    const hasSession = useSyncExternalStore(subscribeToStoredSession, hasStoredSession, () => false);
 
     const {
         edaData,
@@ -76,58 +80,61 @@ export default function EDAPage() {
     }, [hasSession, loadEDAData]);
 
     return (
-        <div className="min-h-screen">
-            <Sidebar
-                isCollapsed={sidebarCollapsed}
-                onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-            />
-
-            <div
-                className="transition-all duration-300"
-                style={{
-                    marginLeft: sidebarCollapsed ? '80px' : '288px',
-                }}
-            >
-                <Header
-                    title="Keşifsel Veri Analizi (EDA)"
-                    subtitle="Verilerinizi analiz edin, istatistikleri görüntüleyin ve görselleştirmeler oluşturun."
+        <ProtectedRouteBoundary>
+            <div className="min-h-screen">
+                <Sidebar
+                    isCollapsed={sidebarCollapsed}
+                    onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
                 />
 
-                <main className="p-6 space-y-6">
-                    {hasSession === true && isLoading && !edaData && <SessionPageSkeleton variant="analytics" />}
+                <div
+                    className="transition-all duration-300"
+                    style={{
+                        marginLeft: sidebarCollapsed ? '80px' : '288px',
+                    }}
+                >
+                    <Header
+                        title="Keşifsel Veri Analizi (EDA)"
+                        subtitle="Verilerinizi analiz edin, istatistikleri görüntüleyin ve görselleştirmeler oluşturun."
+                    />
 
-                    {!isLoading && hasSession !== null && !edaData && (
-                        <NoDataWarning
-                            title="Veri Yüklenmedi"
-                            description="Keşifsel veri analizi yapabilmek için önce veri yüklemeniz gerekmektedir."
-                        />
-                    )}
+                    <main className="space-y-6 p-6">
+                        {hasSession && isLoading && !edaData && <SessionPageSkeleton variant="analytics" />}
 
-                    {edaData && !isLoading && (
-                        <>
-                            <StepProgress
-                                steps={tabs.map((tab) => ({
-                                    id: tab.id,
-                                    name: tab.label,
-                                    icon: tab.icon,
-                                }))}
-                                currentStep={activeTabIndex}
-                                onStepClick={(step) => setActiveTab(tabs[step].id)}
-                                isStepClickable={() => true}
-                                showActiveLine={false}
+                        {!isLoading && !edaData && (
+                            <NoDataWarning
+                                title="Veri Yüklenmedi"
+                                description="Keşifsel veri analizi yapabilmek için önce veri yüklemeniz gerekmektedir."
+                                href={buildDataUploadHref(pathname)}
+                                actionLabel="Veri yüklemeye geç"
                             />
+                        )}
 
-                            {activeTab === 'summary' && (
-                                <div className="space-y-6">
-                                    <StatsSummary
-                                        numericStats={edaData.numericStats}
-                                        categoricalStats={edaData.categoricalStats}
-                                        columnTypes={edaData.columnTypes}
-                                        duplicateRows={edaData.duplicateRows}
-                                    />
-                                    <DataTypesTable columnTypes={edaData.columnTypes} />
-                                </div>
-                            )}
+                        {edaData && !isLoading && (
+                            <>
+                                <StepProgress
+                                    steps={tabs.map((tab) => ({
+                                        id: tab.id,
+                                        name: tab.label,
+                                        icon: tab.icon,
+                                    }))}
+                                    currentStep={activeTabIndex}
+                                    onStepClick={(step) => setActiveTab(tabs[step].id)}
+                                    isStepClickable={() => true}
+                                    showActiveLine={false}
+                                />
+
+                                {activeTab === 'summary' && (
+                                    <div className="space-y-6">
+                                        <StatsSummary
+                                            numericStats={edaData.numericStats}
+                                            categoricalStats={edaData.categoricalStats}
+                                            columnTypes={edaData.columnTypes}
+                                            duplicateRows={edaData.duplicateRows}
+                                        />
+                                        <DataTypesTable columnTypes={edaData.columnTypes} />
+                                    </div>
+                                )}
 
                             {activeTab === 'numeric' && selectedNumericColumn && (
                                 <div className="space-y-6">
@@ -345,10 +352,11 @@ export default function EDAPage() {
                                     />
                                 </div>
                             )}
-                        </>
-                    )}
-                </main>
+                            </>
+                        )}
+                    </main>
+                </div>
             </div>
-        </div>
+        </ProtectedRouteBoundary>
     );
 }

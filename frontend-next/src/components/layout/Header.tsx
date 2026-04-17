@@ -83,7 +83,7 @@ export function Header({ title = 'Dashboard', subtitle }: HeaderProps) {
         try {
             await logout();
             setMenuOpen(false);
-            router.push('/login');
+            router.replace('/login');
             router.refresh();
         } finally {
             setIsLoggingOut(false);

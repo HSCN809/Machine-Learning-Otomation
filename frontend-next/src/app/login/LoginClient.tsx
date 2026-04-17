@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 
 import { getAuthStatus, login } from '@/lib/api';
+import { buildSignupHref, HOMEPAGE_PATH } from '@/lib/routing';
 
 const spaceGrotesk = Space_Grotesk({
     subsets: ['latin'],
@@ -61,10 +62,16 @@ export default function LoginClient({ nextPath, registered = false }: LoginClien
                 }
 
                 if (status.user && status.authenticated) {
-                    setAuthenticatedUser(status.user);
-                    setPageState('success');
-                    setSuccessMessage('Aktif oturum bulundu. Yönetim yüzeyine geçebilirsiniz.');
-                    setEmail(status.user.email);
+                    startTransition(() => {
+                        router.replace(nextPath);
+                    });
+                    return;
+                }
+
+                if (status.requires_setup) {
+                    startTransition(() => {
+                        router.replace(buildSignupHref(nextPath));
+                    });
                     return;
                 }
 
@@ -88,7 +95,7 @@ export default function LoginClient({ nextPath, registered = false }: LoginClien
         return () => {
             cancelled = true;
         };
-    }, [registered]);
+    }, [nextPath, registered, router, startTransition]);
 
     const modeLabel = useMemo(() => {
         return 'Güvenli giriş';
@@ -116,7 +123,7 @@ export default function LoginClient({ nextPath, registered = false }: LoginClien
             setSuccessMessage('Giriş başarılı. Güvenli oturum oluşturuldu.');
 
             startTransition(() => {
-                router.push(nextPath);
+                router.replace(nextPath);
             });
         } catch (error) {
             setPageState('ready');
@@ -149,7 +156,7 @@ export default function LoginClient({ nextPath, registered = false }: LoginClien
             <div className="relative mx-auto grid min-h-screen max-w-7xl gap-12 px-6 py-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)] lg:px-10 lg:py-10">
                 <section className="flex flex-col justify-between">
                     <div>
-                        <Link href="/homepage" className="inline-flex cursor-pointer items-center gap-3">
+                        <Link href={HOMEPAGE_PATH} className="inline-flex cursor-pointer items-center gap-3">
                             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#00D9FF_0%,#00FF88_100%)] shadow-[0_0_28px_rgba(0,217,255,0.28)]">
                                 <BrainCircuit className="h-6 w-6 text-slate-950" />
                             </div>
@@ -254,7 +261,7 @@ export default function LoginClient({ nextPath, registered = false }: LoginClien
                                                 type="button"
                                                 onClick={() =>
                                                     startTransition(() => {
-                                                        router.push(nextPath);
+                                                        router.replace(nextPath);
                                                     })
                                                 }
                                                 className="inline-flex cursor-pointer items-center justify-center gap-3 rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-950 transition-transform duration-300 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
@@ -311,7 +318,7 @@ export default function LoginClient({ nextPath, registered = false }: LoginClien
                                         <p className="text-sm text-slate-400">
                                             Hesabın yok mu?{' '}
                                             <Link
-                                                href={`/signup?next=${encodeURIComponent(nextPath)}`}
+                                                href={buildSignupHref(nextPath)}
                                                 className="cursor-pointer font-medium text-cyan-200 underline underline-offset-4 transition hover:text-cyan-100"
                                             >
                                                 Kayıt ol

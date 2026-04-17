@@ -4,9 +4,10 @@ import { useEffect, useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { JetBrains_Mono, Space_Grotesk } from 'next/font/google';
-import { ArrowRight, BrainCircuit, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { ArrowRight, BrainCircuit, ShieldCheck } from 'lucide-react';
 
 import { getAuthStatus, setupFirstUser } from '@/lib/api';
+import { buildLoginHref, HOMEPAGE_PATH } from '@/lib/routing';
 
 const spaceGrotesk = Space_Grotesk({
     subsets: ['latin'],
@@ -37,7 +38,6 @@ export default function SignupClient({ nextPath }: SignupClientProps) {
 
     const [pageState, setPageState] = useState<LoadState>('bootstrap');
     const [requiresSetup, setRequiresSetup] = useState(false);
-    const [authenticatedUser, setAuthenticatedUser] = useState<{ full_name: string; email: string } | null>(null);
 
     const [fullName, setFullName] = useState('');
     const [email, setEmail] = useState('');
@@ -59,9 +59,9 @@ export default function SignupClient({ nextPath }: SignupClientProps) {
                 setRequiresSetup(status.requires_setup);
 
                 if (status.user && status.authenticated) {
-                    setAuthenticatedUser(status.user);
-                    setPageState('success');
-                    setSuccessMessage('Aktif oturum bulundu. Yönetim yüzeyine geçebilirsiniz.');
+                    startTransition(() => {
+                        router.replace(nextPath);
+                    });
                     return;
                 }
 
@@ -81,7 +81,7 @@ export default function SignupClient({ nextPath }: SignupClientProps) {
         return () => {
             cancelled = true;
         };
-    }, []);
+    }, [nextPath, router, startTransition]);
 
     const modeLabel = useMemo(() => {
         return 'Kayıt ol';
@@ -106,7 +106,7 @@ export default function SignupClient({ nextPath }: SignupClientProps) {
             setSuccessMessage('Hesabınız oluşturuldu. Giriş sayfasına yönlendiriliyorsunuz.');
 
             startTransition(() => {
-                router.push(`/login?next=${encodeURIComponent(nextPath)}&registered=1`);
+                router.replace(`${buildLoginHref(nextPath)}&registered=1`);
             });
         } catch (error) {
             setPageState('ready');
@@ -139,7 +139,7 @@ export default function SignupClient({ nextPath }: SignupClientProps) {
             <div className="relative mx-auto grid min-h-screen max-w-7xl gap-12 px-6 py-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)] lg:px-10 lg:py-10">
                 <section className="flex flex-col justify-between">
                     <div>
-                        <Link href="/homepage" className="inline-flex cursor-pointer items-center gap-3">
+                        <Link href={HOMEPAGE_PATH} className="inline-flex cursor-pointer items-center gap-3">
                             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#00D9FF_0%,#00FF88_100%)] shadow-[0_0_28px_rgba(0,217,255,0.28)]">
                                 <BrainCircuit className="h-6 w-6 text-slate-950" />
                             </div>
@@ -205,7 +205,7 @@ export default function SignupClient({ nextPath }: SignupClientProps) {
                             </div>
                         )}
 
-                        {(pageState === 'ready' || pageState === 'success') && (
+                        {pageState === 'ready' && (
                             <div className="mt-6">
                                 {errorMessage && (
                                     <div className="mb-4 rounded-[1.25rem] border border-red-400/25 bg-red-500/10 p-4 text-sm text-red-100">
@@ -219,42 +219,7 @@ export default function SignupClient({ nextPath }: SignupClientProps) {
                                     </div>
                                 )}
 
-                                {pageState === 'success' && authenticatedUser ? (
-                                    <div className="rounded-[1.5rem] border border-emerald-400/20 bg-emerald-500/10 p-6">
-                                        <div className="flex items-start gap-4">
-                                            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-400/15">
-                                                <CheckCircle2 className="h-6 w-6 text-emerald-200" />
-                                            </div>
-                                            <div className="flex-1">
-                                                <p className="text-lg font-medium text-white">
-                                                    {authenticatedUser.full_name}
-                                                </p>
-                                                <p className="mt-1 text-sm text-emerald-100/85">
-                                                    {authenticatedUser.email}
-                                                </p>
-                                                <p className="mt-4 text-sm leading-7 text-slate-200">
-                                                    Oturum aktif. Dashboard veya landing sayfasına geçebilirsiniz.
-                                                </p>
-                                            </div>
-                                        </div>
-
-                                        <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-                                            <button
-                                                type="button"
-                                                onClick={() =>
-                                                    startTransition(() => {
-                                                        router.push(nextPath);
-                                                    })
-                                                }
-                                                className="inline-flex cursor-pointer items-center justify-center gap-3 rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-950 transition-transform duration-300 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
-                                                disabled={isPending}
-                                            >
-                                                Dashboard aç
-                                                <ArrowRight className="h-4 w-4" />
-                                            </button>
-                                        </div>
-                                    </div>
-                                ) : requiresSetup ? (
+                                {requiresSetup ? (
                                     <form className="space-y-4" onSubmit={handleSubmit}>
                                         <label className="block">
                                             <span className="mb-2 block text-sm text-slate-300">Ad soyad</span>
@@ -305,7 +270,7 @@ export default function SignupClient({ nextPath }: SignupClientProps) {
                                         <p className="text-sm text-slate-400">
                                             Zaten hesabın var mı?{' '}
                                             <Link
-                                                href={`/login?next=${encodeURIComponent(nextPath)}`}
+                                                href={buildLoginHref(nextPath)}
                                                 className="cursor-pointer font-medium text-cyan-200 underline underline-offset-4 transition hover:text-cyan-100"
                                             >
                                                 Giriş yap
@@ -321,7 +286,7 @@ export default function SignupClient({ nextPath }: SignupClientProps) {
                                             İlk kurulum tamamlanmış. Yeni kayıt yerine giriş ekranını kullanın.
                                         </p>
                                         <Link
-                                            href={`/login?next=${encodeURIComponent(nextPath)}`}
+                                            href={buildLoginHref(nextPath)}
                                             className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-cyan-200 underline underline-offset-4 transition hover:text-cyan-100"
                                         >
                                             Giriş ekranına dön

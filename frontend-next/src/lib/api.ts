@@ -15,6 +15,11 @@ const SESSION_ERROR_MESSAGES = new Set([SESSION_REQUIRED_MESSAGE, 'Session not f
 
 // Session ID management
 let sessionId: string | null = null;
+const sessionListeners = new Set<() => void>();
+
+function notifyStoredSessionChange(): void {
+    sessionListeners.forEach((listener) => listener());
+}
 
 function getSessionId(): string | null {
     if (typeof window !== 'undefined') {
@@ -32,6 +37,7 @@ function setSessionId(id: string): void {
     if (typeof window !== 'undefined') {
         localStorage.setItem('ml_session_id', id);
     }
+    notifyStoredSessionChange();
 }
 
 export function clearStoredSession(): void {
@@ -39,10 +45,18 @@ export function clearStoredSession(): void {
     if (typeof window !== 'undefined') {
         localStorage.removeItem('ml_session_id');
     }
+    notifyStoredSessionChange();
 }
 
 export function hasStoredSession(): boolean {
     return Boolean(getSessionId());
+}
+
+export function subscribeToStoredSession(listener: () => void): () => void {
+    sessionListeners.add(listener);
+    return () => {
+        sessionListeners.delete(listener);
+    };
 }
 
 export class SessionRequiredError extends Error {

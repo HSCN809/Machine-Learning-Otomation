@@ -8,6 +8,7 @@ import {
     UserCircle2,
 } from 'lucide-react';
 
+import { ProtectedRouteBoundary } from '@/components/auth/ProtectedRouteBoundary';
 import { Header, Sidebar } from '@/components/layout';
 import {
     changePassword,
@@ -148,7 +149,7 @@ export default function SettingsPage() {
         setDeletePending(true);
         try {
             const response = await deleteAccount(deletePassword);
-            router.push(response.requires_setup ? '/signup' : '/login');
+            router.replace(response.requires_setup ? '/signup' : '/login');
             router.refresh();
         } catch (error) {
             setDeleteError(getErrorMessage(error));
@@ -158,24 +159,25 @@ export default function SettingsPage() {
     }
 
     return (
-        <div className="min-h-screen">
-            <Sidebar
-                isCollapsed={sidebarCollapsed}
-                onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-            />
-
-            <div
-                className="transition-all duration-300"
-                style={{
-                    marginLeft: sidebarCollapsed ? '80px' : '288px',
-                }}
-            >
-                <Header
-                    title="Ayarlar"
-                    subtitle="Profil bilgilerinizi yönetin, parolanızı değiştirin veya hesabınızı kapatın."
+        <ProtectedRouteBoundary>
+            <div className="min-h-screen">
+                <Sidebar
+                    isCollapsed={sidebarCollapsed}
+                    onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
                 />
 
-                <main className="space-y-8 p-6">
+                <div
+                    className="transition-all duration-300"
+                    style={{
+                        marginLeft: sidebarCollapsed ? '80px' : '288px',
+                    }}
+                >
+                    <Header
+                        title="Ayarlar"
+                        subtitle="Profil bilgilerinizi yönetin, parolanızı değiştirin veya hesabınızı kapatın."
+                    />
+
+                    <main className="space-y-8 p-6">
                     <section
                         className="rounded-2xl border border-white/10 p-6"
                         style={{
@@ -373,8 +375,9 @@ export default function SettingsPage() {
                             </form>
                         </section>
                     )}
-                </main>
+                    </main>
+                </div>
             </div>
-        </div>
+        </ProtectedRouteBoundary>
     );
 }

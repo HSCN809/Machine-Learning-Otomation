@@ -136,7 +136,7 @@ export default function Homepage() {
 
       <header className="sticky top-0 z-40 border-b border-white/10 bg-[#07101fcc] backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4 lg:px-10">
-          <Link href="/" className="flex cursor-pointer items-center gap-3">
+          <Link href="/homepage" className="flex cursor-pointer items-center gap-3">
             <div className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#00D9FF_0%,#00FF88_100%)] shadow-[0_0_24px_rgba(0,217,255,0.28)]">
               <BrainCircuit className="h-6 w-6 text-slate-950" />
               <div className="absolute inset-0 rounded-2xl animate-ping bg-cyan-300/20" />
@@ -485,7 +485,7 @@ export default function Homepage() {
                   <ArrowRight className="h-4 w-4" />
                 </Link>
                 <Link
-                  href="/"
+                  href="/dashboard"
                   className="inline-flex cursor-pointer items-center justify-center gap-3 rounded-full border border-white/15 bg-white/5 px-6 py-3.5 text-sm font-semibold text-white transition-colors duration-300 hover:bg-white/10"
                 >
                   Dashboard aç

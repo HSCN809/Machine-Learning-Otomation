@@ -7,11 +7,15 @@ import { theme } from '@/styles/theme';
 interface NoDataWarningProps {
     title?: string;
     description?: string;
+    href?: string;
+    actionLabel?: string;
 }
 
 export function NoDataWarning({
     title = 'Veri Yüklenmedi',
     description = 'Bu sayfayı kullanabilmek için önce veri yüklemeniz gerekmektedir.',
+    href = '/data-upload',
+    actionLabel = 'Veri Yükle',
 }: NoDataWarningProps) {
     return (
         <div className="flex flex-col items-center justify-center py-20 space-y-6">
@@ -30,7 +34,7 @@ export function NoDataWarning({
             </div>
 
             <Link
-                href="/data-upload"
+                href={href}
                 className="inline-flex items-center gap-3 px-8 py-4 rounded-xl font-medium text-white transition-all hover:scale-105"
                 style={{
                     background: theme.gradients.primary,
@@ -38,7 +42,7 @@ export function NoDataWarning({
                 }}
             >
                 <Upload className="w-5 h-5" />
-                Veri Yükle
+                {actionLabel}
             </Link>
         </div>
     );

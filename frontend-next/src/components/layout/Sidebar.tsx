@@ -24,7 +24,7 @@ const navItems = [
         id: 'dashboard',
         label: 'Dashboard',
         icon: LayoutDashboard,
-        href: '/',
+        href: '/dashboard',
     },
     {
         id: 'data-upload',
@@ -67,7 +67,7 @@ export function Sidebar({ isCollapsed = false, onToggle }: SidebarProps) {
             }}
         >
             <div className="flex min-h-16 items-center justify-between px-4 py-3 border-b border-white/10">
-                <Link href="/" className="flex items-center gap-3">
+                <Link href="/dashboard" className="flex items-center gap-3">
                     <div
                         className="relative w-10 h-10 rounded-xl flex items-center justify-center"
                         style={{
