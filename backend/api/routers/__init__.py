@@ -1,2 +1,2 @@
 """Routers package"""
-from . import upload, eda, preprocessing, model
+from . import auth, upload, eda, preprocessing, model

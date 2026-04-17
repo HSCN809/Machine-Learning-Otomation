@@ -35,3 +35,17 @@ LLM_MAX_TOKENS = int(os.getenv('LLM_MAX_TOKENS', '4000'))
 LLM_TIMEOUT = int(os.getenv('LLM_TIMEOUT', '30'))  # seconds
 LLM_MAX_RETRIES = int(os.getenv('LLM_MAX_RETRIES', '2'))
 
+# Database
+DATABASE_URL = os.getenv(
+    'DATABASE_URL',
+    'postgresql+psycopg://postgres:postgres@localhost:5432/ml_automation'
+)
+
+# Authentication
+AUTH_COOKIE_NAME = os.getenv('AUTH_COOKIE_NAME', 'ml_auth_session')
+AUTH_COOKIE_SECURE = os.getenv('AUTH_COOKIE_SECURE', 'false').lower() == 'true'
+AUTH_COOKIE_SAMESITE = os.getenv('AUTH_COOKIE_SAMESITE', 'lax')
+AUTH_SESSION_TTL_MINUTES = int(os.getenv('AUTH_SESSION_TTL_MINUTES', '480'))
+AUTH_RATE_LIMIT_ATTEMPTS = int(os.getenv('AUTH_RATE_LIMIT_ATTEMPTS', '5'))
+AUTH_RATE_LIMIT_WINDOW_MINUTES = int(os.getenv('AUTH_RATE_LIMIT_WINDOW_MINUTES', '15'))
+

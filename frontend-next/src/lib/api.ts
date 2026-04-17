@@ -9,7 +9,7 @@ import type {
 } from '@/types/data-upload';
 import type { FeatureConfig } from '@/types/preprocessing';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api/backend';
 const SESSION_REQUIRED_MESSAGE = 'Valid session ID required. Upload data first.';
 const SESSION_ERROR_MESSAGES = new Set([SESSION_REQUIRED_MESSAGE, 'Session not found']);
 
@@ -70,10 +70,17 @@ async function apiFetch<T>(
         (headers as Record<string, string>)['X-Session-Id'] = sid;
     }
 
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-        ...options,
-        headers,
-    });
+    let response: Response;
+
+    try {
+        response = await fetch(`${API_BASE_URL}${endpoint}`, {
+            ...options,
+            headers,
+            credentials: 'include',
+        });
+    } catch {
+        throw new Error('Backend service unavailable. API proxy could not reach FastAPI server.');
+    }
 
     if (!response.ok) {
         const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
@@ -107,7 +114,16 @@ async function downloadWithSession(endpoint: string, fallbackFilename: string): 
         (headers as Record<string, string>)['X-Session-Id'] = sid;
     }
 
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, { headers });
+    let response: Response;
+
+    try {
+        response = await fetch(`${API_BASE_URL}${endpoint}`, {
+            headers,
+            credentials: 'include',
+        });
+    } catch {
+        throw new Error('Backend service unavailable. API proxy could not reach FastAPI server.');
+    }
 
     if (!response.ok) {
         const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
@@ -763,6 +779,61 @@ export function getModelTrainingStreamUrl(jobId: string): string {
         throw new SessionRequiredError();
     }
     return `${API_BASE_URL}/api/model/train/stream?job_id=${encodeURIComponent(jobId)}&session_id=${encodeURIComponent(sid)}`;
+}
+
+// ============== Auth API ==============
+
+export interface AuthUser {
+    id: string;
+    email: string;
+    full_name: string;
+}
+
+export interface AuthStatusResponse {
+    authenticated: boolean;
+    requires_setup: boolean;
+    user: AuthUser | null;
+}
+
+export async function getAuthStatus(): Promise<AuthStatusResponse> {
+    return apiFetch<AuthStatusResponse>('/api/auth/status');
+}
+
+export async function getCurrentUser(): Promise<{ authenticated: boolean; user: AuthUser }> {
+    return apiFetch<{ authenticated: boolean; user: AuthUser }>('/api/auth/me');
+}
+
+export async function login(
+    email: string,
+    password: string
+): Promise<{ authenticated: boolean; user: AuthUser }> {
+    return apiFetch<{ authenticated: boolean; user: AuthUser }>('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+    });
+}
+
+export async function setupFirstUser(
+    fullName: string,
+    email: string,
+    password: string
+): Promise<{ authenticated: boolean; user: AuthUser }> {
+    return apiFetch<{ authenticated: boolean; user: AuthUser }>('/api/auth/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            full_name: fullName,
+            email,
+            password,
+        }),
+    });
+}
+
+export async function logout(): Promise<{ success: boolean }> {
+    return apiFetch<{ success: boolean }>('/api/auth/logout', {
+        method: 'POST',
+    });
 }
 
 // ============== Health Check ==============

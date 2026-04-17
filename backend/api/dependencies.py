@@ -6,8 +6,15 @@ from typing import Dict, Any, Optional
 from datetime import datetime, timedelta
 import uuid
 import pandas as pd
-from fastapi import HTTPException, Header
+from fastapi import Cookie, Depends, HTTPException, Header, status
 import logging
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from backend.api.database import SessionLocal
+from backend.modules.auth.models import AuthSession, User
+from backend.modules.auth.security import hash_session_token
+from backend.modules.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -187,3 +194,52 @@ async def require_data(x_session_id: str = Header(...)) -> pd.DataFrame:
             detail="No data loaded. Please upload data first."
         )
     return df
+
+
+def get_db():
+    """Yield SQLAlchemy DB session."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def get_current_user(
+    auth_cookie: Optional[str] = Cookie(default=None, alias=settings.AUTH_COOKIE_NAME),
+    db: Session = Depends(get_db),
+) -> User:
+    """Resolve authenticated user from httpOnly cookie."""
+    if not auth_cookie:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required.",
+        )
+
+    session = db.scalar(
+        select(AuthSession)
+        .join(User)
+        .where(
+            AuthSession.token_hash == hash_session_token(auth_cookie),
+            AuthSession.revoked_at.is_(None),
+            AuthSession.expires_at > datetime.utcnow(),
+            User.is_active.is_(True),
+        )
+    )
+
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required.",
+        )
+
+    session.last_used_at = datetime.utcnow()
+    db.commit()
+    return session.user
+
+
+def require_authenticated_user(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """Alias dependency for protected routers."""
+    return current_user

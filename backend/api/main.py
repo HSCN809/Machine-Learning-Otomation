@@ -2,13 +2,15 @@
 FastAPI Backend - DataScience Copilot
 """
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
 
 # Routers
-from .routers import upload, eda, preprocessing, model
+from .database import Base, engine
+from .dependencies import require_authenticated_user
+from .routers import auth, upload, eda, preprocessing, model
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -19,6 +21,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Application lifespan handler"""
     logger.info("🚀 FastAPI Backend starting...")
+    Base.metadata.create_all(bind=engine)
     yield
     logger.info("👋 FastAPI Backend shutting down...")
 
@@ -45,10 +48,31 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(upload.router, prefix="/api/upload", tags=["Upload"])
-app.include_router(eda.router, prefix="/api/eda", tags=["EDA"])
-app.include_router(preprocessing.router, prefix="/api/preprocessing", tags=["Preprocessing"])
-app.include_router(model.router, prefix="/api/model", tags=["Model"])
+app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
+app.include_router(
+    upload.router,
+    prefix="/api/upload",
+    tags=["Upload"],
+    dependencies=[Depends(require_authenticated_user)],
+)
+app.include_router(
+    eda.router,
+    prefix="/api/eda",
+    tags=["EDA"],
+    dependencies=[Depends(require_authenticated_user)],
+)
+app.include_router(
+    preprocessing.router,
+    prefix="/api/preprocessing",
+    tags=["Preprocessing"],
+    dependencies=[Depends(require_authenticated_user)],
+)
+app.include_router(
+    model.router,
+    prefix="/api/model",
+    tags=["Model"],
+    dependencies=[Depends(require_authenticated_user)],
+)
 
 
 @app.get("/")

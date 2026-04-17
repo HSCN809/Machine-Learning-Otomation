@@ -162,10 +162,10 @@ export default function Homepage() {
           </nav>
 
           <Link
-            href="/data-upload"
+            href="/login"
             className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-cyan-400/30 bg-cyan-400/10 px-4 py-2 text-sm font-medium text-cyan-100 transition-all duration-300 hover:border-cyan-300/50 hover:bg-cyan-400/15"
           >
-            Veri yükle
+            Giris yap
             <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
@@ -203,10 +203,10 @@ export default function Homepage() {
 
               <div className="mt-10 flex flex-col gap-4 sm:flex-row">
                 <Link
-                  href="/data-upload"
+                  href="/login"
                   className="inline-flex cursor-pointer items-center justify-center gap-3 rounded-full bg-[linear-gradient(135deg,#00D9FF_0%,#00FF88_100%)] px-7 py-3.5 text-sm font-semibold text-slate-950 shadow-[0_18px_50px_rgba(0,217,255,0.22)] transition-transform duration-300 hover:-translate-y-0.5"
                 >
-                  Pipeline başlat
+                  Guvenli giris
                   <ArrowRight className="h-4 w-4" />
                 </Link>
                 <Link
@@ -443,10 +443,10 @@ export default function Homepage() {
                   </p>
                 </div>
                 <Link
-                  href="/data-upload"
+                  href="/login"
                   className="inline-flex cursor-pointer items-center justify-center gap-3 rounded-full border border-cyan-300/30 bg-cyan-300/10 px-5 py-3 text-sm font-semibold text-cyan-100 transition-colors duration-300 hover:bg-cyan-300/15"
                 >
-                  Modüle geç
+                  Giris katmanina gec
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </div>
@@ -471,17 +471,17 @@ export default function Homepage() {
                   Veriyi sisteme al, analizi görünür kıl, model kararını hızla üret.
                 </h2>
                 <p className="mt-4 max-w-2xl text-base leading-8 text-slate-300">
-                  Bu ana sayfa proje için modern giriş yüzeyi sağlar. Dashboard ayrı kalır,
+                  Bu ana sayfa proje icin modern giris yuzeyi saglar. Dashboard ayri kalir,
                   operasyon akışı bozulmaz.
                 </p>
               </div>
 
               <div className="flex flex-col gap-3 sm:flex-row">
                 <Link
-                  href="/data-upload"
+                  href="/login"
                   className="inline-flex cursor-pointer items-center justify-center gap-3 rounded-full bg-white px-6 py-3.5 text-sm font-semibold text-slate-950 transition-transform duration-300 hover:-translate-y-0.5"
                 >
-                  Veri ile başla
+                  Giris yap
                   <ArrowRight className="h-4 w-4" />
                 </Link>
                 <Link
