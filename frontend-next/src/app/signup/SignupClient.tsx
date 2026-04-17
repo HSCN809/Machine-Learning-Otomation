@@ -157,21 +157,21 @@ export default function SignupClient({ nextPath }: SignupClientProps) {
                                 style={{ fontFamily: 'var(--font-jetbrains-mono)' }}
                             >
                                 <ShieldCheck className="h-3.5 w-3.5 text-cyan-300" />
-                                İlk kurulum katmanı
+                                İlk hesap
                             </p>
 
                             <h1
                                 className="mt-8 text-5xl font-semibold tracking-[-0.05em] text-white sm:text-6xl"
                                 style={{ fontFamily: 'var(--font-space-grotesk)' }}
                             >
-                                İlk yönetici hesabını
-                                <span className="text-gradient-primary"> güvenli biçimde</span>
-                                oluştur.
+                                <span className="block">İlk hesabını</span>
+                                <span className="block text-gradient-primary">kolayca ve güvenle</span>
+                                <span className="block">oluştur.</span>
                             </h1>
 
                             <p className="mt-8 max-w-xl text-base leading-8 text-slate-300 sm:text-lg">
-                                Ad soyad alanı Türkçe karakterleri destekler. Oturum, httpOnly
-                                cookie ile oluşturulur ve sunucu tarafında PostgreSQL üzerinde tutulur.
+                                Ad soyad, e-posta ve parola bilgilerini gir. Hesabın oluşturulduktan
+                                sonra doğrudan panele geçebilirsin.
                             </p>
                         </div>
                     </div>
@@ -179,7 +179,7 @@ export default function SignupClient({ nextPath }: SignupClientProps) {
 
                 <section className="flex items-center justify-center">
                     <div className="w-full max-w-xl overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.12),rgba(255,255,255,0.04))] p-6 shadow-[0_40px_100px_rgba(3,7,18,0.58)] backdrop-blur-2xl sm:p-8">
-                        <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-6">
+                        <div className="border-b border-white/10 pb-6">
                             <div>
                                 <p
                                     className="text-xs uppercase tracking-[0.24em] text-cyan-200"
@@ -190,9 +190,6 @@ export default function SignupClient({ nextPath }: SignupClientProps) {
                                 <h2 className="mt-3 text-3xl font-semibold text-white">
                                     Yönetici hesabını oluştur
                                 </h2>
-                            </div>
-                            <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300">
-                                signup
                             </div>
                         </div>
 

@@ -155,27 +155,26 @@ export default function LoginClient({ nextPath }: LoginClientProps) {
                         </Link>
 
                         <div className="mt-16 max-w-2xl">
-                                <p
-                                    className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.24em] text-slate-300"
-                                    style={{ fontFamily: 'var(--font-jetbrains-mono)' }}
-                                >
-                                    <ShieldCheck className="h-3.5 w-3.5 text-cyan-300" />
-                                PostgreSQL session auth
-                                </p>
+                            <p
+                                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.24em] text-slate-300"
+                                style={{ fontFamily: 'var(--font-jetbrains-mono)' }}
+                            >
+                                <ShieldCheck className="h-3.5 w-3.5 text-cyan-300" />
+                                Güvenli giriş
+                            </p>
 
                             <h1
                                 className="mt-8 text-5xl font-semibold tracking-[-0.05em] text-white sm:text-6xl"
                                 style={{ fontFamily: 'var(--font-space-grotesk)' }}
                             >
-                                Model yüzeyine girmeden önce
-                                <span className="text-gradient-primary"> güvenli oturum</span>
-                                kur.
+                                <span className="block">Devam etmeden önce</span>
+                                <span className="block text-gradient-primary">güvenli giriş</span>
+                                <span className="block">yap.</span>
                             </h1>
 
                             <p className="mt-8 max-w-xl text-base leading-8 text-slate-300 sm:text-lg">
-                                Kimlik doğrulama, `httpOnly` cookie ile tutulur. Session kaydı
-                                PostgreSQL içinde saklanır. Tarayıcı tarafı token okumaz,
-                                backend otorite olur.
+                                E-posta ve parolanla giriş yap. Giriş yaptıktan sonra seni
+                                doğrudan panele yönlendiririz.
                             </p>
                         </div>
                     </div>
@@ -183,7 +182,7 @@ export default function LoginClient({ nextPath }: LoginClientProps) {
 
                 <section className="flex items-center justify-center">
                     <div className="w-full max-w-xl overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.12),rgba(255,255,255,0.04))] p-6 shadow-[0_40px_100px_rgba(3,7,18,0.58)] backdrop-blur-2xl sm:p-8">
-                        <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-6">
+                        <div className="border-b border-white/10 pb-6">
                             <div>
                                 <p
                                     className="text-xs uppercase tracking-[0.24em] text-cyan-200"
@@ -194,9 +193,6 @@ export default function LoginClient({ nextPath }: LoginClientProps) {
                                 <h2 className="mt-3 text-3xl font-semibold text-white">
                                     Hesabına giriş yap
                                 </h2>
-                            </div>
-                            <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300">
-                                login
                             </div>
                         </div>
 
