@@ -350,7 +350,7 @@ export default function SettingsPage() {
                                     </div>
                                 )}
 
-                                <div className="grid gap-4 lg:grid-cols-[minmax(0,360px)_auto] lg:items-end">
+                                <div className="grid gap-4 lg:grid-cols-[minmax(0,360px)_1fr] lg:items-end">
                                     <label className="block">
                                         <span className="mb-2 block text-sm text-slate-300">Parolanızı doğrulayın</span>
                                         <input
@@ -365,7 +365,7 @@ export default function SettingsPage() {
                                     <button
                                         type="submit"
                                         disabled={deletePending}
-                                        className="inline-flex cursor-pointer items-center justify-center rounded-full bg-rose-500 px-6 py-3 text-sm font-semibold text-white transition-colors duration-300 hover:bg-rose-400 disabled:cursor-not-allowed disabled:opacity-60"
+                                        className="inline-flex cursor-pointer items-center justify-center self-end justify-self-start rounded-full bg-rose-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors duration-300 hover:bg-rose-400 lg:justify-self-end disabled:cursor-not-allowed disabled:opacity-60"
                                     >
                                         {deletePending ? 'Hesap siliniyor...' : 'Hesabı sil'}
                                     </button>
