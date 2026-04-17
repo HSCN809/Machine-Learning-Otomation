@@ -4,8 +4,8 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Load environment variables (override=True to reload)
-load_dotenv(override=True)
+# Load environment variables without overriding real runtime env.
+load_dotenv()
 
 # File upload settings
 MAX_FILE_SIZE_MB = 200
