@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -25,21 +26,35 @@ from backend.modules.config import settings
 
 
 router = APIRouter()
+FULL_NAME_PATTERN = re.compile(r"^[A-Za-zÇĞİÖŞÜçğıöşüÂâÊêÎîÔôÛûÄäËëÏïÖöÜüŸÿ'\-.\s]+$")
 
 
 class LoginRequest(BaseModel):
     """Login payload."""
 
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     email: str = Field(min_length=3, max_length=255)
-    password: str = Field(min_length=10, max_length=128)
+    password: str = Field(min_length=3, max_length=128)
 
 
 class SetupRequest(BaseModel):
     """Initial admin setup payload."""
 
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     full_name: str = Field(min_length=2, max_length=255)
     email: str = Field(min_length=3, max_length=255)
-    password: str = Field(min_length=10, max_length=128)
+    password: str = Field(min_length=3, max_length=128)
+
+    @field_validator("full_name")
+    @classmethod
+    def validate_full_name(cls, value: str) -> str:
+        if not FULL_NAME_PATTERN.fullmatch(value):
+            raise ValueError(
+                "Ad soyad alanında Türkçe karakterler kullanılabilir; yalnızca harf, boşluk, tire, nokta ve kesme işareti kabul edilir."
+            )
+        return value
 
 
 def _serialize_user(user: User) -> dict[str, str]:
@@ -146,7 +161,7 @@ def setup_first_user(
     if existing_users > 0:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Ilk kurulum tamamlanmis. Lutfen giris yapin.",
+            detail="İlk kurulum tamamlanmış. Lütfen giriş yapın.",
         )
 
     email = normalize_email(payload.email)
@@ -180,7 +195,7 @@ def login(
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Gecersiz e-posta veya parola.",
+            detail="Geçersiz e-posta veya parola.",
         )
 
     return _create_auth_session(db=db, user=user, request=request, response=response)

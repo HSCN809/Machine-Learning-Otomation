@@ -56,6 +56,42 @@ export function isSessionRequiredError(error: unknown): error is SessionRequired
     return error instanceof SessionRequiredError;
 }
 
+function getApiErrorDetail(errorPayload: unknown, status: number): string {
+    if (
+        errorPayload &&
+        typeof errorPayload === 'object' &&
+        'detail' in errorPayload
+    ) {
+        const detail = (errorPayload as { detail: unknown }).detail;
+
+        if (typeof detail === 'string') {
+            return detail;
+        }
+
+        if (Array.isArray(detail)) {
+            const messages = detail
+                .map((item) => {
+                    if (
+                        item &&
+                        typeof item === 'object' &&
+                        'msg' in item &&
+                        typeof (item as { msg: unknown }).msg === 'string'
+                    ) {
+                        return (item as { msg: string }).msg;
+                    }
+                    return null;
+                })
+                .filter((message): message is string => Boolean(message));
+
+            if (messages.length > 0) {
+                return messages.join(' ');
+            }
+        }
+    }
+
+    return `HTTP ${status}`;
+}
+
 // Base fetch with session header
 async function apiFetch<T>(
     endpoint: string,
@@ -84,7 +120,7 @@ async function apiFetch<T>(
 
     if (!response.ok) {
         const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-        const detail = typeof error.detail === 'string' ? error.detail : `HTTP ${response.status}`;
+        const detail = getApiErrorDetail(error, response.status);
 
         if (SESSION_ERROR_MESSAGES.has(detail)) {
             clearStoredSession();
@@ -127,7 +163,7 @@ async function downloadWithSession(endpoint: string, fallbackFilename: string): 
 
     if (!response.ok) {
         const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-        const detail = typeof error.detail === 'string' ? error.detail : `HTTP ${response.status}`;
+        const detail = getApiErrorDetail(error, response.status);
 
         if (SESSION_ERROR_MESSAGES.has(detail)) {
             clearStoredSession();

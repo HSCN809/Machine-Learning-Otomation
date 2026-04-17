@@ -17,7 +17,7 @@ export function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
     const hasAuthCookie = Boolean(request.cookies.get(AUTH_COOKIE_NAME)?.value);
 
-    if (pathname === '/login' && hasAuthCookie) {
+    if ((pathname === '/login' || pathname === '/signup') && hasAuthCookie) {
         return NextResponse.redirect(new URL('/', request.url));
     }
 
@@ -31,5 +31,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-    matcher: ['/', '/login', '/data-upload/:path*', '/eda/:path*', '/preprocessing/:path*', '/model/:path*'],
+    matcher: ['/', '/login', '/signup', '/data-upload/:path*', '/eda/:path*', '/preprocessing/:path*', '/model/:path*'],
 };

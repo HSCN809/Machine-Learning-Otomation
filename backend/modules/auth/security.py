@@ -27,7 +27,7 @@ def validate_password_strength(password: str) -> None:
     if not PASSWORD_PATTERN.match(password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Password en az 10 karakter, bir buyuk harf, bir kucuk harf ve bir rakam icermeli.",
+            detail="Parola en az 3 karakter, bir büyük harf, bir küçük harf ve bir rakam içermeli.",
         )
 
 
