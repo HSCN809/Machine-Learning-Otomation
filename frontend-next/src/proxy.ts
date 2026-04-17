@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 const AUTH_COOKIE_NAME = process.env.NEXT_PUBLIC_AUTH_COOKIE_NAME || 'ml_auth_session';
+const HOMEPAGE_PATH = '/homepage';
 
 function isProtectedPath(pathname: string): boolean {
     return (
@@ -23,9 +24,7 @@ export function proxy(request: NextRequest) {
     }
 
     if (isProtectedPath(pathname) && !hasAuthCookie) {
-        const loginUrl = new URL('/login', request.url);
-        loginUrl.searchParams.set('next', pathname);
-        return NextResponse.redirect(loginUrl);
+        return NextResponse.redirect(new URL(HOMEPAGE_PATH, request.url));
     }
 
     return NextResponse.next();

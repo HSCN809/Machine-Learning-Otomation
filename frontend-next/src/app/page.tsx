@@ -1,7 +1,13 @@
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
-import { HOMEPAGE_PATH } from '@/lib/routing';
+import { DEFAULT_AUTHENTICATED_PATH, HOMEPAGE_PATH } from '@/lib/routing';
 
-export default function RootPage() {
-    redirect(HOMEPAGE_PATH);
+const AUTH_COOKIE_NAME = process.env.AUTH_COOKIE_NAME || 'ml_auth_session';
+
+export default async function RootPage() {
+    const cookieStore = await cookies();
+    const authCookie = cookieStore.get(AUTH_COOKIE_NAME)?.value;
+
+    redirect(authCookie ? DEFAULT_AUTHENTICATED_PATH : HOMEPAGE_PATH);
 }
