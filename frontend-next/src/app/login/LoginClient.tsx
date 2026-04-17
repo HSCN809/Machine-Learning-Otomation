@@ -27,6 +27,7 @@ type LoadState = 'bootstrap' | 'ready' | 'success' | 'error';
 
 interface LoginClientProps {
     nextPath: string;
+    registered?: boolean;
 }
 
 function getErrorMessage(error: unknown): string {
@@ -36,7 +37,7 @@ function getErrorMessage(error: unknown): string {
     return 'İşlem tamamlanamadı. Lütfen tekrar deneyin.';
 }
 
-export default function LoginClient({ nextPath }: LoginClientProps) {
+export default function LoginClient({ nextPath, registered = false }: LoginClientProps) {
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
 
@@ -67,6 +68,10 @@ export default function LoginClient({ nextPath }: LoginClientProps) {
                     return;
                 }
 
+                if (registered) {
+                    setSuccessMessage('Hesabınız oluşturuldu. Şimdi giriş yapabilirsiniz.');
+                }
+
                 setPageState('ready');
             } catch (error) {
                 if (cancelled) {
@@ -83,7 +88,7 @@ export default function LoginClient({ nextPath }: LoginClientProps) {
         return () => {
             cancelled = true;
         };
-    }, []);
+    }, [registered]);
 
     const modeLabel = useMemo(() => {
         return 'Güvenli giriş';

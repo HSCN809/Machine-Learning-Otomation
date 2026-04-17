@@ -825,6 +825,13 @@ export interface AuthUser {
     full_name: string;
 }
 
+export interface AuthMutationResponse {
+    success: boolean;
+    message: string;
+    user?: AuthUser;
+    requires_setup?: boolean;
+}
+
 export interface AuthStatusResponse {
     authenticated: boolean;
     requires_setup: boolean;
@@ -854,8 +861,8 @@ export async function setupFirstUser(
     fullName: string,
     email: string,
     password: string
-): Promise<{ authenticated: boolean; user: AuthUser }> {
-    return apiFetch<{ authenticated: boolean; user: AuthUser }>('/api/auth/setup', {
+): Promise<AuthMutationResponse> {
+    return apiFetch<AuthMutationResponse>('/api/auth/setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -867,9 +874,53 @@ export async function setupFirstUser(
 }
 
 export async function logout(): Promise<{ success: boolean }> {
-    return apiFetch<{ success: boolean }>('/api/auth/logout', {
+    const response = await apiFetch<{ success: boolean }>('/api/auth/logout', {
         method: 'POST',
     });
+
+    clearStoredSession();
+    return response;
+}
+
+export async function updateProfile(
+    fullName: string,
+    email: string
+): Promise<AuthMutationResponse> {
+    return apiFetch<AuthMutationResponse>('/api/auth/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            full_name: fullName,
+            email,
+        }),
+    });
+}
+
+export async function changePassword(
+    currentPassword: string,
+    newPassword: string
+): Promise<AuthMutationResponse> {
+    return apiFetch<AuthMutationResponse>('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            current_password: currentPassword,
+            new_password: newPassword,
+        }),
+    });
+}
+
+export async function deleteAccount(currentPassword: string): Promise<AuthMutationResponse> {
+    const response = await apiFetch<AuthMutationResponse>('/api/auth/account', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            current_password: currentPassword,
+        }),
+    });
+
+    clearStoredSession();
+    return response;
 }
 
 // ============== Health Check ==============

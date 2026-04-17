@@ -6,6 +6,7 @@ const AUTH_COOKIE_NAME = process.env.NEXT_PUBLIC_AUTH_COOKIE_NAME || 'ml_auth_se
 function isProtectedPath(pathname: string): boolean {
     return (
         pathname === '/' ||
+        pathname.startsWith('/settings') ||
         pathname.startsWith('/data-upload') ||
         pathname.startsWith('/eda') ||
         pathname.startsWith('/preprocessing') ||
@@ -31,5 +32,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-    matcher: ['/', '/login', '/signup', '/data-upload/:path*', '/eda/:path*', '/preprocessing/:path*', '/model/:path*'],
+    matcher: ['/', '/login', '/signup', '/settings/:path*', '/data-upload/:path*', '/eda/:path*', '/preprocessing/:path*', '/model/:path*'],
 };

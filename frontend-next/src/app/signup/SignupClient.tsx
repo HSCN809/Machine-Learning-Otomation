@@ -102,13 +102,11 @@ export default function SignupClient({ nextPath }: SignupClientProps) {
         setIsSubmitting(true);
 
         try {
-            const response = await setupFirstUser(fullName.trim(), email.trim(), password);
-            setAuthenticatedUser(response.user);
-            setPageState('success');
-            setSuccessMessage('Hesap oluşturuldu. Güvenli oturum başlatıldı.');
+            await setupFirstUser(fullName.trim(), email.trim(), password);
+            setSuccessMessage('Hesabınız oluşturuldu. Giriş sayfasına yönlendiriliyorsunuz.');
 
             startTransition(() => {
-                router.push(nextPath);
+                router.push(`/login?next=${encodeURIComponent(nextPath)}&registered=1`);
             });
         } catch (error) {
             setPageState('ready');

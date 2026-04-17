@@ -57,6 +57,37 @@ class SetupRequest(BaseModel):
         return value
 
 
+class ProfileUpdateRequest(BaseModel):
+    """Profile update payload."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    full_name: str = Field(min_length=2, max_length=255)
+    email: str = Field(min_length=3, max_length=255)
+
+    @field_validator("full_name")
+    @classmethod
+    def validate_full_name(cls, value: str) -> str:
+        if not FULL_NAME_PATTERN.fullmatch(value):
+            raise ValueError(
+                "Ad soyad alanında Türkçe karakterler kullanılabilir; yalnızca harf, boşluk, tire, nokta ve kesme işareti kabul edilir."
+            )
+        return value
+
+
+class PasswordChangeRequest(BaseModel):
+    """Password change payload."""
+
+    current_password: str = Field(min_length=3, max_length=128)
+    new_password: str = Field(min_length=3, max_length=128)
+
+
+class DeleteAccountRequest(BaseModel):
+    """Delete-account payload."""
+
+    current_password: str = Field(min_length=3, max_length=128)
+
+
 def _serialize_user(user: User) -> dict[str, str]:
     """Return safe user payload for frontend."""
     return {
@@ -64,6 +95,11 @@ def _serialize_user(user: User) -> dict[str, str]:
         "email": user.email,
         "full_name": user.full_name,
     }
+
+
+def _get_active_user_count(db: Session) -> int:
+    """Return active user count."""
+    return db.scalar(select(func.count()).select_from(User)) or 0
 
 
 def _set_auth_cookie(response: Response, token: str) -> None:
@@ -122,7 +158,7 @@ def get_auth_status(
     db: Session = Depends(get_db),
 ):
     """Return auth state and first-run setup requirement."""
-    user_count = db.scalar(select(func.count()).select_from(User)) or 0
+    user_count = _get_active_user_count(db)
     token = request.cookies.get(settings.AUTH_COOKIE_NAME)
     user_payload = None
 
@@ -151,13 +187,12 @@ def get_auth_status(
 def setup_first_user(
     payload: SetupRequest,
     request: Request,
-    response: Response,
     db: Session = Depends(get_db),
 ):
     """Allow only first account bootstrap when no users exist."""
     auth_rate_limiter.hit(f"setup:{request.client.host if request.client else 'unknown'}")
 
-    existing_users = db.scalar(select(func.count()).select_from(User)) or 0
+    existing_users = _get_active_user_count(db)
     if existing_users > 0:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -176,7 +211,11 @@ def setup_first_user(
     db.commit()
     db.refresh(user)
 
-    return _create_auth_session(db=db, user=user, request=request, response=response)
+    return {
+        "success": True,
+        "message": "Hesabınız oluşturuldu. Şimdi giriş yapabilirsiniz.",
+        "user": _serialize_user(user),
+    }
 
 
 @router.post("/login")
@@ -227,4 +266,86 @@ def me(current_user: User = Depends(get_current_user)):
     return {
         "authenticated": True,
         "user": _serialize_user(current_user),
+    }
+
+
+@router.patch("/profile")
+def update_profile(
+    payload: ProfileUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update current user's profile details."""
+    email = normalize_email(payload.email)
+    existing_user = db.scalar(
+        select(User).where(User.email == email, User.id != current_user.id)
+    )
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Bu e-posta adresi zaten kullanılıyor.",
+        )
+
+    current_user.full_name = payload.full_name.strip()
+    current_user.email = email
+    db.commit()
+    db.refresh(current_user)
+
+    return {
+        "success": True,
+        "message": "Profil bilgileri güncellendi.",
+        "user": _serialize_user(current_user),
+    }
+
+
+@router.post("/change-password")
+def change_password(
+    payload: PasswordChangeRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Change current user's password."""
+    if not verify_password(payload.current_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Mevcut parola yanlış.",
+        )
+    if payload.current_password == payload.new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Yeni parola mevcut parola ile aynı olamaz.",
+        )
+
+    validate_password_strength(payload.new_password)
+    current_user.password_hash = hash_password(payload.new_password)
+    db.commit()
+
+    return {
+        "success": True,
+        "message": "Parolanız güncellendi.",
+    }
+
+
+@router.delete("/account")
+def delete_account(
+    payload: DeleteAccountRequest,
+    response: Response,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete current user account."""
+    if not verify_password(payload.current_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Hesabı silmek için parolanızı doğrulamanız gerekiyor.",
+        )
+
+    db.delete(current_user)
+    db.commit()
+    _clear_auth_cookie(response)
+
+    return {
+        "success": True,
+        "message": "Hesabınız silindi.",
+        "requires_setup": _get_active_user_count(db) == 0,
     }

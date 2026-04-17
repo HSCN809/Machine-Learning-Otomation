@@ -17,6 +17,7 @@ function normalizeNextPath(value: string | string[] | undefined): string {
 export default async function LoginPage({ searchParams }: LoginPageProps) {
     const resolvedSearchParams = searchParams ? await searchParams : undefined;
     const nextPath = normalizeNextPath(resolvedSearchParams?.next);
+    const registered = resolvedSearchParams?.registered === '1';
 
-    return <LoginClient nextPath={nextPath} />;
+    return <LoginClient nextPath={nextPath} registered={registered} />;
 }
