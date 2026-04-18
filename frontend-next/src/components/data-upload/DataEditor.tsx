@@ -79,7 +79,7 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
         }
 
         const confirmed = window.confirm(
-            'Yuklenen veri seti silinecek ve bu oturumdaki duzenlemeler kaybolacak. Devam etmek istiyor musunuz?'
+            'Yüklenen veri seti silinecek ve bu oturumdaki düzenlemeler kaybolacak. Devam etmek istiyor musunuz?'
         );
 
         if (!confirmed) {
@@ -157,7 +157,7 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
     if (isLoading && rows.length === 0) {
         return (
             <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-6 text-sm text-gray-400">
-                Veri duzenleyici yukleniyor...
+                Veri düzenleyici yükleniyor...
             </div>
         );
     }
@@ -167,20 +167,20 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="space-y-2">
                     <div>
-                        <h2 className="text-xl font-semibold text-white">Veri Duzenleme</h2>
+                        <h2 className="text-xl font-semibold text-white">Veri Düzenleme</h2>
                         <p className="text-sm text-gray-400">
-                            Veriler parcali olarak yuklenir. Kaydirdikca yeni satirlar gelir, degisiklikler yalnizca kaydettiginizde uygulanir.
+                            Veriler parçalı olarak yüklenir. Kaydırdıkça yeni satırlar gelir, değişiklikler yalnızca kaydettiğinizde uygulanır.
                         </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 text-xs text-gray-400">
                         <span className="rounded-full border border-white/10 px-3 py-1">
-                            Toplam satir: {totalRows}
+                            Toplam satır: {totalRows}
                         </span>
                         <span className="rounded-full border border-white/10 px-3 py-1">
-                            Yuklenen satir: {rows.length}
+                            Yüklenen satır: {rows.length}
                         </span>
                         <span className="rounded-full border border-white/10 px-3 py-1">
-                            Kaydedilmemis degisiklik: {isDirty ? 'Var' : 'Yok'}
+                            Kaydedilmemiş değişiklik: {isDirty ? 'Var' : 'Yok'}
                         </span>
                         <span className="rounded-full border border-white/10 px-3 py-1">
                             Ctrl+S ile kaydet
@@ -205,7 +205,7 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                         className={getButtonClassName(!isDirty || isSaving)}
                     >
                         <XCircle className="h-4 w-4" />
-                        Vazgec
+                        Vazgeç
                     </button>
                     <button
                         type="button"
@@ -243,13 +243,13 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
                         <div className="flex flex-wrap items-center gap-2 text-sm text-gray-300">
                             <span className="rounded-full border border-white/10 px-3 py-1">
-                                Yuklenen bolum: {loadedPages} / {totalPages}
+                                Yüklenen bölüm: {loadedPages} / {totalPages}
                             </span>
                             <span className="rounded-full border border-white/10 px-3 py-1">
-                                Secili satir: {selectedRows.length}
+                                Seçili satır: {selectedRows.length}
                             </span>
                             <span className="rounded-full border border-white/10 px-3 py-1">
-                                Silinecek satir: {draft.deletedRowIds.length}
+                                Silinecek satır: {draft.deletedRowIds.length}
                             </span>
                         </div>
 
@@ -261,7 +261,7 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                                 className={getButtonClassName(!activeCell || isSaving)}
                             >
                                 <Eraser className="h-4 w-4" />
-                                Secili Hucreyi Temizle
+                                Seçili Hücreyi Temizle
                             </button>
                             <button
                                 type="button"
@@ -270,7 +270,7 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                                 className={getButtonClassName(selectedRows.length === 0 || isSaving, 'danger')}
                             >
                                 <Trash2 className="h-4 w-4" />
-                                Secili Satirlari Sil
+                                Seçili Satırları Sil
                             </button>
                         </div>
                     </div>
@@ -366,22 +366,22 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                             </table>
 
                             <div ref={loadMoreRef} className="px-4 py-4 text-center text-sm text-gray-400">
-                                {isLoadingMore && 'Daha fazla satir yukleniyor...'}
-                                {!isLoadingMore && hasMoreRows && 'Asagi kaydirdikca sonraki satirlar yuklenecek.'}
-                                {!hasMoreRows && rows.length > 0 && 'Tum yuklenebilir satirlar gosteriliyor.'}
+                                {isLoadingMore && 'Daha fazla satır yükleniyor...'}
+                                {!isLoadingMore && hasMoreRows && 'Aşağı kaydırdıkça sonraki satırlar yüklenecek.'}
+                                {!hasMoreRows && rows.length > 0 && 'Tüm yüklenebilir satırlar gösteriliyor.'}
                             </div>
                         </div>
 
                         {rows.length === 0 && (
                             <div className="px-4 py-8 text-center text-sm text-gray-400">
-                                Goruntulenecek satir bulunamadi.
+                                Görüntülenecek satır bulunamadı.
                             </div>
                         )}
                     </div>
 
                     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
                         <span className="text-sm text-gray-400">
-                            Toplam {totalRows} satir, her chunk icin {pageSize} satir getiriliyor
+                            Toplam {totalRows} satır, her chunk için {pageSize} satır getiriliyor
                         </span>
                         <span className="text-sm text-gray-400">
                             Scroll deneyimi aktif, backend pagination korunuyor
@@ -392,9 +392,9 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                 <aside className="space-y-4">
                     <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
                         <div className="mb-4">
-                            <h3 className="text-sm font-semibold text-white">Toplu Islemler</h3>
+                            <h3 className="text-sm font-semibold text-white">Toplu İşlemler</h3>
                             <p className="mt-1 text-xs text-gray-400">
-                                Text kolonlarini secip bastaki ve sondaki bosluklari tek seferde temizleyin.
+                                Text kolonlarını seçip baştaki ve sondaki boşlukları tek seferde temizleyin.
                             </p>
                         </div>
 
@@ -429,39 +429,39 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                             ].join(' ')}
                         >
                             <Scissors className="h-4 w-4" />
-                            Secili Kolonlarda Trim Uygula
+                            Seçili Kolonlarda Trim Uygula
                         </button>
                     </div>
 
                     <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
                         <div className="mb-4">
-                            <h3 className="text-sm font-semibold text-white">Bekleyen Degisiklikler</h3>
+                            <h3 className="text-sm font-semibold text-white">Bekleyen Değişiklikler</h3>
                             <p className="mt-1 text-xs text-gray-400">
-                                Kaydetmeden once birikmis duzenlemelerin ozeti.
+                                Kaydetmeden önce birikmiş düzenlemelerin özeti.
                             </p>
                         </div>
 
                         <div className="space-y-3 text-sm text-gray-300">
                             <div className="flex items-center justify-between">
-                                <span>Guncellenen hucre</span>
+                                <span>Güncellenen hücre</span>
                                 <span>{draft.updatedCells.length}</span>
                             </div>
                             <div className="flex items-center justify-between">
-                                <span>Temizlenen hucre</span>
+                                <span>Temizlenen hücre</span>
                                 <span>{draft.clearedCells.length}</span>
                             </div>
                             <div className="flex items-center justify-between">
-                                <span>Silinecek satir</span>
+                                <span>Silinecek satır</span>
                                 <span>{draft.deletedRowIds.length}</span>
                             </div>
                         </div>
 
                         <div className="mt-4 space-y-2">
                             <p className="text-xs font-medium uppercase tracking-[0.2em] text-gray-500">
-                                Trim Kuyrugu
+                                Trim Kuyruğu
                             </p>
                             {draft.trimColumns.length === 0 && (
-                                <p className="text-sm text-gray-500">Bekleyen trim islemi yok.</p>
+                                <p className="text-sm text-gray-500">Bekleyen trim işlemi yok.</p>
                             )}
                             {draft.trimColumns.map((column) => (
                                 <div
@@ -475,7 +475,7 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                                         disabled={isSaving}
                                         className={getButtonClassName(isSaving)}
                                     >
-                                        Kaldir
+                                        Kaldır
                                     </button>
                                 </div>
                             ))}
