@@ -45,6 +45,14 @@ function mergeRows(existingRows: EditableRow[], incomingRows: EditableRow[]): Ed
     return Array.from(rowMap.values()).sort((left, right) => left.rowId - right.rowId);
 }
 
+function stringifyCellValue(value: unknown): string {
+    if (value === null || value === undefined) {
+        return '';
+    }
+
+    return String(value);
+}
+
 interface UseDataEditorOptions {
     onSaved?: () => Promise<void> | void;
 }
@@ -234,8 +242,17 @@ export function useDataEditor({ onSaved }: UseDataEditorOptions = {}): UseDataEd
                         return;
                     }
 
+                    const sourceRow = rows.find((row) => row.rowId === cell.rowId);
+                    const originalValue = stringifyCellValue(sourceRow?.values[cell.column]);
                     hasEligibleCell = true;
                     const cellKey = `${cell.rowId}:${cell.column}`;
+
+                    if (cell.value === originalValue) {
+                        nextUpdatedCells.delete(cellKey);
+                        clearedCellKeys.delete(cellKey);
+                        return;
+                    }
+
                     nextUpdatedCells.set(cellKey, cell);
                     clearedCellKeys.delete(cellKey);
                 });
@@ -251,7 +268,7 @@ export function useDataEditor({ onSaved }: UseDataEditorOptions = {}): UseDataEd
                 return currentDraft;
             });
         },
-        [applyDraftChange]
+        [applyDraftChange, rows]
     );
 
     const updateCell = useCallback(
