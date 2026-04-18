@@ -174,29 +174,7 @@ export function Sidebar({ isCollapsed = false, onToggle }: SidebarProps) {
                     );
                 })}
             </nav>
-
-            {!isCollapsed && (
-                <div
-                    className="p-4 mx-3 mb-4 rounded-xl border border-white/10"
-                    style={{ background: theme.colors.background.secondary }}
-                >
-                    <div className="flex items-center gap-2 mb-2">
-                        <div
-                            className="w-2 h-2 rounded-full"
-                            style={{
-                                background: theme.colors.status.success,
-                                boxShadow: `0 0 8px ${theme.colors.status.success}`,
-                            }}
-                        />
-                        <span className="text-sm" style={{ color: theme.colors.text.secondary }}>
-                            Veri Durumu
-                        </span>
-                    </div>
-                    <p className="text-xs" style={{ color: theme.colors.text.muted }}>
-                        Henüz veri yüklenmedi
-                    </p>
-                </div>
-            )}
         </aside>
     );
 }
+

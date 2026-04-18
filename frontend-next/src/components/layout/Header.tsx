@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-    Bell,
     ChevronDown,
     LogOut,
     Settings,
@@ -123,24 +122,6 @@ export function Header({ title = 'Dashboard', subtitle }: HeaderProps) {
             </div>
 
             <div className="flex items-center gap-2">
-                <button
-                    type="button"
-                    className={cn(
-                        'group relative cursor-pointer rounded-xl p-2.5 transition-all duration-200',
-                        'hover:bg-white/5'
-                    )}
-                    style={{ color: theme.colors.text.secondary }}
-                >
-                    <Bell className="h-5 w-5 transition-colors group-hover:text-cyan-400" />
-                    <span
-                        className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full"
-                        style={{
-                            background: theme.colors.status.error,
-                            boxShadow: `0 0 8px ${theme.colors.status.error}`,
-                        }}
-                    />
-                </button>
-
                 <button
                     type="button"
                     onClick={handleOpenProfile}
