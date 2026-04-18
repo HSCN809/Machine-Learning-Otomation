@@ -72,6 +72,7 @@ interface UseDataEditorReturn {
     setActiveCell: (cell: DataEditorCellRef | null) => void;
     loadMoreRows: () => Promise<void>;
     toggleRowSelection: (rowId: number) => void;
+    replaceSelectedRows: (rowIds: number[]) => void;
     toggleAllLoadedRows: () => void;
     updateCell: (rowId: number, column: string, value: string) => void;
     renameColumn: (column: string, newName: string) => void;
@@ -207,6 +208,10 @@ export function useDataEditor({ onSaved }: UseDataEditorOptions = {}): UseDataEd
             return Array.from(nextSelectedRows);
         });
     }, [rows]);
+
+    const replaceSelectedRows = useCallback((rowIds: number[]) => {
+        setSelectedRows(Array.from(new Set(rowIds)).sort((left, right) => left - right));
+    }, []);
 
     const updateCell = useCallback(
         (rowId: number, column: string, value: string) => {
@@ -436,6 +441,7 @@ export function useDataEditor({ onSaved }: UseDataEditorOptions = {}): UseDataEd
         setActiveCell,
         loadMoreRows,
         toggleRowSelection,
+        replaceSelectedRows,
         toggleAllLoadedRows,
         updateCell,
         renameColumn,

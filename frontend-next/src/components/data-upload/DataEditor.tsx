@@ -96,12 +96,25 @@ function buildColumnRange(start: string, end: string, columns: string[]): string
     return columns.slice(minIndex, maxIndex + 1);
 }
 
+function buildRowRange(start: number, end: number, rowIds: number[]): number[] {
+    const startIndex = rowIds.indexOf(start);
+    const endIndex = rowIds.indexOf(end);
+
+    if (startIndex < 0 || endIndex < 0) {
+        return [end];
+    }
+
+    const [minIndex, maxIndex] = startIndex <= endIndex ? [startIndex, endIndex] : [endIndex, startIndex];
+    return rowIds.slice(minIndex, maxIndex + 1);
+}
+
 export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
     const [isDeleting, setIsDeleting] = useState(false);
     const [selectedCells, setSelectedCells] = useState<DataEditorCellRef[]>([]);
     const [selectionAnchor, setSelectionAnchor] = useState<DataEditorCellRef | null>(null);
     const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
     const [columnSelectionAnchor, setColumnSelectionAnchor] = useState<string | null>(null);
+    const [rowSelectionAnchor, setRowSelectionAnchor] = useState<number | null>(null);
     const [editingCell, setEditingCell] = useState<DataEditorCellRef | null>(null);
     const [editingColumn, setEditingColumn] = useState<string | null>(null);
     const editorRootRef = useRef<HTMLDivElement | null>(null);
@@ -131,6 +144,7 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
         setActiveCell,
         loadMoreRows,
         toggleRowSelection,
+        replaceSelectedRows,
         toggleAllLoadedRows,
         updateCell,
         renameColumn,
@@ -165,6 +179,11 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
             setIsDeleting(false);
         }
     };
+
+    const clearTargetCells = useMemo(
+        () => (selectedCells.length > 0 ? selectedCells : activeCell ? [activeCell] : []),
+        [activeCell, selectedCells]
+    );
 
     useEffect(() => {
         const isEditorShortcutTarget = () => {
@@ -202,12 +221,49 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
 
                 event.preventDefault();
                 undoLastChange();
+                return;
+            }
+
+            if (event.key === 'Delete' && !isSaving && !editingCell && !editingColumn) {
+                event.preventDefault();
+
+                if (selectedRows.length > 0) {
+                    const deletedSelection = new Set(selectedRows);
+                    deleteSelectedRows();
+                    setSelectedCells((previousSelectedCells) =>
+                        previousSelectedCells.filter((cell) => !deletedSelection.has(cell.rowId))
+                    );
+                    if (selectionAnchor && deletedSelection.has(selectionAnchor.rowId)) {
+                        setSelectionAnchor(null);
+                    }
+                    if (rowSelectionAnchor && deletedSelection.has(rowSelectionAnchor)) {
+                        setRowSelectionAnchor(null);
+                    }
+                    return;
+                }
+
+                if (clearTargetCells.length > 0) {
+                    clearCells(clearTargetCells);
+                }
             }
         };
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isDirty, isSaving, saveChanges, undoLastChange]);
+    }, [
+        clearCells,
+        clearTargetCells,
+        deleteSelectedRows,
+        editingCell,
+        editingColumn,
+        isDirty,
+        isSaving,
+        rowSelectionAnchor,
+        saveChanges,
+        selectedRows,
+        selectionAnchor,
+        undoLastChange,
+    ]);
 
     useEffect(() => {
         const handlePointerSelectionEnd = () => {
@@ -270,7 +326,6 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
     );
     const selectedColumnSet = useMemo(() => new Set(selectedColumns), [selectedColumns]);
     const allRowsSelected = rows.length > 0 && rows.every((row) => selectedRowSet.has(row.rowId));
-    const clearTargetCells = selectedCells.length > 0 ? selectedCells : activeCell ? [activeCell] : [];
 
     useEffect(() => {
         const validRowIds = new Set(rows.map((row) => row.rowId));
@@ -313,6 +368,9 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
         );
         setColumnSelectionAnchor((previousColumnAnchor) =>
             previousColumnAnchor && validColumns.has(previousColumnAnchor) ? previousColumnAnchor : null
+        );
+        setRowSelectionAnchor((previousRowAnchor) =>
+            previousRowAnchor !== null && validRowIds.has(previousRowAnchor) ? previousRowAnchor : null
         );
         setEditingColumn((previousEditingColumn) =>
             previousEditingColumn && validColumns.has(previousEditingColumn) ? previousEditingColumn : null
@@ -382,6 +440,7 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
         setActiveCell(null);
         setSelectedCells([]);
         setSelectionAnchor(null);
+        setRowSelectionAnchor(null);
 
         if (event.shiftKey && columnSelectionAnchor) {
             setSelectedColumns(buildColumnRange(columnSelectionAnchor, column, columns));
@@ -437,9 +496,26 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
         setActiveCell(null);
         setSelectedCells([]);
         setSelectionAnchor(null);
+        setRowSelectionAnchor(null);
         setColumnSelectionAnchor(column);
         setSelectedColumns([column]);
         setEditingColumn(column);
+    };
+
+    const handleRowCheckboxClick = (rowId: number, event: MouseEvent<HTMLInputElement>) => {
+        if (isSaving) {
+            return;
+        }
+
+        event.stopPropagation();
+
+        if (event.shiftKey && rowSelectionAnchor !== null) {
+            replaceSelectedRows(buildRowRange(rowSelectionAnchor, rowId, rowIds));
+            return;
+        }
+
+        setRowSelectionAnchor(rowId);
+        toggleRowSelection(rowId);
     };
 
     const handleCellEditorKeyDown = (
@@ -528,6 +604,7 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                             setSelectionAnchor(null);
                             setSelectedColumns([]);
                             setColumnSelectionAnchor(null);
+                            setRowSelectionAnchor(null);
                             setEditingCell(null);
                             setEditingColumn(null);
                         }}
@@ -547,6 +624,7 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                                     setSelectionAnchor(null);
                                     setSelectedColumns([]);
                                     setColumnSelectionAnchor(null);
+                                    setRowSelectionAnchor(null);
                                     setEditingCell(null);
                                     setEditingColumn(null);
                                 }
@@ -621,6 +699,9 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                                     );
                                     if (selectionAnchor && deletedSelection.has(selectionAnchor.rowId)) {
                                         setSelectionAnchor(null);
+                                    }
+                                    if (rowSelectionAnchor && deletedSelection.has(rowSelectionAnchor)) {
+                                        setRowSelectionAnchor(null);
                                     }
                                 }}
                                 disabled={selectedRows.length === 0 || isSaving}
@@ -720,7 +801,8 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                                                     <input
                                                         type="checkbox"
                                                         checked={selectedRowSet.has(row.rowId)}
-                                                        onChange={() => toggleRowSelection(row.rowId)}
+                                                        readOnly
+                                                        onClick={(event) => handleRowCheckboxClick(row.rowId, event)}
                                                         disabled={isSaving}
                                                         className={[
                                                             'h-4 w-4 rounded border-white/20 bg-transparent',
