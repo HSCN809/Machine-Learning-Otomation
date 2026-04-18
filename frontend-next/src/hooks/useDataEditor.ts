@@ -13,6 +13,7 @@ const EMPTY_DRAFT: DataEditorDraft = {
     clearedCells: [],
     deletedRowIds: [],
     trimColumns: [],
+    renamedColumns: [],
 };
 
 function cloneDraft(draft: DataEditorDraft): DataEditorDraft {
@@ -21,6 +22,7 @@ function cloneDraft(draft: DataEditorDraft): DataEditorDraft {
         clearedCells: draft.clearedCells.map((cell) => ({ ...cell })),
         deletedRowIds: [...draft.deletedRowIds],
         trimColumns: [...draft.trimColumns],
+        renamedColumns: draft.renamedColumns.map((column) => ({ ...column })),
     };
 }
 
@@ -72,6 +74,9 @@ interface UseDataEditorReturn {
     toggleRowSelection: (rowId: number) => void;
     toggleAllLoadedRows: () => void;
     updateCell: (rowId: number, column: string, value: string) => void;
+    renameColumn: (column: string, newName: string) => void;
+    getColumnDisplayName: (column: string) => string;
+    clearCells: (cells: DataEditorCellRef[]) => void;
     clearActiveCell: () => void;
     deleteSelectedRows: () => void;
     toggleTrimColumnSelection: (column: string) => void;
@@ -101,6 +106,12 @@ export function useDataEditor({ onSaved }: UseDataEditorOptions = {}): UseDataEd
     const [selectedTrimColumns, setSelectedTrimColumns] = useState<string[]>([]);
     const [activeCell, setActiveCell] = useState<DataEditorCellRef | null>(null);
     const loadingPagesRef = useRef(new Set<number>());
+
+    const getColumnDisplayName = useCallback(
+        (column: string) =>
+            draft.renamedColumns.find((item) => item.column === column)?.newName ?? column,
+        [draft.renamedColumns]
+    );
 
     const loadPage = useCallback(
         async (nextPage: number, options?: { append?: boolean }) => {
@@ -217,26 +228,65 @@ export function useDataEditor({ onSaved }: UseDataEditorOptions = {}): UseDataEd
         [applyDraftChange]
     );
 
+    const renameColumn = useCallback(
+        (column: string, newName: string) => {
+            applyDraftChange((currentDraft) => {
+                currentDraft.renamedColumns = currentDraft.renamedColumns.filter(
+                    (item) => item.column !== column
+                );
+
+                if (newName !== column) {
+                    currentDraft.renamedColumns.push({ column, newName });
+                }
+
+                return currentDraft;
+            });
+        },
+        [applyDraftChange]
+    );
+
+    const clearCells = useCallback(
+        (cells: DataEditorCellRef[]) => {
+            if (cells.length === 0) {
+                return;
+            }
+
+            applyDraftChange((currentDraft) => {
+                const uniqueCells = new Map<string, DataEditorCellRef>();
+
+                cells.forEach((cell) => {
+                    if (currentDraft.deletedRowIds.includes(cell.rowId)) {
+                        return;
+                    }
+
+                    uniqueCells.set(`${cell.rowId}:${cell.column}`, cell);
+                });
+
+                if (uniqueCells.size === 0) {
+                    return currentDraft;
+                }
+
+                const selectedCellKeys = new Set(uniqueCells.keys());
+                currentDraft.updatedCells = currentDraft.updatedCells.filter(
+                    (cell) => !selectedCellKeys.has(`${cell.rowId}:${cell.column}`)
+                );
+                currentDraft.clearedCells = currentDraft.clearedCells.filter(
+                    (cell) => !selectedCellKeys.has(`${cell.rowId}:${cell.column}`)
+                );
+                currentDraft.clearedCells.push(...uniqueCells.values());
+                return currentDraft;
+            });
+        },
+        [applyDraftChange]
+    );
+
     const clearActiveCell = useCallback(() => {
         if (!activeCell) {
             return;
         }
 
-        applyDraftChange((currentDraft) => {
-            if (currentDraft.deletedRowIds.includes(activeCell.rowId)) {
-                return currentDraft;
-            }
-
-            currentDraft.updatedCells = currentDraft.updatedCells.filter(
-                (cell) => !isSameCell(cell, activeCell.rowId, activeCell.column)
-            );
-            currentDraft.clearedCells = currentDraft.clearedCells.filter(
-                (cell) => !isSameCell(cell, activeCell.rowId, activeCell.column)
-            );
-            currentDraft.clearedCells.push(activeCell);
-            return currentDraft;
-        });
-    }, [activeCell, applyDraftChange]);
+        clearCells([activeCell]);
+    }, [activeCell, clearCells]);
 
     const deleteSelectedRows = useCallback(() => {
         if (selectedRows.length === 0) {
@@ -318,9 +368,24 @@ export function useDataEditor({ onSaved }: UseDataEditorOptions = {}): UseDataEd
             draft.updatedCells.length > 0 ||
             draft.clearedCells.length > 0 ||
             draft.deletedRowIds.length > 0 ||
-            draft.trimColumns.length > 0;
+            draft.trimColumns.length > 0 ||
+            draft.renamedColumns.length > 0;
 
         if (!isDirty) {
+            return false;
+        }
+
+        const renamedColumnNames = draft.renamedColumns.map((item) => item.newName.trim());
+        const hasEmptyRenamedColumns = renamedColumnNames.some((name) => name.length === 0);
+
+        if (hasEmptyRenamedColumns) {
+            setError('Sutun adlari bos birakilamaz');
+            return false;
+        }
+
+        const nextColumnNames = columns.map((column) => getColumnDisplayName(column).trim());
+        if (new Set(nextColumnNames).size !== nextColumnNames.length) {
+            setError('Sutun adlari kaydetmeden once benzersiz olmalidir');
             return false;
         }
 
@@ -344,7 +409,7 @@ export function useDataEditor({ onSaved }: UseDataEditorOptions = {}): UseDataEd
         } finally {
             setIsSaving(false);
         }
-    }, [draft, loadPage, onSaved]);
+    }, [columns, draft, getColumnDisplayName, loadPage, onSaved]);
 
     return {
         rows,
@@ -363,7 +428,8 @@ export function useDataEditor({ onSaved }: UseDataEditorOptions = {}): UseDataEd
             draft.updatedCells.length > 0 ||
             draft.clearedCells.length > 0 ||
             draft.deletedRowIds.length > 0 ||
-            draft.trimColumns.length > 0,
+            draft.trimColumns.length > 0 ||
+            draft.renamedColumns.length > 0,
         selectedRows,
         selectedTrimColumns,
         activeCell,
@@ -372,6 +438,9 @@ export function useDataEditor({ onSaved }: UseDataEditorOptions = {}): UseDataEd
         toggleRowSelection,
         toggleAllLoadedRows,
         updateCell,
+        renameColumn,
+        getColumnDisplayName,
+        clearCells,
         clearActiveCell,
         deleteSelectedRows,
         toggleTrimColumnSelection,

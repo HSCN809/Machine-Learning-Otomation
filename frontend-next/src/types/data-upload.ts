@@ -81,11 +81,17 @@ export interface DataEditorCellUpdate extends DataEditorCellRef {
     value: string;
 }
 
+export interface DataEditorColumnRename {
+    column: string;
+    newName: string;
+}
+
 export interface DataEditorDraft {
     updatedCells: DataEditorCellUpdate[];
     clearedCells: DataEditorCellRef[];
     deletedRowIds: number[];
     trimColumns: string[];
+    renamedColumns: DataEditorColumnRename[];
 }
 
 export interface DataEditorCommitResponse {
@@ -96,6 +102,7 @@ export interface DataEditorCommitResponse {
     clearedCells: number;
     deletedRows: number;
     trimmedColumns: number;
+    renamedColumns: number;
 }
 
 export interface SampleDataset {

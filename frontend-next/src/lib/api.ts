@@ -335,6 +335,7 @@ interface EditorCommitApiResponse {
     cleared_cells: number;
     deleted_rows: number;
     trimmed_columns: number;
+    renamed_columns: number;
 }
 
 export async function commitDataEditorChanges(
@@ -355,6 +356,10 @@ export async function commitDataEditorChanges(
             })),
             deleted_row_ids: draft.deletedRowIds,
             trim_columns: draft.trimColumns,
+            renamed_columns: draft.renamedColumns.map((column) => ({
+                column: column.column,
+                new_name: column.newName,
+            })),
         }),
     });
 
@@ -366,6 +371,7 @@ export async function commitDataEditorChanges(
         clearedCells: response.cleared_cells,
         deletedRows: response.deleted_rows,
         trimmedColumns: response.trimmed_columns,
+        renamedColumns: response.renamed_columns,
     };
 }
 

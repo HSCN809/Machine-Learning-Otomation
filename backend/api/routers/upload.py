@@ -32,11 +32,17 @@ class EditorCellRef(BaseModel):
     column: str
 
 
+class EditorColumnRename(BaseModel):
+    column: str
+    new_name: str
+
+
 class EditorCommitRequest(BaseModel):
     updated_cells: list[EditorCellUpdate] = Field(default_factory=list)
     cleared_cells: list[EditorCellRef] = Field(default_factory=list)
     deleted_row_ids: list[int] = Field(default_factory=list)
     trim_columns: list[str] = Field(default_factory=list)
+    renamed_columns: list[EditorColumnRename] = Field(default_factory=list)
 
 
 def _serialize_editor_value(value: Any) -> Any:
@@ -332,9 +338,21 @@ async def commit_editor_changes(
         ensure_valid_row(cell.row_id)
         ensure_valid_column(cell.column)
 
+    rename_map: dict[str, str] = {}
+    for item in request.renamed_columns:
+        ensure_valid_column(item.column)
+        next_name = item.new_name.strip()
+        if not next_name:
+            raise HTTPException(status_code=400, detail="Column names cannot be empty")
+        rename_map[item.column] = next_name
+
     deleted_row_ids = sorted(set(request.deleted_row_ids))
     for row_id in deleted_row_ids:
         ensure_valid_row(row_id)
+
+    final_column_names = [rename_map.get(column, column) for column in df.columns]
+    if len(set(final_column_names)) != len(final_column_names):
+        raise HTTPException(status_code=400, detail="Column names must be unique")
 
     for column in request.trim_columns:
         df[column] = df[column].map(lambda value: value.strip() if isinstance(value, str) else value)
@@ -348,6 +366,9 @@ async def commit_editor_changes(
     if deleted_row_ids:
         df = df.drop(index=deleted_row_ids).reset_index(drop=True)
 
+    if rename_map:
+        df = df.rename(columns=rename_map)
+
     session_manager.set_dataframe(session_id, df, is_original=True)
     _clear_downstream_metadata(session_id)
 
@@ -358,6 +379,7 @@ async def commit_editor_changes(
         "cleared_cells": len(request.cleared_cells),
         "deleted_rows": len(deleted_row_ids),
         "trim_columns": request.trim_columns,
+        "renamed_columns": request.renamed_columns,
     })
     session_manager.set_metadata(session_id, "editor_commits", editor_commits)
 
@@ -369,6 +391,7 @@ async def commit_editor_changes(
         "cleared_cells": len(request.cleared_cells),
         "deleted_rows": len(deleted_row_ids),
         "trimmed_columns": len(request.trim_columns),
+        "renamed_columns": len(request.renamed_columns),
     }
 
 
