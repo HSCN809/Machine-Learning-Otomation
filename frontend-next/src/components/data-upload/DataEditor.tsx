@@ -265,6 +265,11 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
         [selectedCells]
     );
     const selectedColumnSet = useMemo(() => new Set(selectedColumns), [selectedColumns]);
+    const queuedTrimColumnSet = useMemo(() => new Set(draft.trimColumns), [draft.trimColumns]);
+    const availableTrimColumns = useMemo(
+        () => columns.filter((column) => !queuedTrimColumnSet.has(column)),
+        [columns, queuedTrimColumnSet]
+    );
     const copyCellSet = useMemo(
         () => (editorClipboard?.mode === 'copy' ? editorClipboard.sourceCellKeys : new Set<string>()),
         [editorClipboard]
@@ -1374,7 +1379,12 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                         </div>
 
                         <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
-                            {columns.map((column) => (
+                            {availableTrimColumns.length === 0 && (
+                                <p className="rounded-xl border border-white/10 px-3 py-4 text-sm text-gray-500">
+                                    Kuyrukta olmayan trim kolonu kalmadı.
+                                </p>
+                            )}
+                            {availableTrimColumns.map((column) => (
                                 <label
                                     key={column}
                                     className="flex items-center justify-between gap-3 rounded-xl border border-white/10 px-3 py-2 text-sm text-gray-200"
