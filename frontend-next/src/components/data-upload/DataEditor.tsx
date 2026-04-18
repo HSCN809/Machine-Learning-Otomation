@@ -1,9 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-    ChevronLeft,
-    ChevronRight,
     Eraser,
     RotateCcw,
     Save,
@@ -41,21 +39,29 @@ function stringifyValue(value: unknown): string {
 
 export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
     const [isDeleting, setIsDeleting] = useState(false);
+    const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+    const loadMoreRef = useRef<HTMLDivElement | null>(null);
     const {
-        pageData,
-        page,
+        rows,
+        columns,
+        pageSize,
+        totalRows,
+        totalPages,
+        loadedPages,
+        hasMoreRows,
         error,
         isLoading,
+        isLoadingMore,
         isSaving,
         draft,
         isDirty,
         selectedRows,
         selectedTrimColumns,
         activeCell,
-        setPage,
         setActiveCell,
+        loadMoreRows,
         toggleRowSelection,
-        toggleAllRowsOnPage,
+        toggleAllLoadedRows,
         updateCell,
         clearActiveCell,
         deleteSelectedRows,
@@ -73,7 +79,7 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
         }
 
         const confirmed = window.confirm(
-            'Yüklenen veri seti silinecek ve bu oturumdaki düzenlemeler kaybolacak. Devam etmek istiyor musunuz?'
+            'Yuklenen veri seti silinecek ve bu oturumdaki duzenlemeler kaybolacak. Devam etmek istiyor musunuz?'
         );
 
         if (!confirmed) {
@@ -104,6 +110,35 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [isDirty, isSaving, saveChanges]);
 
+    useEffect(() => {
+        const root = scrollContainerRef.current;
+        const sentinel = loadMoreRef.current;
+
+        if (!root || !sentinel || !hasMoreRows || isLoading || isLoadingMore || isSaving) {
+            return;
+        }
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                const [entry] = entries;
+                if (entry?.isIntersecting) {
+                    void loadMoreRows();
+                }
+            },
+            {
+                root,
+                rootMargin: '200px 0px',
+                threshold: 0.1,
+            }
+        );
+
+        observer.observe(sentinel);
+
+        return () => {
+            observer.disconnect();
+        };
+    }, [hasMoreRows, isLoading, isLoadingMore, isSaving, loadMoreRows]);
+
     const updatedCellMap = useMemo(
         () =>
             new Map<string, string>(
@@ -117,15 +152,12 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
     );
     const deletedRowSet = useMemo(() => new Set(draft.deletedRowIds), [draft.deletedRowIds]);
     const selectedRowSet = useMemo(() => new Set(selectedRows), [selectedRows]);
-
-    const rows = pageData?.rows ?? [];
-    const columns = pageData?.columns ?? [];
     const allRowsSelected = rows.length > 0 && rows.every((row) => selectedRowSet.has(row.rowId));
 
-    if (isLoading && !pageData) {
+    if (isLoading && rows.length === 0) {
         return (
             <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-6 text-sm text-gray-400">
-                Veri düzenleyici yükleniyor...
+                Veri duzenleyici yukleniyor...
             </div>
         );
     }
@@ -135,17 +167,20 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="space-y-2">
                     <div>
-                        <h2 className="text-xl font-semibold text-white">Veri Düzenleme</h2>
+                        <h2 className="text-xl font-semibold text-white">Veri Duzenleme</h2>
                         <p className="text-sm text-gray-400">
-                            Tüm veri setini sayfalı tabloda düzenleyin. Değişiklikler yalnızca kaydettiğinizde uygulanır.
+                            Veriler parcali olarak yuklenir. Kaydirdikca yeni satirlar gelir, degisiklikler yalnizca kaydettiginizde uygulanir.
                         </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 text-xs text-gray-400">
                         <span className="rounded-full border border-white/10 px-3 py-1">
-                            Toplam satır: {pageData?.totalRows ?? 0}
+                            Toplam satir: {totalRows}
                         </span>
                         <span className="rounded-full border border-white/10 px-3 py-1">
-                            Kaydedilmemiş değişiklik: {isDirty ? 'Var' : 'Yok'}
+                            Yuklenen satir: {rows.length}
+                        </span>
+                        <span className="rounded-full border border-white/10 px-3 py-1">
+                            Kaydedilmemis degisiklik: {isDirty ? 'Var' : 'Yok'}
                         </span>
                         <span className="rounded-full border border-white/10 px-3 py-1">
                             Ctrl+S ile kaydet
@@ -170,7 +205,7 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                         className={getButtonClassName(!isDirty || isSaving)}
                     >
                         <XCircle className="h-4 w-4" />
-                        Vazgeç
+                        Vazgec
                     </button>
                     <button
                         type="button"
@@ -208,13 +243,13 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
                         <div className="flex flex-wrap items-center gap-2 text-sm text-gray-300">
                             <span className="rounded-full border border-white/10 px-3 py-1">
-                                Sayfa {pageData?.page ?? page} / {pageData?.totalPages ?? 1}
+                                Yuklenen bolum: {loadedPages} / {totalPages}
                             </span>
                             <span className="rounded-full border border-white/10 px-3 py-1">
-                                Seçili satır: {selectedRows.length}
+                                Secili satir: {selectedRows.length}
                             </span>
                             <span className="rounded-full border border-white/10 px-3 py-1">
-                                Silinecek satır: {draft.deletedRowIds.length}
+                                Silinecek satir: {draft.deletedRowIds.length}
                             </span>
                         </div>
 
@@ -226,7 +261,7 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                                 className={getButtonClassName(!activeCell || isSaving)}
                             >
                                 <Eraser className="h-4 w-4" />
-                                Seçili Hücreyi Temizle
+                                Secili Hucreyi Temizle
                             </button>
                             <button
                                 type="button"
@@ -235,21 +270,21 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                                 className={getButtonClassName(selectedRows.length === 0 || isSaving, 'danger')}
                             >
                                 <Trash2 className="h-4 w-4" />
-                                Seçili Satırları Sil
+                                Secili Satirlari Sil
                             </button>
                         </div>
                     </div>
 
                     <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
-                        <div className="overflow-x-auto">
+                        <div ref={scrollContainerRef} className="max-h-[70vh] overflow-auto">
                             <table className="min-w-full text-sm">
-                                <thead className="bg-white/5">
+                                <thead className="sticky top-0 z-10 bg-[#101827]">
                                     <tr className="border-b border-white/10">
                                         <th className="px-4 py-3 text-left">
                                             <input
                                                 type="checkbox"
                                                 checked={allRowsSelected}
-                                                onChange={toggleAllRowsOnPage}
+                                                onChange={toggleAllLoadedRows}
                                                 className="h-4 w-4 cursor-pointer rounded border-white/20 bg-transparent"
                                             />
                                         </th>
@@ -329,54 +364,37 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                                     })}
                                 </tbody>
                             </table>
+
+                            <div ref={loadMoreRef} className="px-4 py-4 text-center text-sm text-gray-400">
+                                {isLoadingMore && 'Daha fazla satir yukleniyor...'}
+                                {!isLoadingMore && hasMoreRows && 'Asagi kaydirdikca sonraki satirlar yuklenecek.'}
+                                {!hasMoreRows && rows.length > 0 && 'Tum yuklenebilir satirlar gosteriliyor.'}
+                            </div>
                         </div>
 
                         {rows.length === 0 && (
                             <div className="px-4 py-8 text-center text-sm text-gray-400">
-                                Görüntülenecek satır bulunamadı.
+                                Goruntulenecek satir bulunamadi.
                             </div>
                         )}
                     </div>
 
                     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
                         <span className="text-sm text-gray-400">
-                            Toplam {pageData?.totalRows ?? 0} satır, {pageData?.totalPages ?? 1} sayfa
+                            Toplam {totalRows} satir, her chunk icin {pageSize} satir getiriliyor
                         </span>
-                        <div className="flex items-center gap-2">
-                            <button
-                                type="button"
-                                onClick={() => setPage(Math.max(1, page - 1))}
-                                disabled={page <= 1 || isLoading || isSaving}
-                                className={getButtonClassName(page <= 1 || isLoading || isSaving)}
-                            >
-                                <ChevronLeft className="h-4 w-4" />
-                                Önceki
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    setPage(
-                                        Math.min(pageData?.totalPages ?? page, page + 1)
-                                    )
-                                }
-                                disabled={page >= (pageData?.totalPages ?? 1) || isLoading || isSaving}
-                                className={getButtonClassName(
-                                    page >= (pageData?.totalPages ?? 1) || isLoading || isSaving
-                                )}
-                            >
-                                Sonraki
-                                <ChevronRight className="h-4 w-4" />
-                            </button>
-                        </div>
+                        <span className="text-sm text-gray-400">
+                            Scroll deneyimi aktif, backend pagination korunuyor
+                        </span>
                     </div>
                 </div>
 
                 <aside className="space-y-4">
                     <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
                         <div className="mb-4">
-                            <h3 className="text-sm font-semibold text-white">Toplu İşlemler</h3>
+                            <h3 className="text-sm font-semibold text-white">Toplu Islemler</h3>
                             <p className="mt-1 text-xs text-gray-400">
-                                Text kolonlarını seçip baştaki ve sondaki boşlukları tek seferde temizleyin.
+                                Text kolonlarini secip bastaki ve sondaki bosluklari tek seferde temizleyin.
                             </p>
                         </div>
 
@@ -411,39 +429,39 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                             ].join(' ')}
                         >
                             <Scissors className="h-4 w-4" />
-                            Seçili Kolonlarda Trim Uygula
+                            Secili Kolonlarda Trim Uygula
                         </button>
                     </div>
 
                     <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
                         <div className="mb-4">
-                            <h3 className="text-sm font-semibold text-white">Bekleyen Değişiklikler</h3>
+                            <h3 className="text-sm font-semibold text-white">Bekleyen Degisiklikler</h3>
                             <p className="mt-1 text-xs text-gray-400">
-                                Kaydetmeden önce birikmiş düzenlemelerin özeti.
+                                Kaydetmeden once birikmis duzenlemelerin ozeti.
                             </p>
                         </div>
 
                         <div className="space-y-3 text-sm text-gray-300">
                             <div className="flex items-center justify-between">
-                                <span>Güncellenen hücre</span>
+                                <span>Guncellenen hucre</span>
                                 <span>{draft.updatedCells.length}</span>
                             </div>
                             <div className="flex items-center justify-between">
-                                <span>Temizlenen hücre</span>
+                                <span>Temizlenen hucre</span>
                                 <span>{draft.clearedCells.length}</span>
                             </div>
                             <div className="flex items-center justify-between">
-                                <span>Silinecek satır</span>
+                                <span>Silinecek satir</span>
                                 <span>{draft.deletedRowIds.length}</span>
                             </div>
                         </div>
 
                         <div className="mt-4 space-y-2">
                             <p className="text-xs font-medium uppercase tracking-[0.2em] text-gray-500">
-                                Trim Kuyruğu
+                                Trim Kuyrugu
                             </p>
                             {draft.trimColumns.length === 0 && (
-                                <p className="text-sm text-gray-500">Bekleyen trim işlemi yok.</p>
+                                <p className="text-sm text-gray-500">Bekleyen trim islemi yok.</p>
                             )}
                             {draft.trimColumns.map((column) => (
                                 <div
@@ -457,7 +475,7 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                                         disabled={isSaving}
                                         className={getButtonClassName(isSaving)}
                                     >
-                                        Kaldır
+                                        Kaldir
                                     </button>
                                 </div>
                             ))}
