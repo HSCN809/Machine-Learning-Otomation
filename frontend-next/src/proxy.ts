@@ -1,12 +1,16 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-const AUTH_COOKIE_NAME = process.env.NEXT_PUBLIC_AUTH_COOKIE_NAME || 'ml_auth_session';
+const AUTH_COOKIE_NAME =
+    process.env.AUTH_COOKIE_NAME ||
+    process.env.NEXT_PUBLIC_AUTH_COOKIE_NAME ||
+    'ml_auth_session';
 const HOMEPAGE_PATH = '/homepage';
 
 function isProtectedPath(pathname: string): boolean {
     return (
         pathname === '/' ||
+        pathname.startsWith('/dashboard') ||
         pathname.startsWith('/settings') ||
         pathname.startsWith('/data-upload') ||
         pathname.startsWith('/eda') ||
@@ -31,5 +35,15 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-    matcher: ['/', '/login', '/signup', '/settings/:path*', '/data-upload/:path*', '/eda/:path*', '/preprocessing/:path*', '/model/:path*'],
+    matcher: [
+        '/',
+        '/login',
+        '/signup',
+        '/dashboard/:path*',
+        '/settings/:path*',
+        '/data-upload/:path*',
+        '/eda/:path*',
+        '/preprocessing/:path*',
+        '/model/:path*',
+    ],
 };
