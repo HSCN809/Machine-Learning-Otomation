@@ -256,3 +256,34 @@ body {
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+@keyframes data-editor-copy-ants {
+  from {
+    background-position:
+      0 0,
+      100% 0,
+      0 100%,
+      0 0;
+  }
+  to {
+    background-position:
+      16px 0,
+      100% 16px,
+      -16px 100%,
+      0 -16px;
+  }
+}
+
+.data-editor-copy-ants {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 0.5rem;
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.95) 0 7px, transparent 7px 12px) top left / calc(100% - 2px) 2px repeat-x,
+    repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0 7px, transparent 7px 12px) top right / 2px calc(100% - 2px) repeat-y,
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.95) 0 7px, transparent 7px 12px) bottom left / calc(100% - 2px) 2px repeat-x,
+    repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0 7px, transparent 7px 12px) top left / 2px calc(100% - 2px) repeat-y;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  animation: data-editor-copy-ants 700ms linear infinite;
+}

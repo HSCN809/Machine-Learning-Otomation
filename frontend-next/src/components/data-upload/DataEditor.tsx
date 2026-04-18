@@ -3,6 +3,7 @@
 import {
     type KeyboardEvent as ReactKeyboardEvent,
     type MouseEvent,
+    useCallback,
     useEffect,
     useMemo,
     useRef,
@@ -17,11 +18,19 @@ import {
     XCircle,
 } from 'lucide-react';
 import { useDataEditor } from '@/hooks/useDataEditor';
-import type { DataEditorCellRef } from '@/types/data-upload';
+import type { DataEditorCellRef, DataEditorCellUpdate } from '@/types/data-upload';
 
 interface DataEditorProps {
     onSaved?: () => Promise<void> | void;
     onDelete?: () => Promise<void> | void;
+}
+
+interface EditorClipboard {
+    mode: 'copy' | 'cut';
+    matrix: string[][];
+    sourceCells: DataEditorCellRef[];
+    sourceCellKeys: Set<string>;
+    preferInternalPaste: boolean;
 }
 
 function getButtonClassName(disabled: boolean, tone: 'default' | 'danger' | 'primary' = 'default') {
@@ -47,6 +56,41 @@ function stringifyValue(value: unknown): string {
 
 function getCellKey(cell: DataEditorCellRef): string {
     return `${cell.rowId}:${cell.column}`;
+}
+
+function isTextEntryElement(target: EventTarget | null): boolean {
+    if (!(target instanceof HTMLElement)) {
+        return false;
+    }
+
+    return (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target.isContentEditable
+    );
+}
+
+function normalizeClipboardText(text: string): string {
+    return text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+}
+
+function parseClipboardText(text: string): string[][] {
+    if (!text) {
+        return [];
+    }
+
+    const normalizedText = normalizeClipboardText(text);
+    const rows = normalizedText.split('\n');
+
+    if (rows.length > 1 && rows[rows.length - 1] === '') {
+        rows.pop();
+    }
+
+    return rows.map((row) => row.split('\t'));
+}
+
+function serializeClipboardMatrix(matrix: string[][]): string {
+    return matrix.map((row) => row.join('\t')).join('\n');
 }
 
 function buildCellRange(
@@ -117,6 +161,7 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
     const [rowSelectionAnchor, setRowSelectionAnchor] = useState<number | null>(null);
     const [editingCell, setEditingCell] = useState<DataEditorCellRef | null>(null);
     const [editingColumn, setEditingColumn] = useState<string | null>(null);
+    const [editorClipboard, setEditorClipboard] = useState<EditorClipboard | null>(null);
     const editorRootRef = useRef<HTMLDivElement | null>(null);
     const scrollContainerRef = useRef<HTMLDivElement | null>(null);
     const loadMoreRef = useRef<HTMLDivElement | null>(null);
@@ -147,6 +192,7 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
         replaceSelectedRows,
         toggleAllLoadedRows,
         updateCell,
+        updateCells,
         renameColumn,
         getColumnDisplayName,
         clearCells,
@@ -184,17 +230,265 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
         () => (selectedCells.length > 0 ? selectedCells : activeCell ? [activeCell] : []),
         [activeCell, selectedCells]
     );
+    const rowIds = useMemo(() => rows.map((row) => row.rowId), [rows]);
+    const rowIndexMap = useMemo(
+        () => new Map(rowIds.map((rowId, index) => [rowId, index])),
+        [rowIds]
+    );
+    const columnIndexMap = useMemo(
+        () => new Map(columns.map((column, index) => [column, index])),
+        [columns]
+    );
+    const updatedCellMap = useMemo(
+        () =>
+            new Map<string, string>(
+                draft.updatedCells.map((cell) => [`${cell.rowId}:${cell.column}`, cell.value])
+            ),
+        [draft.updatedCells]
+    );
+    const rowValueMap = useMemo(
+        () => new Map(rows.map((row) => [row.rowId, row.values])),
+        [rows]
+    );
+    const clearedCellSet = useMemo(
+        () => new Set<string>(draft.clearedCells.map((cell) => `${cell.rowId}:${cell.column}`)),
+        [draft.clearedCells]
+    );
+    const deletedRowSet = useMemo(() => new Set(draft.deletedRowIds), [draft.deletedRowIds]);
+    const selectedRowSet = useMemo(() => new Set(selectedRows), [selectedRows]);
+    const selectedCellSet = useMemo(
+        () => new Set(selectedCells.map((cell) => getCellKey(cell))),
+        [selectedCells]
+    );
+    const selectedColumnSet = useMemo(() => new Set(selectedColumns), [selectedColumns]);
+    const copyCellSet = useMemo(
+        () => (editorClipboard?.mode === 'copy' ? editorClipboard.sourceCellKeys : new Set<string>()),
+        [editorClipboard]
+    );
+    const cutCellSet = useMemo(
+        () => (editorClipboard?.mode === 'cut' ? editorClipboard.sourceCellKeys : new Set<string>()),
+        [editorClipboard]
+    );
+    const allRowsSelected = rows.length > 0 && rows.every((row) => selectedRowSet.has(row.rowId));
 
-    useEffect(() => {
-        const isEditorShortcutTarget = () => {
-            const activeElement = document.activeElement;
-            if (!activeElement) {
-                return true;
+    const isEditorShortcutTarget = useCallback(() => {
+        const activeElement = document.activeElement;
+        if (!activeElement) {
+            return true;
+        }
+
+        const isInsideEditor =
+            activeElement === document.body || editorRootRef.current?.contains(activeElement);
+
+        if (!isInsideEditor) {
+            return false;
+        }
+
+        return !isTextEntryElement(activeElement);
+    }, []);
+
+    const getCurrentCellValue = useCallback((cell: DataEditorCellRef): string => {
+        const cellKey = getCellKey(cell);
+        if (clearedCellSet.has(cellKey)) {
+            return '';
+        }
+
+        const updatedValue = updatedCellMap.get(cellKey);
+        if (updatedValue !== undefined) {
+            return updatedValue;
+        }
+
+        return stringifyValue(rowValueMap.get(cell.rowId)?.[cell.column]);
+    }, [clearedCellSet, rowValueMap, updatedCellMap]);
+
+    const buildClipboardState = useCallback((
+        cells: DataEditorCellRef[],
+        mode: 'copy' | 'cut',
+        preferInternalPaste: boolean
+    ): EditorClipboard | null => {
+        if (cells.length === 0) {
+            return null;
+        }
+
+        const selectedRowIndexes = Array.from(
+            new Set(
+                cells
+                    .map((cell) => rowIndexMap.get(cell.rowId))
+                    .filter((index): index is number => index !== undefined)
+            )
+        ).sort((left, right) => left - right);
+        const selectedColumnIndexes = Array.from(
+            new Set(
+                cells
+                    .map((cell) => columnIndexMap.get(cell.column))
+                    .filter((index): index is number => index !== undefined)
+            )
+        ).sort((left, right) => left - right);
+
+        if (selectedRowIndexes.length === 0 || selectedColumnIndexes.length === 0) {
+            return null;
+        }
+
+        const selectedCellKeys = new Set(cells.map((cell) => getCellKey(cell)));
+        const matrix = selectedRowIndexes.map((rowIndex) =>
+            selectedColumnIndexes.map((columnIndex) => {
+                const cell = {
+                    rowId: rowIds[rowIndex],
+                    column: columns[columnIndex],
+                };
+
+                return selectedCellKeys.has(getCellKey(cell)) ? getCurrentCellValue(cell) : '';
+            })
+        );
+
+        return {
+            mode,
+            matrix,
+            sourceCells: cells.map((cell) => ({ ...cell })),
+            sourceCellKeys: selectedCellKeys,
+            preferInternalPaste,
+        };
+    }, [columnIndexMap, columns, getCurrentCellValue, rowIds, rowIndexMap]);
+
+    const getPasteTargetCell = useCallback((): DataEditorCellRef | null => {
+        if (
+            activeCell &&
+            rowIndexMap.has(activeCell.rowId) &&
+            columnIndexMap.has(activeCell.column) &&
+            !deletedRowSet.has(activeCell.rowId)
+        ) {
+            return activeCell;
+        }
+
+        if (selectedCells.length === 0) {
+            return null;
+        }
+
+        return (
+            selectedCells
+                .filter(
+                    (cell) =>
+                        rowIndexMap.has(cell.rowId) &&
+                        columnIndexMap.has(cell.column) &&
+                        !deletedRowSet.has(cell.rowId)
+                )
+                .sort((left, right) => {
+                    const rowDelta =
+                        (rowIndexMap.get(left.rowId) ?? Number.MAX_SAFE_INTEGER) -
+                        (rowIndexMap.get(right.rowId) ?? Number.MAX_SAFE_INTEGER);
+
+                    if (rowDelta !== 0) {
+                        return rowDelta;
+                    }
+
+                    return (
+                        (columnIndexMap.get(left.column) ?? Number.MAX_SAFE_INTEGER) -
+                        (columnIndexMap.get(right.column) ?? Number.MAX_SAFE_INTEGER)
+                    );
+                })[0] ?? null
+        );
+    }, [activeCell, columnIndexMap, deletedRowSet, rowIndexMap, selectedCells]);
+
+    const applyClipboardToGrid = useCallback((clipboard: EditorClipboard) => {
+        const targetCell = getPasteTargetCell();
+        const targetRowIndex = targetCell ? rowIndexMap.get(targetCell.rowId) : undefined;
+        const targetColumnIndex = targetCell ? columnIndexMap.get(targetCell.column) : undefined;
+
+        if (
+            !targetCell ||
+            targetRowIndex === undefined ||
+            targetColumnIndex === undefined ||
+            clipboard.matrix.length === 0
+        ) {
+            return;
+        }
+
+        const nextUpdatedCells: DataEditorCellUpdate[] = [];
+        const destinationCells: DataEditorCellRef[] = [];
+
+        clipboard.matrix.forEach((rowValues, rowOffset) => {
+            rowValues.forEach((value, columnOffset) => {
+                const nextRowId = rowIds[targetRowIndex + rowOffset];
+                const nextColumn = columns[targetColumnIndex + columnOffset];
+
+                if (nextRowId === undefined || nextColumn === undefined || deletedRowSet.has(nextRowId)) {
+                    return;
+                }
+
+                const cell = { rowId: nextRowId, column: nextColumn };
+                nextUpdatedCells.push({ ...cell, value });
+                destinationCells.push(cell);
+            });
+        });
+
+        if (nextUpdatedCells.length === 0) {
+            return;
+        }
+
+        const destinationCellKeys = new Set(destinationCells.map((cell) => getCellKey(cell)));
+        updateCells(nextUpdatedCells);
+
+        if (clipboard.mode === 'cut') {
+            const cellsToClear = clipboard.sourceCells.filter(
+                (cell) => !destinationCellKeys.has(getCellKey(cell))
+            );
+
+            if (cellsToClear.length > 0) {
+                clearCells(cellsToClear);
             }
 
-            return activeElement === document.body || editorRootRef.current?.contains(activeElement);
-        };
+            setEditorClipboard(null);
+        } else if (clipboard.preferInternalPaste) {
+            setEditorClipboard((previousClipboard) =>
+                previousClipboard
+                    ? {
+                          ...previousClipboard,
+                          preferInternalPaste: false,
+                      }
+                    : previousClipboard
+            );
+        }
 
+        setSelectionAnchor(destinationCells[0] ?? targetCell);
+        setSelectedCells(destinationCells);
+        setActiveCell(destinationCells[0] ?? targetCell);
+        setSelectedColumns([]);
+        setColumnSelectionAnchor(null);
+        setRowSelectionAnchor(null);
+    }, [
+        clearCells,
+        columnIndexMap,
+        columns,
+        deletedRowSet,
+        getPasteTargetCell,
+        rowIds,
+        rowIndexMap,
+        setActiveCell,
+        updateCells,
+    ]);
+
+    const syncClipboard = useCallback(async (mode: 'copy' | 'cut') => {
+        if (isSaving || isDeleting || selectedCells.length === 0) {
+            return;
+        }
+
+        const nextClipboard = buildClipboardState(selectedCells, mode, false);
+        if (!nextClipboard) {
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(serializeClipboardMatrix(nextClipboard.matrix));
+            setEditorClipboard(nextClipboard);
+        } catch {
+            setEditorClipboard({
+                ...nextClipboard,
+                preferInternalPaste: true,
+            });
+        }
+    }, [buildClipboardState, isDeleting, isSaving, selectedCells]);
+
+    useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
             if (!isEditorShortcutTarget()) {
                 return;
@@ -221,6 +515,32 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
 
                 event.preventDefault();
                 undoLastChange();
+                return;
+            }
+
+            if (event.key === 'Escape' && editorClipboard && !editingCell && !editingColumn) {
+                event.preventDefault();
+                setEditorClipboard(null);
+                return;
+            }
+
+            if ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === 'c') {
+                if (selectedCells.length === 0 || editingCell || editingColumn || isSaving || isDeleting) {
+                    return;
+                }
+
+                event.preventDefault();
+                void syncClipboard('copy');
+                return;
+            }
+
+            if ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === 'x') {
+                if (selectedCells.length === 0 || editingCell || editingColumn || isSaving || isDeleting) {
+                    return;
+                }
+
+                event.preventDefault();
+                void syncClipboard('cut');
                 return;
             }
 
@@ -254,14 +574,19 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
         clearCells,
         clearTargetCells,
         deleteSelectedRows,
+        editorClipboard,
         editingCell,
         editingColumn,
+        isDeleting,
         isDirty,
         isSaving,
         rowSelectionAnchor,
         saveChanges,
+        selectedCells,
         selectedRows,
         selectionAnchor,
+        isEditorShortcutTarget,
+        syncClipboard,
         undoLastChange,
     ]);
 
@@ -306,26 +631,74 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
         };
     }, [hasMoreRows, isLoading, isLoadingMore, isSaving, loadMoreRows]);
 
-    const updatedCellMap = useMemo(
-        () =>
-            new Map<string, string>(
-                draft.updatedCells.map((cell) => [`${cell.rowId}:${cell.column}`, cell.value])
-            ),
-        [draft.updatedCells]
-    );
-    const rowIds = useMemo(() => rows.map((row) => row.rowId), [rows]);
-    const clearedCellSet = useMemo(
-        () => new Set<string>(draft.clearedCells.map((cell) => `${cell.rowId}:${cell.column}`)),
-        [draft.clearedCells]
-    );
-    const deletedRowSet = useMemo(() => new Set(draft.deletedRowIds), [draft.deletedRowIds]);
-    const selectedRowSet = useMemo(() => new Set(selectedRows), [selectedRows]);
-    const selectedCellSet = useMemo(
-        () => new Set(selectedCells.map((cell) => getCellKey(cell))),
-        [selectedCells]
-    );
-    const selectedColumnSet = useMemo(() => new Set(selectedColumns), [selectedColumns]);
-    const allRowsSelected = rows.length > 0 && rows.every((row) => selectedRowSet.has(row.rowId));
+    useEffect(() => {
+        const handlePaste = (event: ClipboardEvent) => {
+            if (!isEditorShortcutTarget() || isSaving || isDeleting || editingCell || editingColumn) {
+                return;
+            }
+
+            const clipboardText = event.clipboardData?.getData('text/plain') ?? '';
+            const externalMatrix = parseClipboardText(clipboardText);
+            const serializedInternalClipboard = editorClipboard
+                ? normalizeClipboardText(serializeClipboardMatrix(editorClipboard.matrix))
+                : null;
+            const shouldUseInternalClipboard =
+                !!editorClipboard &&
+                (editorClipboard.mode === 'cut' ||
+                    editorClipboard.preferInternalPaste ||
+                    normalizeClipboardText(clipboardText) === serializedInternalClipboard);
+            const nextClipboard =
+                shouldUseInternalClipboard
+                    ? editorClipboard
+                    : externalMatrix.length > 0
+                      ? {
+                            mode: 'copy' as const,
+                            matrix: externalMatrix,
+                            sourceCells: [],
+                            sourceCellKeys: new Set<string>(),
+                            preferInternalPaste: false,
+                        }
+                      : editorClipboard;
+
+            if (!nextClipboard || nextClipboard.matrix.length === 0) {
+                return;
+            }
+
+            event.preventDefault();
+            applyClipboardToGrid(nextClipboard);
+        };
+
+        window.addEventListener('paste', handlePaste);
+        return () => window.removeEventListener('paste', handlePaste);
+    }, [
+        applyClipboardToGrid,
+        editingCell,
+        editingColumn,
+        editorClipboard,
+        isEditorShortcutTarget,
+        isDeleting,
+        isSaving,
+    ]);
+
+    useEffect(() => {
+        const validRowIds = new Set(rows.map((row) => row.rowId));
+        const validColumns = new Set(columns);
+
+        setEditorClipboard((previousClipboard) => {
+            if (!previousClipboard) {
+                return previousClipboard;
+            }
+
+            const isClipboardStillValid = previousClipboard.sourceCells.every(
+                (cell) =>
+                    validRowIds.has(cell.rowId) &&
+                    validColumns.has(cell.column) &&
+                    !deletedRowSet.has(cell.rowId)
+            );
+
+            return isClipboardStillValid ? previousClipboard : null;
+        });
+    }, [columns, deletedRowSet, rows]);
 
     useEffect(() => {
         const validRowIds = new Set(rows.map((row) => row.rowId));
@@ -583,6 +956,9 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                         <span className="rounded-full border border-white/10 px-3 py-1">
                             Ctrl+S ile kaydet
                         </span>
+                        <span className="rounded-full border border-white/10 px-3 py-1">
+                            Kisayollar: Ctrl+C / Ctrl+X / Ctrl+V
+                        </span>
                     </div>
                 </div>
 
@@ -607,6 +983,7 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                             setRowSelectionAnchor(null);
                             setEditingCell(null);
                             setEditingColumn(null);
+                            setEditorClipboard(null);
                         }}
                         disabled={!isDirty || isSaving}
                         className={getButtonClassName(!isDirty || isSaving)}
@@ -627,6 +1004,7 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                                     setRowSelectionAnchor(null);
                                     setEditingCell(null);
                                     setEditingColumn(null);
+                                    setEditorClipboard(null);
                                 }
                             })();
                         }}
@@ -816,6 +1194,8 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                                                 {columns.map((column) => {
                                                     const cellKey = `${row.rowId}:${column}`;
                                                     const isSelectedCell = selectedCellSet.has(cellKey);
+                                                    const isCopyCell = copyCellSet.has(cellKey);
+                                                    const isCutCell = cutCellSet.has(cellKey);
                                                     const isEditingCell =
                                                         editingCell?.rowId === row.rowId &&
                                                         editingCell.column === column;
@@ -875,7 +1255,7 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                                                                     }
                                                                     disabled={isDeleted || isSaving}
                                                                     className={[
-                                                                        'block min-w-[160px] w-full rounded-lg border px-3 py-2 text-left text-sm outline-none transition-all',
+                                                                        'relative block min-w-[160px] w-full overflow-hidden rounded-lg border px-3 py-2 text-left text-sm outline-none transition-all',
                                                                         isDeleted || isSaving
                                                                             ? 'cursor-not-allowed border-white/5 bg-white/5 text-gray-500'
                                                                             : 'cursor-pointer border-transparent bg-transparent text-white',
@@ -887,6 +1267,9 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                                                                         !isSelectedCell
                                                                             ? 'ring-1 ring-cyan-500/30'
                                                                             : '',
+                                                                        isCutCell
+                                                                            ? 'border-amber-400/60 border-dashed bg-amber-500/10'
+                                                                            : '',
                                                                         isSelectedCell
                                                                             ? 'border-cyan-400 bg-cyan-500/10 shadow-[0_0_0_1px_rgba(34,211,238,0.18)]'
                                                                             : '',
@@ -895,6 +1278,12 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                                                                     <span className="block min-h-[1.5rem] truncate">
                                                                         {currentValue || '\u00A0'}
                                                                     </span>
+                                                                    {isCopyCell && (
+                                                                        <span
+                                                                            aria-hidden="true"
+                                                                            className="data-editor-copy-ants"
+                                                                        />
+                                                                    )}
                                                                 </button>
                                                             )}
                                                         </td>

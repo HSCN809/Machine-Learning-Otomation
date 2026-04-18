@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
     DataEditorCellRef,
+    DataEditorCellUpdate,
     DataEditorDraft,
     EditableRow,
 } from '@/types/data-upload';
@@ -24,10 +25,6 @@ function cloneDraft(draft: DataEditorDraft): DataEditorDraft {
         trimColumns: [...draft.trimColumns],
         renamedColumns: draft.renamedColumns.map((column) => ({ ...column })),
     };
-}
-
-function isSameCell(cell: DataEditorCellRef, rowId: number, column: string): boolean {
-    return cell.rowId === rowId && cell.column === column;
 }
 
 function draftsEqual(left: DataEditorDraft, right: DataEditorDraft): boolean {
@@ -75,6 +72,7 @@ interface UseDataEditorReturn {
     replaceSelectedRows: (rowIds: number[]) => void;
     toggleAllLoadedRows: () => void;
     updateCell: (rowId: number, column: string, value: string) => void;
+    updateCells: (cells: DataEditorCellUpdate[]) => void;
     renameColumn: (column: string, newName: string) => void;
     getColumnDisplayName: (column: string) => string;
     clearCells: (cells: DataEditorCellRef[]) => void;
@@ -213,24 +211,54 @@ export function useDataEditor({ onSaved }: UseDataEditorOptions = {}): UseDataEd
         setSelectedRows(Array.from(new Set(rowIds)).sort((left, right) => left - right));
     }, []);
 
-    const updateCell = useCallback(
-        (rowId: number, column: string, value: string) => {
+    const updateCells = useCallback(
+        (cells: DataEditorCellUpdate[]) => {
+            if (cells.length === 0) {
+                return;
+            }
+
             applyDraftChange((currentDraft) => {
-                if (currentDraft.deletedRowIds.includes(rowId)) {
+                const nextUpdatedCells = new Map<string, DataEditorCellUpdate>();
+
+                currentDraft.updatedCells.forEach((cell) => {
+                    nextUpdatedCells.set(`${cell.rowId}:${cell.column}`, cell);
+                });
+
+                const clearedCellKeys = new Set(
+                    currentDraft.clearedCells.map((cell) => `${cell.rowId}:${cell.column}`)
+                );
+                let hasEligibleCell = false;
+
+                cells.forEach((cell) => {
+                    if (currentDraft.deletedRowIds.includes(cell.rowId)) {
+                        return;
+                    }
+
+                    hasEligibleCell = true;
+                    const cellKey = `${cell.rowId}:${cell.column}`;
+                    nextUpdatedCells.set(cellKey, cell);
+                    clearedCellKeys.delete(cellKey);
+                });
+
+                if (!hasEligibleCell) {
                     return currentDraft;
                 }
 
-                currentDraft.updatedCells = currentDraft.updatedCells.filter(
-                    (cell) => !isSameCell(cell, rowId, column)
+                currentDraft.updatedCells = Array.from(nextUpdatedCells.values());
+                currentDraft.clearedCells = currentDraft.clearedCells.filter((cell) =>
+                    clearedCellKeys.has(`${cell.rowId}:${cell.column}`)
                 );
-                currentDraft.clearedCells = currentDraft.clearedCells.filter(
-                    (cell) => !isSameCell(cell, rowId, column)
-                );
-                currentDraft.updatedCells.push({ rowId, column, value });
                 return currentDraft;
             });
         },
         [applyDraftChange]
+    );
+
+    const updateCell = useCallback(
+        (rowId: number, column: string, value: string) => {
+            updateCells([{ rowId, column, value }]);
+        },
+        [updateCells]
     );
 
     const renameColumn = useCallback(
@@ -444,6 +472,7 @@ export function useDataEditor({ onSaved }: UseDataEditorOptions = {}): UseDataEd
         replaceSelectedRows,
         toggleAllLoadedRows,
         updateCell,
+        updateCells,
         renameColumn,
         getColumnDisplayName,
         clearCells,
