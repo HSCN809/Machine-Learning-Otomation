@@ -155,7 +155,7 @@ export function FileDropzone({
                     <p className="text-sm text-red-400">{error}</p>
                     <button
                         onClick={() => setError(null)}
-                        className="ml-auto p-1 hover:bg-red-500/20 rounded"
+                        className="ml-auto cursor-pointer rounded p-1 hover:bg-red-500/20"
                     >
                         <X className="w-4 h-4 text-red-400" />
                     </button>

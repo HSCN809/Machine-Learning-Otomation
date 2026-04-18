@@ -173,6 +173,8 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
     const pointerSelectionStartRef = useRef<DataEditorCellRef | null>(null);
     const isColumnPointerSelectingRef = useRef(false);
     const pointerColumnSelectionStartRef = useRef<string | null>(null);
+    const pointerPositionRef = useRef<{ clientX: number; clientY: number } | null>(null);
+    const autoScrollFrameRef = useRef<number | null>(null);
     const {
         rows,
         columns,
@@ -506,6 +508,95 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
         setEditorClipboard(null);
     }, [setActiveCell]);
 
+    const stopAutoScroll = useCallback(() => {
+        if (autoScrollFrameRef.current !== null) {
+            window.cancelAnimationFrame(autoScrollFrameRef.current);
+            autoScrollFrameRef.current = null;
+        }
+    }, []);
+
+    const syncSelectionWithPointer = useCallback((clientX: number, clientY: number) => {
+        const pointerTarget = document.elementFromPoint(clientX, clientY);
+        if (!pointerTarget) {
+            return;
+        }
+
+        if (isPointerSelectingRef.current && pointerSelectionStartRef.current) {
+            const cellButton = pointerTarget.closest<HTMLButtonElement>('[data-editor-cell="true"]');
+            const rowId = cellButton?.dataset.rowId ? Number(cellButton.dataset.rowId) : NaN;
+            const column = cellButton?.dataset.column;
+
+            if (!Number.isNaN(rowId) && column) {
+                const cell = { rowId, column };
+                setActiveCell(cell);
+                setSelectedCells(buildCellRange(pointerSelectionStartRef.current, cell, rowIds, columns));
+            }
+
+            return;
+        }
+
+        if (isColumnPointerSelectingRef.current && pointerColumnSelectionStartRef.current) {
+            const columnButton = pointerTarget.closest<HTMLButtonElement>('[data-editor-column="true"]');
+            const column = columnButton?.dataset.column;
+
+            if (column) {
+                setSelectedColumns(buildColumnRange(pointerColumnSelectionStartRef.current, column, columns));
+            }
+        }
+    }, [columns, rowIds, setActiveCell]);
+
+    const startAutoScroll = useCallback(() => {
+        if (autoScrollFrameRef.current !== null) {
+            return;
+        }
+
+        const step = () => {
+            const scrollContainer = scrollContainerRef.current;
+            const pointerPosition = pointerPositionRef.current;
+
+            if (
+                !scrollContainer ||
+                !pointerPosition ||
+                (!isPointerSelectingRef.current && !isColumnPointerSelectingRef.current)
+            ) {
+                autoScrollFrameRef.current = null;
+                return;
+            }
+
+            const bounds = scrollContainer.getBoundingClientRect();
+            const threshold = 48;
+            const maxScrollSpeed = 24;
+            let deltaX = 0;
+            let deltaY = 0;
+
+            if (pointerPosition.clientX < bounds.left + threshold) {
+                deltaX = -Math.min(maxScrollSpeed, bounds.left + threshold - pointerPosition.clientX);
+            } else if (pointerPosition.clientX > bounds.right - threshold) {
+                deltaX = Math.min(maxScrollSpeed, pointerPosition.clientX - (bounds.right - threshold));
+            }
+
+            if (isPointerSelectingRef.current) {
+                if (pointerPosition.clientY < bounds.top + threshold) {
+                    deltaY = -Math.min(maxScrollSpeed, bounds.top + threshold - pointerPosition.clientY);
+                } else if (pointerPosition.clientY > bounds.bottom - threshold) {
+                    deltaY = Math.min(maxScrollSpeed, pointerPosition.clientY - (bounds.bottom - threshold));
+                }
+            }
+
+            if (deltaX !== 0 || deltaY !== 0) {
+                scrollContainer.scrollBy({
+                    left: deltaX,
+                    top: deltaY,
+                });
+                syncSelectionWithPointer(pointerPosition.clientX, pointerPosition.clientY);
+            }
+
+            autoScrollFrameRef.current = window.requestAnimationFrame(step);
+        };
+
+        autoScrollFrameRef.current = window.requestAnimationFrame(step);
+    }, [syncSelectionWithPointer]);
+
     const commitCellEditing = useCallback(() => {
         if (!editingCell) {
             return;
@@ -586,6 +677,12 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
 
             if (event.key === 'Escape' && !editingCell && !editingColumn) {
                 event.preventDefault();
+                isPointerSelectingRef.current = false;
+                pointerSelectionStartRef.current = null;
+                isColumnPointerSelectingRef.current = false;
+                pointerColumnSelectionStartRef.current = null;
+                pointerPositionRef.current = null;
+                stopAutoScroll();
                 clearCellAndColumnSelection();
                 return;
             }
@@ -653,21 +750,43 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
         selectedRows,
         selectionAnchor,
         isEditorShortcutTarget,
+        stopAutoScroll,
         syncClipboard,
         undoLastChange,
     ]);
 
     useEffect(() => {
+        const handlePointerMove = (event: globalThis.MouseEvent) => {
+            if (!isPointerSelectingRef.current && !isColumnPointerSelectingRef.current) {
+                return;
+            }
+
+            pointerPositionRef.current = {
+                clientX: event.clientX,
+                clientY: event.clientY,
+            };
+            syncSelectionWithPointer(event.clientX, event.clientY);
+            startAutoScroll();
+        };
+
         const handlePointerSelectionEnd = () => {
             isPointerSelectingRef.current = false;
             pointerSelectionStartRef.current = null;
             isColumnPointerSelectingRef.current = false;
             pointerColumnSelectionStartRef.current = null;
+            pointerPositionRef.current = null;
+            stopAutoScroll();
         };
 
+        window.addEventListener('mousemove', handlePointerMove);
         window.addEventListener('mouseup', handlePointerSelectionEnd);
-        return () => window.removeEventListener('mouseup', handlePointerSelectionEnd);
-    }, []);
+
+        return () => {
+            window.removeEventListener('mousemove', handlePointerMove);
+            window.removeEventListener('mouseup', handlePointerSelectionEnd);
+            stopAutoScroll();
+        };
+    }, [startAutoScroll, stopAutoScroll, syncSelectionWithPointer]);
 
     useEffect(() => {
         const root = scrollContainerRef.current;
@@ -856,6 +975,11 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
 
         isPointerSelectingRef.current = true;
         pointerSelectionStartRef.current = cell;
+        pointerPositionRef.current = {
+            clientX: event.clientX,
+            clientY: event.clientY,
+        };
+        startAutoScroll();
         setSelectionAnchor(cell);
         setActiveCell(cell);
         setSelectedCells([cell]);
@@ -899,6 +1023,11 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
 
         isColumnPointerSelectingRef.current = true;
         pointerColumnSelectionStartRef.current = column;
+        pointerPositionRef.current = {
+            clientX: event.clientX,
+            clientY: event.clientY,
+        };
+        startAutoScroll();
         setColumnSelectionAnchor(column);
         setSelectedColumns([column]);
     };
@@ -1022,7 +1151,7 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                             Ctrl+S ile kaydet
                         </span>
                         <span className="rounded-full border border-white/10 px-3 py-1">
-                            Kisayollar: Ctrl+C / Ctrl+X / Ctrl+V
+                            Kısayollar: Ctrl+C / Ctrl+X / Ctrl+V
                         </span>
                     </div>
                 </div>
@@ -1105,10 +1234,10 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                                 Silinecek satır: {draft.deletedRowIds.length}
                             </span>
                             <span className="rounded-full border border-white/10 px-3 py-1">
-                                Secili hucre: {selectedCells.length}
+                                Seçili hücre: {selectedCells.length}
                             </span>
                             <span className="rounded-full border border-white/10 px-3 py-1">
-                                Secili sutun: {selectedColumns.length}
+                                Seçili sütun: {selectedColumns.length}
                             </span>
                         </div>
 
@@ -1159,7 +1288,11 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                                                 type="checkbox"
                                                 checked={allRowsSelected}
                                                 onChange={toggleAllLoadedRows}
-                                                className="h-4 w-4 cursor-pointer rounded border-white/20 bg-transparent"
+                                                disabled={isSaving}
+                                                className={[
+                                                    'h-4 w-4 rounded border-white/20 bg-transparent',
+                                                    isSaving ? 'cursor-not-allowed' : 'cursor-pointer',
+                                                ].join(' ')}
                                             />
                                         </th>
                                         <th className="px-4 py-3 text-left font-medium text-gray-400">#</th>
@@ -1188,6 +1321,8 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                                                 ) : (
                                                     <button
                                                         type="button"
+                                                        data-editor-column="true"
+                                                        data-column={column}
                                                         onMouseDown={(event) =>
                                                             handleColumnMouseDown(column, event)
                                                         }
@@ -1285,6 +1420,9 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                                                             ) : (
                                                                 <button
                                                                     type="button"
+                                                                    data-editor-cell="true"
+                                                                    data-row-id={row.rowId}
+                                                                    data-column={column}
                                                                     onMouseDown={(event) =>
                                                                         handleCellMouseDown(
                                                                             { rowId: row.rowId, column },
@@ -1361,10 +1499,10 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
 
                     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
                         <span className="text-sm text-gray-400">
-                            Toplam {totalRows} satır, her chunk için {pageSize} satır getiriliyor
+                            Toplam {totalRows} satır, her parça için {pageSize} satır getiriliyor
                         </span>
                         <span className="text-sm text-gray-400">
-                            Scroll deneyimi aktif, backend pagination korunuyor
+                            Kaydırma deneyimi aktif, arka uç sayfalama korunuyor
                         </span>
                     </div>
                 </div>
@@ -1374,14 +1512,14 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                         <div className="mb-4">
                             <h3 className="text-sm font-semibold text-white">Toplu İşlemler</h3>
                             <p className="mt-1 text-xs text-gray-400">
-                                Text kolonlarını seçip baştaki ve sondaki boşlukları tek seferde temizleyin.
+                                Metin sütunlarını seçip baştaki ve sondaki boşlukları tek seferde temizleyin.
                             </p>
                         </div>
 
                         <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
                             {availableTrimColumns.length === 0 && (
                                 <p className="rounded-xl border border-white/10 px-3 py-4 text-sm text-gray-500">
-                                    Kuyrukta olmayan trim kolonu kalmadı.
+                                    Kuyrukta olmayan kırpma sütunu kalmadı.
                                 </p>
                             )}
                             {availableTrimColumns.map((column) => (
@@ -1414,7 +1552,7 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                             ].join(' ')}
                         >
                             <Scissors className="h-4 w-4" />
-                            Seçili Kolonlarda Trim Uygula
+                            Seçili sütunlarda kırpma uygula
                         </button>
                     </div>
 
@@ -1440,17 +1578,17 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                                 <span>{draft.deletedRowIds.length}</span>
                             </div>
                             <div className="flex items-center justify-between">
-                                <span>Rename sutun</span>
+                                <span>Yeniden adlandırılan sütun</span>
                                 <span>{draft.renamedColumns.length}</span>
                             </div>
                         </div>
 
                         <div className="mt-4 space-y-2">
                             <p className="text-xs font-medium uppercase tracking-[0.2em] text-gray-500">
-                                Trim Kuyruğu
+                                Kırpma Kuyruğu
                             </p>
                             {draft.trimColumns.length === 0 && (
-                                <p className="text-sm text-gray-500">Bekleyen trim işlemi yok.</p>
+                                <p className="text-sm text-gray-500">Bekleyen kırpma işlemi yok.</p>
                             )}
                             {draft.trimColumns.map((column) => (
                                 <div
