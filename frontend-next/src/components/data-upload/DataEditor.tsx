@@ -160,11 +160,15 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
     const [columnSelectionAnchor, setColumnSelectionAnchor] = useState<string | null>(null);
     const [rowSelectionAnchor, setRowSelectionAnchor] = useState<number | null>(null);
     const [editingCell, setEditingCell] = useState<DataEditorCellRef | null>(null);
+    const [editingCellValue, setEditingCellValue] = useState('');
     const [editingColumn, setEditingColumn] = useState<string | null>(null);
+    const [editingColumnValue, setEditingColumnValue] = useState('');
     const [editorClipboard, setEditorClipboard] = useState<EditorClipboard | null>(null);
     const editorRootRef = useRef<HTMLDivElement | null>(null);
     const scrollContainerRef = useRef<HTMLDivElement | null>(null);
     const loadMoreRef = useRef<HTMLDivElement | null>(null);
+    const skipCellBlurCommitRef = useRef(false);
+    const skipColumnBlurCommitRef = useRef(false);
     const isPointerSelectingRef = useRef(false);
     const pointerSelectionStartRef = useRef<DataEditorCellRef | null>(null);
     const isColumnPointerSelectingRef = useRef(false);
@@ -488,6 +492,63 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
         }
     }, [buildClipboardState, isDeleting, isSaving, selectedCells]);
 
+    const clearCellAndColumnSelection = useCallback(() => {
+        setSelectedCells([]);
+        setSelectionAnchor(null);
+        setSelectedColumns([]);
+        setColumnSelectionAnchor(null);
+        setActiveCell(null);
+        setEditorClipboard(null);
+    }, [setActiveCell]);
+
+    const commitCellEditing = useCallback(() => {
+        if (!editingCell) {
+            return;
+        }
+
+        updateCell(editingCell.rowId, editingCell.column, editingCellValue);
+        setEditingCell(null);
+        setActiveCell(editingCell);
+    }, [editingCell, editingCellValue, setActiveCell, updateCell]);
+
+    const cancelCellEditing = useCallback(() => {
+        skipCellBlurCommitRef.current = true;
+        setEditingCell(null);
+    }, []);
+
+    const commitColumnEditing = useCallback(() => {
+        if (!editingColumn) {
+            return;
+        }
+
+        renameColumn(editingColumn, editingColumnValue);
+        setEditingColumn(null);
+        setSelectedColumns([editingColumn]);
+    }, [editingColumn, editingColumnValue, renameColumn]);
+
+    const cancelColumnEditing = useCallback(() => {
+        skipColumnBlurCommitRef.current = true;
+        setEditingColumn(null);
+    }, []);
+
+    const handleCellEditorBlur = useCallback(() => {
+        if (skipCellBlurCommitRef.current) {
+            skipCellBlurCommitRef.current = false;
+            return;
+        }
+
+        commitCellEditing();
+    }, [commitCellEditing]);
+
+    const handleColumnEditorBlur = useCallback(() => {
+        if (skipColumnBlurCommitRef.current) {
+            skipColumnBlurCommitRef.current = false;
+            return;
+        }
+
+        commitColumnEditing();
+    }, [commitColumnEditing]);
+
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
             if (!isEditorShortcutTarget()) {
@@ -518,9 +579,9 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                 return;
             }
 
-            if (event.key === 'Escape' && editorClipboard && !editingCell && !editingColumn) {
+            if (event.key === 'Escape' && !editingCell && !editingColumn) {
                 event.preventDefault();
-                setEditorClipboard(null);
+                clearCellAndColumnSelection();
                 return;
             }
 
@@ -577,6 +638,7 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
         editorClipboard,
         editingCell,
         editingColumn,
+        clearCellAndColumnSelection,
         isDeleting,
         isDirty,
         isSaving,
@@ -857,6 +919,7 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
         setSelectionAnchor(cell);
         setActiveCell(cell);
         setSelectedCells([cell]);
+        setEditingCellValue(getCurrentCellValue(cell));
         setEditingCell(cell);
     };
 
@@ -872,6 +935,7 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
         setRowSelectionAnchor(null);
         setColumnSelectionAnchor(column);
         setSelectedColumns([column]);
+        setEditingColumnValue(getColumnDisplayName(column));
         setEditingColumn(column);
     };
 
@@ -892,36 +956,32 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
     };
 
     const handleCellEditorKeyDown = (
-        event: ReactKeyboardEvent<HTMLInputElement>,
-        cell: DataEditorCellRef
+        event: ReactKeyboardEvent<HTMLInputElement>
     ) => {
-        if (event.key === 'Enter') {
+        if (event.key === 'Enter' || event.key === 'Tab') {
             event.preventDefault();
-            setEditingCell(null);
-            setActiveCell(cell);
+            commitCellEditing();
             return;
         }
 
         if (event.key === 'Escape') {
             event.preventDefault();
-            setEditingCell(null);
+            cancelCellEditing();
         }
     };
 
     const handleColumnEditorKeyDown = (
-        event: ReactKeyboardEvent<HTMLInputElement>,
-        column: string
+        event: ReactKeyboardEvent<HTMLInputElement>
     ) => {
-        if (event.key === 'Enter') {
+        if (event.key === 'Enter' || event.key === 'Tab') {
             event.preventDefault();
-            setEditingColumn(null);
-            setSelectedColumns([column]);
+            commitColumnEditing();
             return;
         }
 
         if (event.key === 'Escape') {
             event.preventDefault();
-            setEditingColumn(null);
+            cancelColumnEditing();
         }
     };
 
@@ -976,14 +1036,10 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                         type="button"
                         onClick={() => {
                             discardChanges();
-                            setSelectedCells([]);
-                            setSelectionAnchor(null);
-                            setSelectedColumns([]);
-                            setColumnSelectionAnchor(null);
+                            clearCellAndColumnSelection();
                             setRowSelectionAnchor(null);
                             setEditingCell(null);
                             setEditingColumn(null);
-                            setEditorClipboard(null);
                         }}
                         disabled={!isDirty || isSaving}
                         className={getButtonClassName(!isDirty || isSaving)}
@@ -997,14 +1053,10 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                             void (async () => {
                                 const didSave = await saveChanges();
                                 if (didSave) {
-                                    setSelectedCells([]);
-                                    setSelectionAnchor(null);
-                                    setSelectedColumns([]);
-                                    setColumnSelectionAnchor(null);
+                                    clearCellAndColumnSelection();
                                     setRowSelectionAnchor(null);
                                     setEditingCell(null);
                                     setEditingColumn(null);
-                                    setEditorClipboard(null);
                                 }
                             })();
                         }}
@@ -1114,14 +1166,12 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                                                 {editingColumn === column ? (
                                                     <input
                                                         autoFocus
-                                                        value={getColumnDisplayName(column)}
+                                                        value={editingColumnValue}
                                                         onChange={(event) =>
-                                                            renameColumn(column, event.target.value)
+                                                            setEditingColumnValue(event.target.value)
                                                         }
-                                                        onBlur={() => setEditingColumn(null)}
-                                                        onKeyDown={(event) =>
-                                                            handleColumnEditorKeyDown(event, column)
-                                                        }
+                                                        onBlur={handleColumnEditorBlur}
+                                                        onKeyDown={handleColumnEditorKeyDown}
                                                         disabled={isSaving}
                                                         className={[
                                                             'block min-w-[160px] w-full rounded-lg border px-3 py-2 text-sm outline-none transition-all',
@@ -1210,19 +1260,14 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                                                             {isEditingCell ? (
                                                                 <input
                                                                     autoFocus
-                                                                    value={currentValue}
+                                                                    value={editingCellValue}
                                                                     onFocus={() =>
                                                                         setActiveCell({ rowId: row.rowId, column })
                                                                     }
-                                                                    onBlur={() => setEditingCell(null)}
-                                                                    onKeyDown={(event) =>
-                                                                        handleCellEditorKeyDown(event, {
-                                                                            rowId: row.rowId,
-                                                                            column,
-                                                                        })
-                                                                    }
+                                                                    onBlur={handleCellEditorBlur}
+                                                                    onKeyDown={handleCellEditorKeyDown}
                                                                     onChange={(event) =>
-                                                                        updateCell(row.rowId, column, event.target.value)
+                                                                        setEditingCellValue(event.target.value)
                                                                     }
                                                                     disabled={isDeleted || isSaving}
                                                                     className={[
