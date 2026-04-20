@@ -113,6 +113,7 @@ def _set_auth_cookie(response: Response, token: str) -> None:
         max_age=settings.AUTH_SESSION_TTL_MINUTES * 60,
         expires=settings.AUTH_SESSION_TTL_MINUTES * 60,
         path="/",
+        domain=settings.AUTH_COOKIE_DOMAIN,
     )
 
 
@@ -124,6 +125,7 @@ def _clear_auth_cookie(response: Response) -> None:
         secure=settings.AUTH_COOKIE_SECURE,
         samesite=settings.AUTH_COOKIE_SAMESITE,
         path="/",
+        domain=settings.AUTH_COOKIE_DOMAIN,
     )
 
 

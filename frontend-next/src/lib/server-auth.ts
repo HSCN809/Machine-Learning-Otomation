@@ -1,0 +1,34 @@
+export const AUTH_COOKIE_NAME =
+    process.env.AUTH_COOKIE_NAME ||
+    process.env.NEXT_PUBLIC_AUTH_COOKIE_NAME ||
+    'ml_auth_session';
+
+const BACKEND_BASE_URL = process.env.BACKEND_API_URL || 'http://localhost:8000';
+
+export async function hasValidAuthSession(authCookie: string | undefined): Promise<boolean> {
+    if (!authCookie) {
+        return false;
+    }
+
+    try {
+        const response = await fetch(`${BACKEND_BASE_URL}/api/auth/status`, {
+            headers: {
+                cookie: `${AUTH_COOKIE_NAME}=${authCookie}`,
+            },
+            cache: 'no-store',
+        });
+
+        if (!response.ok) {
+            return false;
+        }
+
+        const status = (await response.json()) as {
+            authenticated?: boolean;
+            user?: unknown;
+        };
+
+        return Boolean(status.authenticated && status.user);
+    } catch {
+        return false;
+    }
+}

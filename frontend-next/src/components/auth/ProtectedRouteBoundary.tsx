@@ -4,7 +4,7 @@ import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 
 import { getAuthStatus } from '@/lib/api';
-import { DEFAULT_AUTHENTICATED_PATH, HOMEPAGE_PATH } from '@/lib/routing';
+import { buildLoginHref, DEFAULT_AUTHENTICATED_PATH } from '@/lib/routing';
 
 type GuardState = 'bootstrap' | 'ready' | 'error';
 
@@ -54,7 +54,7 @@ export function ProtectedRouteBoundary({ children }: ProtectedRouteBoundaryProps
                     return;
                 }
 
-                router.replace(HOMEPAGE_PATH);
+                router.replace(buildLoginHref(nextPath));
             } catch (error) {
                 if (cancelled) {
                     return;

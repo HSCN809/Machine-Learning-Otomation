@@ -117,8 +117,13 @@ export default function LoginClient({ nextPath, registered = false }: LoginClien
 
         try {
             const response = await login(email.trim(), password);
+            const status = await getAuthStatus();
 
-            setAuthenticatedUser(response.user);
+            if (!status.authenticated || !status.user) {
+                throw new Error('Oturum cookie dogrulanamadi. Lutfen tekrar deneyin.');
+            }
+
+            setAuthenticatedUser(status.user ?? response.user);
             setPageState('success');
             setSuccessMessage('Giriş başarılı. Güvenli oturum oluşturuldu.');
 

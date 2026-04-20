@@ -5,6 +5,20 @@ const BACKEND_BASE_URL = process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+type HeadersWithSetCookie = Headers & {
+    getSetCookie?: () => string[];
+};
+
+function getSetCookieHeaders(headers: Headers): string[] {
+    const setCookies = (headers as HeadersWithSetCookie).getSetCookie?.();
+    if (setCookies && setCookies.length > 0) {
+        return setCookies;
+    }
+
+    const setCookie = headers.get('set-cookie');
+    return setCookie ? [setCookie] : [];
+}
+
 async function forward(request: NextRequest, params: { path: string[] }) {
     const targetPath = params.path.join('/');
     const targetUrl = new URL(`/${targetPath}`, BACKEND_BASE_URL);
@@ -35,16 +49,23 @@ async function forward(request: NextRequest, params: { path: string[] }) {
         const response = await fetch(targetUrl, init);
         const responseHeaders = new Headers();
         response.headers.forEach((value, key) => {
-            if (key.toLowerCase() === 'content-length') {
+            const normalizedKey = key.toLowerCase();
+            if (normalizedKey === 'content-length' || normalizedKey === 'set-cookie') {
                 return;
             }
             responseHeaders.set(key, value);
         });
 
-        return new NextResponse(response.body, {
+        const proxyResponse = new NextResponse(response.body, {
             status: response.status,
             headers: responseHeaders,
         });
+
+        getSetCookieHeaders(response.headers).forEach((setCookie) => {
+            proxyResponse.headers.append('Set-Cookie', setCookie);
+        });
+
+        return proxyResponse;
     } catch {
         return NextResponse.json(
             {
