@@ -25,11 +25,25 @@ async def lifespan(app: FastAPI):
     logger.info("🚀 FastAPI Backend starting...")
     # Alembic migration varsa calistir, yoksa dogrudan tablo olustur
     try:
+        import os
         from alembic.config import Config
         from alembic import command
         alembic_cfg = Config("alembic.ini")
-        command.upgrade(alembic_cfg, "head")
-        logger.info("✅ Alembic migrations applied.")
+        # Ensure sqlalchemy.url is set from environment
+        db_url = os.getenv("DATABASE_URL")
+        if db_url:
+            alembic_cfg.set_main_option("sqlalchemy.url", db_url)
+        
+        try:
+            command.upgrade(alembic_cfg, "head")
+            logger.info("✅ Alembic migrations applied.")
+        except Exception as e:
+            if "already exists" in str(e).lower():
+                logger.info("⚠️ Tablolar zaten mevcut, Alembic 'head' olarak isaretleniyor (stamp)...")
+                command.stamp(alembic_cfg, "head")
+                logger.info("✅ Alembic stamped as head.")
+            else:
+                raise e
     except Exception as exc:
         logger.warning(f"Alembic migration atlanamadi, fallback create_all: {exc}")
         Base.metadata.create_all(bind=engine)
