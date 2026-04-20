@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { Sidebar, Header } from '@/components/layout';
 import { ProtectedRouteBoundary } from '@/components/auth/ProtectedRouteBoundary';
@@ -16,7 +16,7 @@ import {
 } from '@/components/eda';
 import { NoDataWarning, SessionPageSkeleton, StepProgress } from '@/components/common';
 import { useEDA } from '@/hooks/useEDA';
-import { hasStoredSession, subscribeToStoredSession } from '@/lib/api';
+import { useDatasetBootstrap } from '@/hooks/useDatasetBootstrap';
 import { buildDataUploadHref } from '@/lib/routing';
 import { BarChart3, TrendingUp, GitBranch, Layers } from 'lucide-react';
 
@@ -52,7 +52,6 @@ export default function EDAPage() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [activeTab, setActiveTab] = useState<TabId>('summary');
     const pathname = usePathname();
-    const hasSession = useSyncExternalStore(subscribeToStoredSession, hasStoredSession, () => false);
 
     const {
         edaData,
@@ -70,14 +69,9 @@ export default function EDAPage() {
         scatterYColumn,
         setScatterColumns,
     } = useEDA();
+    const datasetBootstrap = useDatasetBootstrap(loadEDAData);
 
     const activeTabIndex = tabs.findIndex((tab) => tab.id === activeTab);
-
-    useEffect(() => {
-        if (hasSession) {
-            loadEDAData();
-        }
-    }, [hasSession, loadEDAData]);
 
     return (
         <ProtectedRouteBoundary>
@@ -99,9 +93,11 @@ export default function EDAPage() {
                     />
 
                     <main className="space-y-6 p-6">
-                        {hasSession && isLoading && !edaData && <SessionPageSkeleton variant="analytics" />}
+                        {(datasetBootstrap.isChecking || (isLoading && !edaData)) && (
+                            <SessionPageSkeleton variant="analytics" />
+                        )}
 
-                        {!isLoading && !edaData && (
+                        {!datasetBootstrap.isChecking && !isLoading && !edaData && (
                             <NoDataWarning
                                 title="Veri Yüklenmedi"
                                 description="Keşifsel veri analizi yapabilmek için önce veri yüklemeniz gerekmektedir."

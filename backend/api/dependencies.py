@@ -57,6 +57,7 @@ class SessionManager:
         original_df: pd.DataFrame,
         metadata: Dict[str, Any],
         owner_user_id: str,
+        history: Optional[list[Dict[str, Any]]] = None,
         created_at: Optional[datetime] = None,
     ):
         """Restore a persisted session into memory."""
@@ -66,7 +67,7 @@ class SessionManager:
             "last_accessed": datetime.now(),
             "data": df,
             "original_data": original_df,
-            "history": [],
+            "history": history or [],
             "history_snapshots": [],
             "metadata": metadata,
         }
@@ -250,7 +251,8 @@ def require_authenticated_user(
 
 def restore_persisted_session(session_id: str, user_id: str, db: Session) -> bool:
     """Load a persisted dataset session into the in-memory manager."""
-    record = DataSessionRepository(db).get_session(session_id, user_id)
+    repository = DataSessionRepository(db)
+    record = repository.get_session(session_id, user_id)
     if record is None:
         return False
 
@@ -260,6 +262,7 @@ def restore_persisted_session(session_id: str, user_id: str, db: Session) -> boo
         original_df=dataframe_from_json(record.original_data_json),
         metadata=record.metadata_json or {},
         owner_user_id=user_id,
+        history=repository.list_preprocessing_history(session_id, user_id),
         created_at=record.created_at,
     )
     return True
@@ -279,13 +282,19 @@ def persist_session(session_id: str, db: Session):
     if original_df is None:
         original_df = session["data"].copy(deep=True)
 
-    DataSessionRepository(db).upsert_session(
+    repository = DataSessionRepository(db)
+    repository.upsert_session(
         session_id=session_id,
         user_id=user_id,
         data=session["data"],
         original_data=original_df,
         metadata=session.get("metadata", {}),
         created_at=session.get("created_at"),
+    )
+    repository.sync_preprocessing_history(
+        session_id=session_id,
+        user_id=user_id,
+        history=session.get("history", []),
     )
     db.commit()
 

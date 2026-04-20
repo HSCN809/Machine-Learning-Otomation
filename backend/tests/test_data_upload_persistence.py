@@ -13,7 +13,7 @@ from backend.api.dependencies import restore_persisted_session, session_manager
 from backend.api.routers.preprocessing import MissingValuesRequest, handle_missing_values
 from backend.api.routers.upload import upload_file
 from backend.modules.auth.models import User
-from backend.modules.data_upload.models import DatasetSession
+from backend.modules.data_upload.models import DatasetSession, PreprocessingEvent
 from backend.modules.data_upload.persistence import (
     DataSessionRepository,
     dataframe_from_json,
@@ -29,7 +29,14 @@ class RenameMetadata(BaseModel):
 class DataUploadPersistenceTests(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
-        Base.metadata.create_all(bind=self.engine, tables=[User.__table__, DatasetSession.__table__])
+        Base.metadata.create_all(
+            bind=self.engine,
+            tables=[
+                User.__table__,
+                DatasetSession.__table__,
+                PreprocessingEvent.__table__,
+            ],
+        )
         self.Session = sessionmaker(bind=self.engine, future=True)
         self.user_id = "user-1"
         self.other_user_id = "user-2"
@@ -264,6 +271,45 @@ class DataUploadPersistenceTests(unittest.TestCase):
             self.assertIsNotNone(memory_session)
             self.assertEqual(memory_session["data"]["value"].isnull().sum(), 0)
             self.assertEqual(memory_session["data"].loc[1, "value"], 10.0)
+            self.assertEqual(len(memory_session["history"]), 1)
+            self.assertEqual(memory_session["history"][0]["step"], "missing_values")
+
+    def test_preprocessing_history_is_scoped_and_persisted_as_events(self):
+        df = pd.DataFrame({"city": ["Ankara"], "value": [10]})
+        history = [
+            {
+                "step": "scaling",
+                "action": "standard",
+                "columns": ["value"],
+                "timestamp": "2026-01-01T00:00:00",
+            }
+        ]
+
+        with self.Session() as db:
+            self.create_default_users(db)
+            repository = DataSessionRepository(db)
+            repository.upsert_session(
+                session_id="history-session-1",
+                user_id=self.user_id,
+                data=df,
+                original_data=df.copy(deep=True),
+                metadata={"filename": "cities.csv"},
+            )
+            repository.sync_preprocessing_history(
+                session_id="history-session-1",
+                user_id=self.user_id,
+                history=history,
+            )
+            db.commit()
+
+            self.assertEqual(
+                repository.list_preprocessing_history("history-session-1", self.user_id),
+                history,
+            )
+            self.assertEqual(
+                repository.list_preprocessing_history("history-session-1", self.other_user_id),
+                [],
+            )
 
 
 if __name__ == "__main__":

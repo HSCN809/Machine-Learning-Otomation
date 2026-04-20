@@ -113,12 +113,13 @@ interface UsePreprocessingReturn {
                 .map((entry, index) => mapHistoryEntry(entry, index))
                 .filter((entry): entry is ProcessingHistory => entry !== null);
             setHistory(nextHistory);
+            return true;
         } catch (err) {
             if (api.isSessionRequiredError(err)) {
                 setColumns([]);
                 setHistory([]);
                 setError(null);
-                return;
+                return false;
             }
             console.error('Load preprocessing data error:', err);
             setError(err instanceof Error ? err.message : 'Ön işleme verileri yüklenirken hata oluştu');
@@ -137,9 +138,9 @@ interface UsePreprocessingReturn {
     canGoPrev: boolean;
 
     // Actions
-    loadInitialData: () => Promise<void>;
-    loadColumns: () => Promise<void>;
-    loadHistory: () => Promise<void>;
+    loadInitialData: () => Promise<unknown>;
+    loadColumns: () => Promise<unknown>;
+    loadHistory: () => Promise<unknown>;
     applyMissingValues: (config: MissingValueConfig) => Promise<void>;
     applyOutliers: (config: OutlierConfig) => Promise<void>;
 applyEncoding: (config: EncodingConfig) => Promise<void>;
@@ -167,7 +168,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
     const [error, setError] = useState<string | null>(null);
 
     // Load columns from API
-    const loadColumns = useCallback(async () => {
+    const loadColumns = useCallback(async (): Promise<unknown> => {
         try {
             setIsLoading(true);
             const columnTypes = await api.getColumnTypes();
@@ -182,11 +183,12 @@ export function usePreprocessing(): UsePreprocessingReturn {
             }));
 
             setColumns(cols);
+            return true;
         } catch (err) {
             if (api.isSessionRequiredError(err)) {
                 setColumns([]);
                 setError(null);
-                return;
+                return false;
             }
             console.error('Load columns error:', err);
             setError(err instanceof Error ? err.message : 'Sütunlar yüklenirken hata oluştu');
@@ -195,7 +197,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
         }
     }, []);
 
-    const loadHistory = useCallback(async () => {
+    const loadHistory = useCallback(async (): Promise<unknown> => {
         try {
             setIsLoading(true);
             const historyResponse = await api.getPreprocessingHistory();
@@ -203,11 +205,12 @@ export function usePreprocessing(): UsePreprocessingReturn {
                 .map((entry, index) => mapHistoryEntry(entry, index))
                 .filter((entry): entry is ProcessingHistory => entry !== null);
             setHistory(nextHistory);
+            return true;
         } catch (err) {
             if (api.isSessionRequiredError(err)) {
                 setHistory([]);
                 setError(null);
-                return;
+                return false;
             }
             console.error('Load history error:', err);
             setError(err instanceof Error ? err.message : 'İşlem geçmişi yüklenirken hata oluştu');
@@ -216,7 +219,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
         }
     }, []);
 
-    const loadInitialData = useCallback(async () => {
+    const loadInitialData = useCallback(async (): Promise<unknown> => {
         try {
             setIsLoading(true);
             setError(null);

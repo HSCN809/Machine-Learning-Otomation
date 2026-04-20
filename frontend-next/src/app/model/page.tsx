@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { Target, BrainCircuit, SlidersHorizontal, Rocket, BarChart3, ChevronLeft, ChevronRight, Play, SkipForward } from 'lucide-react';
 import { Sidebar, Header } from '@/components/layout';
@@ -18,7 +18,7 @@ import {
 } from '@/components/model-selection';
 import { NoDataWarning, SessionPageSkeleton, StepProgress } from '@/components/common';
 import { useModelSelection } from '@/hooks/useModelSelection';
-import { hasStoredSession, subscribeToStoredSession } from '@/lib/api';
+import { useDatasetBootstrap } from '@/hooks/useDatasetBootstrap';
 import { buildDataUploadHref } from '@/lib/routing';
 import { theme } from '@/styles/theme';
 
@@ -33,11 +33,6 @@ const STEPS = [
 export default function ModelSelectionPage() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const pathname = usePathname();
-    const hasSession = useSyncExternalStore(
-        subscribeToStoredSession,
-        hasStoredSession,
-        () => false
-    );
 
     const {
         currentStep,
@@ -71,14 +66,9 @@ export default function ModelSelectionPage() {
         trainModels,
         stopTraining,
     } = useModelSelection();
+    const datasetBootstrap = useDatasetBootstrap(loadColumns);
 
-    useEffect(() => {
-        if (hasSession) {
-            void loadColumns();
-        }
-    }, [hasSession, loadColumns]);
-
-    const hasData = hasSession === true && columns.length > 0;
+    const hasData = datasetBootstrap.isReady && columns.length > 0;
     const currentStepInfo = STEPS[currentStep];
     const canSkip = currentStep < STEPS.length - 1;
     const currentTrainingModelName =
@@ -215,9 +205,11 @@ export default function ModelSelectionPage() {
                     />
 
                     <main className="space-y-6 p-6">
-                        {hasSession && isLoading && !hasData && <SessionPageSkeleton variant="wizard" />}
+                        {(datasetBootstrap.isChecking || (isLoading && !hasData)) && (
+                            <SessionPageSkeleton variant="wizard" />
+                        )}
 
-                        {!isLoading && !hasData && (
+                        {!datasetBootstrap.isChecking && !isLoading && !hasData && (
                             <NoDataWarning
                                 title="Veri Yüklenmedi"
                                 description="Model seçimi ve eğitimi yapabilmek için önce veri yüklemeniz gerekmektedir."

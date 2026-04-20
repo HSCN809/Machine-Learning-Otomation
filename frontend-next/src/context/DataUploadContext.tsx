@@ -218,15 +218,21 @@ export function DataUploadProvider({ children }: { children: ReactNode }) {
             setIsInitializing(true);
             setError(null);
 
-            const [summary, preview, validation] = await Promise.all([
+            const [summary, preview] = await Promise.all([
                 api.getDataSummary(),
                 api.getDataPreview(5),
-                api.getDataValidation(),
             ]);
 
             setDataSummary(buildDataSummary(summary, preview.data));
-            setValidationReport(buildValidationReport(validation));
+            setValidationReport(null);
             setStatus('success');
+            void api.getDataValidation()
+                .then((validation) => setValidationReport(buildValidationReport(validation)))
+                .catch((validationError) => {
+                    if (!api.isSessionRequiredError(validationError)) {
+                        console.error('Session validation hydration error:', validationError);
+                    }
+                });
         } catch (err) {
             if (api.isSessionRequiredError(err)) {
                 setError(null);

@@ -8,10 +8,10 @@ from typing import Any
 
 import pandas as pd
 from fastapi.encoders import jsonable_encoder
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from backend.modules.data_upload.models import DatasetSession, utc_now
+from backend.modules.data_upload.models import DatasetSession, PreprocessingEvent, utc_now
 
 
 def dataframe_to_json(df: pd.DataFrame) -> str:
@@ -81,3 +81,40 @@ class DataSessionRepository:
         record = self.get_session(session_id, user_id)
         if record is not None:
             self.db.delete(record)
+
+    def list_preprocessing_history(self, session_id: str, user_id: str) -> list[dict[str, Any]]:
+        events = self.db.scalars(
+            select(PreprocessingEvent)
+            .where(
+                PreprocessingEvent.dataset_session_id == session_id,
+                PreprocessingEvent.user_id == user_id,
+            )
+            .order_by(PreprocessingEvent.event_index)
+        ).all()
+        return [event.payload_json for event in events]
+
+    def sync_preprocessing_history(
+        self,
+        *,
+        session_id: str,
+        user_id: str,
+        history: list[dict[str, Any]],
+    ) -> None:
+        self.db.execute(
+            delete(PreprocessingEvent).where(
+                PreprocessingEvent.dataset_session_id == session_id,
+                PreprocessingEvent.user_id == user_id,
+            )
+        )
+
+        for event_index, entry in enumerate(history):
+            payload = jsonable_encoder(entry or {})
+            event = PreprocessingEvent(
+                dataset_session_id=session_id,
+                user_id=user_id,
+                event_index=event_index,
+                step=str(payload.get("step")) if payload.get("step") is not None else None,
+                action=str(payload.get("action")) if payload.get("action") is not None else None,
+                payload_json=payload,
+            )
+            self.db.add(event)

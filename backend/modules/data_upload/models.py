@@ -3,7 +3,9 @@
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, Text
+import uuid
+
+from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.api.database import Base
@@ -38,4 +40,39 @@ class DatasetSession(Base):
         onupdate=utc_now,
         nullable=False,
     )
+    user: Mapped["User"] = relationship("User")
+
+
+class PreprocessingEvent(Base):
+    """Persisted preprocessing history entry for a dataset session."""
+
+    __tablename__ = "preprocessing_events"
+    __table_args__ = (
+        UniqueConstraint(
+            "dataset_session_id",
+            "event_index",
+            name="uq_preprocessing_events_session_index",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    dataset_session_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("dataset_sessions.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    event_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    step: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    action: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+
+    dataset_session: Mapped["DatasetSession"] = relationship("DatasetSession")
     user: Mapped["User"] = relationship("User")

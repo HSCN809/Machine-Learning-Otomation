@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { Grip, History, X } from 'lucide-react';
 import { Sidebar, Header } from '@/components/layout';
@@ -18,7 +18,7 @@ import {
 } from '@/components/preprocessing';
 import { ClickSpark, NoDataWarning, PixelTrail, SessionPageSkeleton } from '@/components/common';
 import { usePreprocessing, PREPROCESSING_STEPS } from '@/hooks/usePreprocessing';
-import { hasStoredSession, subscribeToStoredSession } from '@/lib/api';
+import { useDatasetBootstrap } from '@/hooks/useDatasetBootstrap';
 import { buildDataUploadHref } from '@/lib/routing';
 import { theme } from '@/styles/theme';
 
@@ -38,11 +38,6 @@ export default function PreprocessingPage() {
     });
     const [historyTrailPointer, setHistoryTrailPointer] = useState<{ x: number; y: number } | null>(null);
     const [isHistoryButtonDragging, setIsHistoryButtonDragging] = useState(false);
-    const hasSession = useSyncExternalStore(
-        subscribeToStoredSession,
-        hasStoredSession,
-        () => false
-    );
     const dragOffsetRef = useRef({ x: 0, y: 0 });
     const dragStartRef = useRef({ x: 0, y: 0 });
     const didDragRef = useRef(false);
@@ -74,14 +69,9 @@ export default function PreprocessingPage() {
         categoricalColumns,
         columnsWithMissing,
     } = usePreprocessing();
+    const datasetBootstrap = useDatasetBootstrap(loadInitialData);
 
-    useEffect(() => {
-        if (hasSession) {
-            void loadInitialData();
-        }
-    }, [hasSession, loadInitialData]);
-
-    const hasData = hasSession === true && columns.length > 0;
+    const hasData = datasetBootstrap.isReady && columns.length > 0;
     const currentStepInfo = PREPROCESSING_STEPS[currentStep];
     const isLastStep = currentStep === PREPROCESSING_STEPS.length - 1;
 
@@ -217,9 +207,11 @@ export default function PreprocessingPage() {
                         extraScale={1.15}
                     >
                         <main className="space-y-6 p-6">
-                            {hasSession && isLoading && !hasData && <SessionPageSkeleton variant="wizard" />}
+                            {(datasetBootstrap.isChecking || (isLoading && !hasData)) && (
+                                <SessionPageSkeleton variant="wizard" />
+                            )}
 
-                            {!isLoading && !hasData && (
+                            {!datasetBootstrap.isChecking && !isLoading && !hasData && (
                                 <NoDataWarning
                                     title="Veri Yüklenmedi"
                                     description="Veri ön işleme yapabilmek için önce veri yüklemeniz gerekir."

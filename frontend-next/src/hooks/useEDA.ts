@@ -21,7 +21,7 @@ interface UseEDAReturn {
     selectedCategoricalColumn: string | null;
     setSelectedNumericColumn: (col: string) => void;
     setSelectedCategoricalColumn: (col: string) => void;
-    loadEDAData: () => Promise<void>;
+    loadEDAData: () => Promise<boolean>;
     histogramData: HistogramData[];
     boxPlotData: BoxPlotData | null;
     categoryData: CategoryData[];
@@ -45,7 +45,7 @@ export function useEDA(): UseEDAReturn {
     const [boxPlotData, setBoxPlotData] = useState<BoxPlotData | null>(null);
     const [categoryData, setCategoryData] = useState<CategoryData[]>([]);
 
-    const loadEDAData = useCallback(async () => {
+    const loadEDAData = useCallback(async (): Promise<boolean> => {
         try {
             setIsLoading(true);
             setError(null);
@@ -141,6 +141,7 @@ export function useEDA(): UseEDAReturn {
             if (filteredCategoricalColumns.length > 0) {
                 setSelectedCategoricalColumn(filteredCategoricalColumns[0]);
             }
+            return true;
         } catch (err) {
             if (api.isSessionRequiredError(err)) {
                 setEdaData(null);
@@ -153,11 +154,12 @@ export function useEDA(): UseEDAReturn {
                 setBoxPlotData(null);
                 setCategoryData([]);
                 setScatterData([]);
-                return;
+                return false;
             }
 
             console.error('EDA Error:', err);
             setError(err instanceof Error ? err.message : 'EDA verisi yüklenirken hata oluştu');
+            throw err;
         } finally {
             setIsLoading(false);
         }

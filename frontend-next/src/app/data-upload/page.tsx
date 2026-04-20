@@ -37,7 +37,6 @@ export default function DataUploadPage() {
         error,
         uploadedFile,
         dataSummary,
-        validationReport,
         uploadFile,
         loadSampleDataset,
         hydrateSession,
@@ -54,7 +53,7 @@ export default function DataUploadPage() {
 
         const bootstrap = async () => {
             try {
-                const hasContextData = Boolean(dataSummary && validationReport);
+                const hasContextData = Boolean(dataSummary);
                 const hasStoredSession = api.hasStoredSession();
 
                 if (!hasContextData && hasStoredSession && status === 'idle') {
@@ -72,10 +71,10 @@ export default function DataUploadPage() {
         return () => {
             cancelled = true;
         };
-    }, [dataSummary, hydrateSession, status, validationReport]);
+    }, [dataSummary, hydrateSession, status]);
 
     const isLoading = status === 'uploading' || status === 'validating';
-    const showEditor = status === 'success' && dataSummary && validationReport;
+    const showEditor = status === 'success' && dataSummary;
     const showSessionSkeleton = isBootstrapping;
 
     return (
