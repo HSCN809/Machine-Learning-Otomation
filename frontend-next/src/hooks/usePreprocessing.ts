@@ -474,8 +474,10 @@ export function usePreprocessing(): UsePreprocessingReturn {
         );
     }, [history, numericColumns]);
 
-    const categoricalColumns = useMemo(() =>
-        columns.filter(col => col.type === 'categorical'), [columns]);
+    const categoricalColumns = useMemo(
+        () => columns.filter((col) => col.type === 'categorical' || col.type === 'text'),
+        [columns]
+    );
 
     const columnsWithMissing = useMemo(() =>
         columns.filter(col => col.missingCount > 0), [columns]);

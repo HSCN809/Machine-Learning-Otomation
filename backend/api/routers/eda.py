@@ -9,7 +9,12 @@ import sys
 from fastapi import APIRouter, Depends, HTTPException, Query
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_datetime64_any_dtype, is_numeric_dtype, is_object_dtype
+from pandas.api.types import (
+    is_datetime64_any_dtype,
+    is_numeric_dtype,
+    is_object_dtype,
+    is_string_dtype,
+)
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
@@ -47,7 +52,11 @@ def _is_numeric_series(series: pd.Series) -> bool:
 
 def _is_categorical_series(series: pd.Series) -> bool:
     """Check whether a pandas Series is categorical-like."""
-    return bool(is_object_dtype(series.dtype) or isinstance(series.dtype, pd.CategoricalDtype))
+    return bool(
+        is_object_dtype(series.dtype)
+        or is_string_dtype(series.dtype)
+        or isinstance(series.dtype, pd.CategoricalDtype)
+    )
 
 
 def _is_datetime_series(series: pd.Series) -> bool:
@@ -61,7 +70,11 @@ async def get_eda_summary(session_id: str = Depends(require_session)):
     df = _get_dataframe(session_id)
     
     numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
-    categorical_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
+    categorical_cols = [
+        column_name
+        for column_name in df.columns
+        if _is_categorical_series(_get_series(df, column_name))
+    ]
     
     total_cells = len(df) * len(df.columns)
 
@@ -155,7 +168,12 @@ async def get_categorical_stats(session_id: str = Depends(require_session)):
     """Get statistics for categorical columns"""
     df = _get_dataframe(session_id)
     
-    categorical_df = df.select_dtypes(include=['object', 'category'])
+    categorical_columns = [
+        column_name
+        for column_name in df.columns
+        if _is_categorical_series(_get_series(df, column_name))
+    ]
+    categorical_df = df[categorical_columns]
     if categorical_df.empty:
         return {"stats": []}
     
