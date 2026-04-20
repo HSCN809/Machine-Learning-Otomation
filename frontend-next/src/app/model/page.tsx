@@ -1,22 +1,17 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { Target, BrainCircuit, SlidersHorizontal, Rocket, BarChart3, ChevronLeft, ChevronRight, Play, SkipForward } from 'lucide-react';
 import { Sidebar, Header } from '@/components/layout';
 import { ProtectedRouteBoundary } from '@/components/auth/ProtectedRouteBoundary';
-import {
-    TargetSelector,
-    ModelGrid,
-    HyperparameterForm,
-    TrainingProgress,
-    MetricsDisplay,
-    ConfusionMatrix,
-    FeatureImportance,
-    ModelComparison,
-    ResultsExport,
-} from '@/components/model-selection';
 import { NoDataWarning, SessionPageSkeleton, StepProgress } from '@/components/common';
+import { HyperparameterForm } from '@/components/model-selection/HyperparameterForm';
+import { MetricsDisplay } from '@/components/model-selection/MetricsDisplay';
+import { ModelGrid } from '@/components/model-selection/ModelGrid';
+import { TargetSelectorClean as TargetSelector } from '@/components/model-selection/TargetSelectorClean';
+import { TrainingProgress } from '@/components/model-selection/TrainingProgress';
 import { useModelSelection } from '@/hooks/useModelSelection';
 import { useDatasetBootstrap } from '@/hooks/useDatasetBootstrap';
 import { buildDataUploadHref } from '@/lib/routing';
@@ -29,6 +24,46 @@ const STEPS = [
     { id: 3, name: 'Eğitim', icon: <Rocket className="h-5 w-5" /> },
     { id: 4, name: 'Sonuçlar', icon: <BarChart3 className="h-5 w-5" /> },
 ];
+
+function ResultsPanelFallback() {
+    return (
+        <div className="rounded-xl border border-white/10 bg-white/5 p-6">
+            <div className="mb-4 h-6 w-40 animate-pulse rounded-lg bg-white/10" />
+            <div className="h-72 animate-pulse rounded-2xl bg-white/8" />
+        </div>
+    );
+}
+
+const ConfusionMatrix = dynamic(
+    () => import('@/components/model-selection/ConfusionMatrix').then((module) => module.ConfusionMatrix),
+    {
+        loading: () => <ResultsPanelFallback />,
+        ssr: false,
+    }
+);
+
+const FeatureImportance = dynamic(
+    () => import('@/components/model-selection/FeatureImportance').then((module) => module.FeatureImportance),
+    {
+        loading: () => <ResultsPanelFallback />,
+        ssr: false,
+    }
+);
+
+const ModelComparison = dynamic(
+    () => import('@/components/model-selection/ModelComparison').then((module) => module.ModelComparison),
+    {
+        loading: () => <ResultsPanelFallback />,
+    }
+);
+
+const ResultsExport = dynamic(
+    () => import('@/components/model-selection/ResultsExport').then((module) => module.ResultsExport),
+    {
+        loading: () => <ResultsPanelFallback />,
+        ssr: false,
+    }
+);
 
 export default function ModelSelectionPage() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);

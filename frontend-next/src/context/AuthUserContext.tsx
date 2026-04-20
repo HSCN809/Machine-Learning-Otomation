@@ -11,33 +11,54 @@ import {
 } from 'react';
 import { usePathname } from 'next/navigation';
 
-import { getCurrentUser, type AuthUser } from '@/lib/api';
+import { getAuthStatus, type AuthUser } from '@/lib/api';
 import { isProtectedPath } from '@/lib/routing';
+
+type AuthResolutionStatus = 'idle' | 'loading' | 'authenticated' | 'unauthenticated' | 'error';
 
 interface AuthUserContextValue {
     currentUser: AuthUser | null;
+    status: AuthResolutionStatus;
+    errorMessage: string;
     isLoading: boolean;
-    refreshCurrentUser: () => Promise<void>;
+    refreshAuth: () => Promise<void>;
 }
 
 const AuthUserContext = createContext<AuthUserContextValue | undefined>(undefined);
 
+function getErrorMessage(error: unknown): string {
+    if (error instanceof Error && error.message) {
+        return error.message;
+    }
+
+    return 'Auth state could not be resolved. Please try again.';
+}
+
 export function AuthUserProvider({ children }: { children: ReactNode }) {
     const pathname = usePathname();
     const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
-    const [isLoading, setIsLoading] = useState(false);
-    const [hasLoadedProtectedUser, setHasLoadedProtectedUser] = useState(false);
+    const [status, setStatus] = useState<AuthResolutionStatus>('idle');
+    const [errorMessage, setErrorMessage] = useState('');
 
-    const refreshCurrentUser = useCallback(async () => {
+    const refreshAuth = useCallback(async () => {
+        setStatus('loading');
+        setErrorMessage('');
+
         try {
-            setIsLoading(true);
-            const response = await getCurrentUser();
-            setCurrentUser(response.user);
-        } catch {
+            const response = await getAuthStatus();
+
+            if (response.authenticated && response.user) {
+                setCurrentUser(response.user);
+                setStatus('authenticated');
+                return;
+            }
+
             setCurrentUser(null);
-        } finally {
-            setHasLoadedProtectedUser(true);
-            setIsLoading(false);
+            setStatus('unauthenticated');
+        } catch (error) {
+            setCurrentUser(null);
+            setErrorMessage(getErrorMessage(error));
+            setStatus('error');
         }
     }, []);
 
@@ -46,23 +67,31 @@ export function AuthUserProvider({ children }: { children: ReactNode }) {
             return;
         }
 
-        if (!hasLoadedProtectedUser || currentUser === null) {
-            void refreshCurrentUser();
+        if (status === 'idle') {
+            const timerId = window.setTimeout(() => {
+                void refreshAuth();
+            }, 0);
+
+            return () => {
+                window.clearTimeout(timerId);
+            };
         }
-    }, [currentUser, hasLoadedProtectedUser, pathname, refreshCurrentUser]);
+    }, [pathname, refreshAuth, status]);
 
     useEffect(() => {
         function handleUserUpdated(event: Event) {
             const customEvent = event as CustomEvent<AuthUser>;
             if (customEvent.detail) {
                 setCurrentUser(customEvent.detail);
-                setHasLoadedProtectedUser(true);
+                setStatus('authenticated');
+                setErrorMessage('');
             }
         }
 
         function handleLogout() {
             setCurrentUser(null);
-            setHasLoadedProtectedUser(false);
+            setStatus('unauthenticated');
+            setErrorMessage('');
         }
 
         window.addEventListener('auth:user-updated', handleUserUpdated as EventListener);
@@ -77,10 +106,12 @@ export function AuthUserProvider({ children }: { children: ReactNode }) {
     const value = useMemo<AuthUserContextValue>(
         () => ({
             currentUser,
-            isLoading,
-            refreshCurrentUser,
+            status,
+            errorMessage,
+            isLoading: status === 'loading',
+            refreshAuth,
         }),
-        [currentUser, isLoading, refreshCurrentUser]
+        [currentUser, errorMessage, refreshAuth, status]
     );
 
     return <AuthUserContext.Provider value={value}>{children}</AuthUserContext.Provider>;

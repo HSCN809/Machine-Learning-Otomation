@@ -1,28 +1,19 @@
 'use client';
 
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 
-import { getAuthStatus } from '@/lib/api';
+import { useAuthUserContext } from '@/context/AuthUserContext';
 import { buildLoginHref, DEFAULT_AUTHENTICATED_PATH } from '@/lib/routing';
 
 interface ProtectedRouteBoundaryProps {
     children: ReactNode;
 }
 
-function getErrorMessage(error: unknown): string {
-    if (error instanceof Error && error.message) {
-        return error.message;
-    }
-
-    return 'Oturum kontrolü tamamlanamadı. Lütfen tekrar deneyin.';
-}
-
 export function ProtectedRouteBoundary({ children }: ProtectedRouteBoundaryProps) {
     const router = useRouter();
     const pathname = usePathname();
-
-    const [errorMessage, setErrorMessage] = useState('');
+    const { status, errorMessage } = useAuthUserContext();
 
     const nextPath = useMemo(() => {
         if (!pathname) {
@@ -37,35 +28,10 @@ export function ProtectedRouteBoundary({ children }: ProtectedRouteBoundaryProps
     }, [pathname]);
 
     useEffect(() => {
-        let cancelled = false;
-
-        async function verifyAuth() {
-            try {
-                const status = await getAuthStatus();
-                if (cancelled) {
-                    return;
-                }
-
-                if (status.authenticated && status.user) {
-                    return;
-                }
-
-                router.replace(buildLoginHref(nextPath));
-            } catch (error) {
-                if (cancelled) {
-                    return;
-                }
-
-                setErrorMessage(getErrorMessage(error));
-            }
+        if (status === 'unauthenticated') {
+            router.replace(buildLoginHref(nextPath));
         }
-
-        void verifyAuth();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [nextPath, router]);
+    }, [nextPath, router, status]);
 
     if (errorMessage) {
         return (
@@ -75,6 +41,10 @@ export function ProtectedRouteBoundary({ children }: ProtectedRouteBoundaryProps
                 </div>
             </div>
         );
+    }
+
+    if (status === 'idle' || status === 'loading' || status === 'unauthenticated') {
+        return null;
     }
 
     return <>{children}</>;

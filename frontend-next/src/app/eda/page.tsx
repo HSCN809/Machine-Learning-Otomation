@@ -1,20 +1,13 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { Sidebar, Header } from '@/components/layout';
 import { ProtectedRouteBoundary } from '@/components/auth/ProtectedRouteBoundary';
-import {
-    ChartCarousel,
-    StatsSummary,
-    DataTypesTable,
-    HistogramChart,
-    BoxPlotChart,
-    ScatterChart,
-    CorrelationMatrix,
-    CategoryDistribution,
-} from '@/components/eda';
 import { NoDataWarning, SessionPageSkeleton, StepProgress } from '@/components/common';
+import { DataTypesTable } from '@/components/eda/DataTypesTable';
+import { StatsSummary } from '@/components/eda/StatsSummary';
 import { useEDA } from '@/hooks/useEDA';
 import { useDatasetBootstrap } from '@/hooks/useDatasetBootstrap';
 import { buildDataUploadHref } from '@/lib/routing';
@@ -47,6 +40,61 @@ const tabs = [
 
 const chartSelectClassName =
     'min-w-[160px] rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-cyan-500/50';
+
+function AnalyticsPanelFallback() {
+    return (
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+            <div className="mb-6 h-6 w-48 animate-pulse rounded-lg bg-white/10" />
+            <div className="h-[420px] animate-pulse rounded-2xl bg-white/8" />
+        </div>
+    );
+}
+
+const ChartCarousel = dynamic(
+    () => import('@/components/eda/ChartCarousel').then((module) => module.ChartCarousel),
+    {
+        loading: () => <AnalyticsPanelFallback />,
+    }
+);
+
+const HistogramChart = dynamic(
+    () => import('@/components/eda/HistogramChart').then((module) => module.HistogramChart),
+    {
+        loading: () => <AnalyticsPanelFallback />,
+        ssr: false,
+    }
+);
+
+const BoxPlotChart = dynamic(
+    () => import('@/components/eda/BoxPlotChart').then((module) => module.BoxPlotChart),
+    {
+        loading: () => <AnalyticsPanelFallback />,
+        ssr: false,
+    }
+);
+
+const ScatterChart = dynamic(
+    () => import('@/components/eda/ScatterChart').then((module) => module.ScatterChart),
+    {
+        loading: () => <AnalyticsPanelFallback />,
+        ssr: false,
+    }
+);
+
+const CorrelationMatrix = dynamic(
+    () => import('@/components/eda/CorrelationMatrix').then((module) => module.CorrelationMatrix),
+    {
+        loading: () => <AnalyticsPanelFallback />,
+    }
+);
+
+const CategoryDistribution = dynamic(
+    () => import('@/components/eda/CategoryDistribution').then((module) => module.CategoryDistribution),
+    {
+        loading: () => <AnalyticsPanelFallback />,
+        ssr: false,
+    }
+);
 
 export default function EDAPage() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
