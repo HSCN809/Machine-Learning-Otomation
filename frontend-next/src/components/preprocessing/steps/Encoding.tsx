@@ -34,7 +34,9 @@ const METHOD_DETAILS_MARKDOWN: Record<EncodingMethod, string> = {
         '**Ne yapar?** Her kategoriyi veri içindeki görülme sıklığıyla temsil eder.\n\n**Ne zaman uygundur?** Kategori sayısı çok olduğunda daha kompakt bir temsil istediğinizde kullanılır.',
 };
 
-export function Encoding({ categoricalColumns, onApply, isLoading }: EncodingProps) {
+import React from 'react';
+
+export const Encoding = React.memo(function Encoding({ categoricalColumns, onApply, isLoading }: EncodingProps) {
     const [method, setMethod] = useState<EncodingMethod>('label');
     const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
     const [dropFirst, setDropFirst] = useState(true);
@@ -118,4 +120,4 @@ export function Encoding({ categoricalColumns, onApply, isLoading }: EncodingPro
             </button>
         </div>
     );
-}
+});

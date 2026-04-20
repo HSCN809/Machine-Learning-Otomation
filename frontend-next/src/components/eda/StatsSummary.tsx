@@ -11,7 +11,9 @@ interface StatsSummaryProps {
     duplicateRows: number;
 }
 
-export function StatsSummary({
+import React from 'react';
+
+export const StatsSummary = React.memo(function StatsSummary({
     numericStats,
     categoricalStats,
     columnTypes,
@@ -87,4 +89,4 @@ export function StatsSummary({
             })}
         </div>
     );
-}
+});

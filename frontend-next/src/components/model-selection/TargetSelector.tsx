@@ -13,7 +13,9 @@ interface TargetSelectorProps {
     disabled?: boolean;
 }
 
-export function TargetSelector({
+import React from 'react';
+
+export const TargetSelector = React.memo(function TargetSelector({
     columns,
     selectedColumn,
     problemType,
@@ -197,4 +199,4 @@ export function TargetSelector({
             )}
         </div>
     );
-}
+});

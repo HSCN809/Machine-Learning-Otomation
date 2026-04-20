@@ -11,7 +11,9 @@ interface TrainingProgressProps {
     completedModels: number;
 }
 
-export function TrainingProgress({
+import React from 'react';
+
+export const TrainingProgress = React.memo(function TrainingProgress({
     isTraining,
     status = 'idle',
     currentModel,
@@ -81,4 +83,4 @@ export function TrainingProgress({
             </div>
         </div>
     );
-}
+});

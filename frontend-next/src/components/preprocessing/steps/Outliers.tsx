@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useMemo, useState } from 'react';
 import { MethodSelector } from '../MethodSelector';
@@ -65,7 +65,9 @@ function renderMarkdown(content: string) {
     ));
 }
 
-export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) {
+import React from 'react';
+
+export const Outliers = React.memo(function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) {
     const [method, setMethod] = useState<OutlierMethod>('iqr_cap');
     const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
     const [threshold, setThreshold] = useState<string>('1.5');
@@ -359,4 +361,4 @@ export function Outliers({ numericColumns, onApply, isLoading }: OutliersProps) 
             )}
         </div>
     );
-}
+});

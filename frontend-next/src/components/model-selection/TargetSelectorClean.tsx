@@ -18,7 +18,9 @@ interface TargetSelectorProps {
 const EXIT_DURATION_MS = 150;
 const ENTER_DURATION_MS = 220;
 
-export function TargetSelectorClean({
+import React from 'react';
+
+export const TargetSelectorClean = React.memo(function TargetSelectorClean({
     columns,
     selectedColumn,
     problemType,
@@ -363,4 +365,4 @@ export function TargetSelectorClean({
             `}</style>
         </div>
     );
-}
+});

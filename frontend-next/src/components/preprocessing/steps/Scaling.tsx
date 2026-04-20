@@ -34,7 +34,9 @@ const METHOD_DETAILS_MARKDOWN: Record<ScalingMethod, string> = {
         '**Ne yapar?** Her satırı seçilen norma göre birim vektöre dönüştürür.\n\n**Ne zaman uygundur?** Yön bilgisinin büyüklükten daha önemli olduğu metin/vektör benzerliği problemlerinde faydalıdır.',
 };
 
-export function Scaling({ numericColumns, onApply, isLoading }: ScalingProps) {
+import React from 'react';
+
+export const Scaling = React.memo(function Scaling({ numericColumns, onApply, isLoading }: ScalingProps) {
     const [method, setMethod] = useState<ScalingMethod>('standard');
     const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
 
@@ -99,4 +101,4 @@ export function Scaling({ numericColumns, onApply, isLoading }: ScalingProps) {
             </button>
         </div>
     );
-}
+});

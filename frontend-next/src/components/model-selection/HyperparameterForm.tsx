@@ -11,7 +11,9 @@ interface HyperparameterFormProps {
     onUpdateParams: (modelId: string, params: Record<string, unknown>) => void;
 }
 
-export function HyperparameterForm({
+import React from 'react';
+
+export const HyperparameterForm = React.memo(function HyperparameterForm({
     models,
     selectedModels,
     params,
@@ -136,4 +138,4 @@ export function HyperparameterForm({
             })}
         </div>
     );
-}
+});

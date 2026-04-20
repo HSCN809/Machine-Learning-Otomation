@@ -10,7 +10,9 @@ interface ModelGridProps {
     disabled?: boolean;
 }
 
-export function ModelGrid({ models, selectedModels, onToggle, disabled = false }: ModelGridProps) {
+import React from 'react';
+
+export const ModelGrid = React.memo(function ModelGrid({ models, selectedModels, onToggle, disabled = false }: ModelGridProps) {
     const modelsByCategory = models.reduce((acc, model) => {
         if (!acc[model.category]) acc[model.category] = [];
         acc[model.category].push(model);
@@ -61,4 +63,4 @@ export function ModelGrid({ models, selectedModels, onToggle, disabled = false }
             })}
         </div>
     );
-}
+});

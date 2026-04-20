@@ -112,7 +112,9 @@ function renderMarkdown(content: string) {
     ));
 }
 
-export function FeatureEngineeringLegacy({ columns, numericColumns, onApply, isLoading }: FeatureEngineeringProps) {
+import React from 'react';
+
+export const FeatureEngineeringLegacy = React.memo(function FeatureEngineeringLegacy({ columns, numericColumns, onApply, isLoading }: FeatureEngineeringProps) {
     const [operation, setOperation] = useState<FeatureOperation>('create_numeric');
     const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
     const [newColumnName, setNewColumnName] = useState('');
@@ -238,9 +240,9 @@ export function FeatureEngineeringLegacy({ columns, numericColumns, onApply, isL
             </button>
         </div>
     );
-}
+});
 
-export function FeatureEngineering({ columns, numericColumns, onApply, onDropColumns, isLoading }: FeatureEngineeringProps) {
+export const FeatureEngineering = React.memo(function FeatureEngineering({ columns, numericColumns, onApply, onDropColumns, isLoading }: FeatureEngineeringProps) {
     const [activeTab, setActiveTab] = useState<FeatureTab>('numeric');
 
     const [numericOperation, setNumericOperation] = useState<NumericFeatureOperation>('add');
@@ -812,7 +814,7 @@ export function FeatureEngineering({ columns, numericColumns, onApply, onDropCol
             )}
         </div>
     );
-}
+});
 
 function DropColumnsTab({ columns, isLoading, onDropColumns }: DropColumnsTabProps) {
     const [selectedColumns, setSelectedColumns] = useState<string[]>([]);

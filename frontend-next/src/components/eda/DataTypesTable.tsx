@@ -8,7 +8,9 @@ interface DataTypesTableProps {
     columnTypes: ColumnType[];
 }
 
-export function DataTypesTable({ columnTypes }: DataTypesTableProps) {
+import React from 'react';
+
+export const DataTypesTable = React.memo(function DataTypesTable({ columnTypes }: DataTypesTableProps) {
     const getTypeColor = (type: string) => {
         switch (type) {
             case 'numeric':
@@ -143,4 +145,4 @@ export function DataTypesTable({ columnTypes }: DataTypesTableProps) {
             </div>
         </div>
     );
-}
+});

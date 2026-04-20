@@ -66,7 +66,9 @@ const METHOD_DETAILS_MARKDOWN: Record<MissingValueMethod, string> = {
     drop_columns: '**Ne yapar?** Eksik değer içeren özellikleri tamamen kaldırır.\n\n**Ne zaman uygundur?** Bilgi değeri düşük veya eksik oranı çok yüksek alanlarda modeli sadeleştirmek için kullanılabilir.',
 };
 
-export function MissingValues({ columnsWithMissing, onApply, isLoading }: MissingValuesProps) {
+import React from 'react';
+
+export const MissingValues = React.memo(function MissingValues({ columnsWithMissing, onApply, isLoading }: MissingValuesProps) {
     const [method, setMethod] = useState<MissingValueMethod>('fill_mean');
     const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
     const [activeCategory, setActiveCategory] = useState<MethodCategory>('numeric');
@@ -200,4 +202,4 @@ export function MissingValues({ columnsWithMissing, onApply, isLoading }: Missin
             </button>
         </div>
     );
-}
+});
