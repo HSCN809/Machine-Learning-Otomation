@@ -140,6 +140,8 @@ async def upload_file(
             "column_names": df.columns.tolist(),
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -449,8 +451,11 @@ async def reset_upload(
     """Clear/reset the current session data"""
     try:
         # Clear the dataframe from session
+        memory_session = session_manager.get_session(session_id)
+        owner_user_id = memory_session.get("owner_user_id") if memory_session else None
+        if owner_user_id:
+            delete_persisted_session(session_id, owner_user_id, db)
         session_manager.delete_session(session_id)
-        delete_persisted_session(session_id, db)
         
         return {
             "success": True,

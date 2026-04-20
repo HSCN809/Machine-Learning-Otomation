@@ -3,8 +3,8 @@
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import DateTime, Integer, JSON, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.api.database import Base
 
@@ -19,6 +19,12 @@ class DatasetSession(Base):
     __tablename__ = "dataset_sessions"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
     filename: Mapped[str | None] = mapped_column(String(512), nullable=True)
     row_count: Mapped[int] = mapped_column(Integer, nullable=False)
     column_count: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -32,3 +38,4 @@ class DatasetSession(Base):
         onupdate=utc_now,
         nullable=False,
     )
+    user: Mapped["User"] = relationship("User")

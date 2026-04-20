@@ -21,7 +21,7 @@ from starlette.responses import StreamingResponse
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
-from ..dependencies import session_manager, require_session
+from ..dependencies import get_current_user, require_session, session_manager
 
 try:
     import xgboost as xgb
@@ -702,9 +702,10 @@ async def stream_training(
     request: Request,
     job_id: str,
     session_id: str = Query(...),
+    current_user=Depends(get_current_user),
 ):
     """Stream training progress for a job via SSE."""
-    if not session_manager.get_session(session_id):
+    if not session_manager.owns_session(session_id, current_user.id):
         raise HTTPException(status_code=400, detail="Valid session ID required. Upload data first.")
 
     snapshot = _get_job_snapshot(job_id)

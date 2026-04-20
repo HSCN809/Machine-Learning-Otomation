@@ -27,10 +27,11 @@ class SessionManager:
         self._sessions: Dict[str, Dict[str, Any]] = {}
         self.timeout = timedelta(minutes=timeout_minutes)
     
-    def create_session(self) -> str:
+    def create_session(self, owner_user_id: Optional[str] = None) -> str:
         """Create a new session and return session ID"""
         session_id = str(uuid.uuid4())
         self._sessions[session_id] = {
+            "owner_user_id": owner_user_id,
             "created_at": datetime.now(),
             "last_accessed": datetime.now(),
             "data": None,
@@ -55,10 +56,12 @@ class SessionManager:
         df: pd.DataFrame,
         original_df: pd.DataFrame,
         metadata: Dict[str, Any],
+        owner_user_id: str,
         created_at: Optional[datetime] = None,
     ):
         """Restore a persisted session into memory."""
         self._sessions[session_id] = {
+            "owner_user_id": owner_user_id,
             "created_at": created_at or datetime.now(),
             "last_accessed": datetime.now(),
             "data": df,
@@ -68,6 +71,14 @@ class SessionManager:
             "metadata": metadata,
         }
         logger.info(f"Restored persisted session: {session_id}")
+
+    def owns_session(self, session_id: str, user_id: str) -> bool:
+        """Return whether an in-memory session belongs to the given user."""
+        session = self._sessions.get(session_id)
+        if not session or session.get("owner_user_id") != user_id:
+            return False
+        session["last_accessed"] = datetime.now()
+        return True
     
     def set_dataframe(self, session_id: str, df: pd.DataFrame, is_original: bool = False):
         """Store DataFrame in session"""
@@ -197,89 +208,6 @@ def get_db():
         db.close()
 
 
-def restore_persisted_session(session_id: str, db: Session) -> bool:
-    """Load a persisted dataset session into the in-memory manager."""
-    record = DataSessionRepository(db).get_session(session_id)
-    if record is None:
-        return False
-
-    session_manager.restore_session(
-        session_id=session_id,
-        df=dataframe_from_json(record.data_json),
-        original_df=dataframe_from_json(record.original_data_json),
-        metadata=record.metadata_json or {},
-        created_at=record.created_at,
-    )
-    return True
-
-
-def persist_session(session_id: str, db: Session):
-    """Persist the current in-memory dataset session to PostgreSQL."""
-    session = session_manager.get_session(session_id)
-    if not session or session.get("data") is None:
-        raise HTTPException(status_code=400, detail="No data loaded")
-
-    original_df = session.get("original_data")
-    if original_df is None:
-        original_df = session["data"].copy(deep=True)
-
-    DataSessionRepository(db).upsert_session(
-        session_id=session_id,
-        data=session["data"],
-        original_data=original_df,
-        metadata=session.get("metadata", {}),
-        created_at=session.get("created_at"),
-    )
-    db.commit()
-
-
-def delete_persisted_session(session_id: str, db: Session):
-    """Delete a persisted dataset session from PostgreSQL."""
-    DataSessionRepository(db).delete_session(session_id)
-    db.commit()
-
-
-async def get_session_id(
-    x_session_id: Optional[str] = Header(None),
-    db: Session = Depends(get_db),
-) -> str:
-    """Dependency to get or create session ID"""
-    if x_session_id and session_manager.get_session(x_session_id):
-        return x_session_id
-    if x_session_id and restore_persisted_session(x_session_id, db):
-        return x_session_id
-    return session_manager.create_session()
-
-
-async def require_session(
-    x_session_id: str = Header(...),
-    db: Session = Depends(get_db),
-) -> str:
-    """Dependency that requires a valid session"""
-    has_session = bool(x_session_id and session_manager.get_session(x_session_id))
-    if not has_session and x_session_id:
-        has_session = restore_persisted_session(x_session_id, db)
-
-    if not has_session:
-        raise HTTPException(
-            status_code=400,
-            detail="Valid session ID required. Upload data first."
-        )
-    return x_session_id
-
-
-async def require_data(x_session_id: str = Header(...)) -> pd.DataFrame:
-    """Dependency that requires session with loaded data"""
-    session_id = await require_session(x_session_id)
-    df = session_manager.get_dataframe(session_id)
-    if df is None:
-        raise HTTPException(
-            status_code=400,
-            detail="No data loaded. Please upload data first."
-        )
-    return df
-
-
 def get_current_user(
     auth_cookie: Optional[str] = Cookie(default=None, alias=settings.AUTH_COOKIE_NAME),
     db: Session = Depends(get_db),
@@ -318,3 +246,98 @@ def require_authenticated_user(
 ) -> User:
     """Alias dependency for protected routers."""
     return current_user
+
+
+def restore_persisted_session(session_id: str, user_id: str, db: Session) -> bool:
+    """Load a persisted dataset session into the in-memory manager."""
+    record = DataSessionRepository(db).get_session(session_id, user_id)
+    if record is None:
+        return False
+
+    session_manager.restore_session(
+        session_id=session_id,
+        df=dataframe_from_json(record.data_json),
+        original_df=dataframe_from_json(record.original_data_json),
+        metadata=record.metadata_json or {},
+        owner_user_id=user_id,
+        created_at=record.created_at,
+    )
+    return True
+
+
+def persist_session(session_id: str, db: Session):
+    """Persist the current in-memory dataset session to PostgreSQL."""
+    session = session_manager.get_session(session_id)
+    if not session or session.get("data") is None:
+        raise HTTPException(status_code=400, detail="No data loaded")
+
+    user_id = session.get("owner_user_id")
+    if not user_id:
+        raise HTTPException(status_code=400, detail="Valid session ID required. Upload data first.")
+
+    original_df = session.get("original_data")
+    if original_df is None:
+        original_df = session["data"].copy(deep=True)
+
+    DataSessionRepository(db).upsert_session(
+        session_id=session_id,
+        user_id=user_id,
+        data=session["data"],
+        original_data=original_df,
+        metadata=session.get("metadata", {}),
+        created_at=session.get("created_at"),
+    )
+    db.commit()
+
+
+def delete_persisted_session(session_id: str, user_id: str, db: Session):
+    """Delete a persisted dataset session from PostgreSQL."""
+    DataSessionRepository(db).delete_session(session_id, user_id)
+    db.commit()
+
+
+async def get_session_id(
+    x_session_id: Optional[str] = Header(None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> str:
+    """Dependency to get or create session ID"""
+    if x_session_id and session_manager.owns_session(x_session_id, current_user.id):
+        return x_session_id
+    if x_session_id and restore_persisted_session(x_session_id, current_user.id, db):
+        return x_session_id
+    return session_manager.create_session(owner_user_id=current_user.id)
+
+
+async def require_session(
+    x_session_id: str = Header(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> str:
+    """Dependency that requires a valid session"""
+    has_session = bool(x_session_id and session_manager.owns_session(x_session_id, current_user.id))
+    if not has_session and x_session_id:
+        has_session = restore_persisted_session(x_session_id, current_user.id, db)
+
+    if not has_session:
+        raise HTTPException(
+            status_code=400,
+            detail="Valid session ID required. Upload data first."
+        )
+    return x_session_id
+
+
+async def require_data(
+    x_session_id: str = Header(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> pd.DataFrame:
+    """Dependency that requires session with loaded data"""
+    session_id = await require_session(x_session_id, current_user, db)
+    df = session_manager.get_dataframe(session_id)
+    if df is None:
+        raise HTTPException(
+            status_code=400,
+            detail="No data loaded. Please upload data first."
+        )
+    return df

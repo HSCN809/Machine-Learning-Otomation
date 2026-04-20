@@ -13,13 +13,14 @@ import numpy as np
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 from starlette.responses import StreamingResponse
 
 logger = logging.getLogger(__name__)
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
-from ..dependencies import session_manager, require_session
+from ..dependencies import get_db, persist_session, require_session, session_manager
 from backend.modules.data_preprocessing.feature_engineering.processor import (
     create_binned_feature,
     create_categorical_combination,
@@ -229,7 +230,8 @@ def _validate_expression(expression: str, allowed_names: set[str]) -> ast.Expres
 @router.post("/missing-values")
 async def handle_missing_values(
     request: MissingValuesRequest,
-    session_id: str = Depends(require_session)
+    session_id: str = Depends(require_session),
+    db: Session = Depends(get_db),
 ):
     """Handle missing values"""
     df = session_manager.get_dataframe(session_id)
@@ -283,6 +285,7 @@ async def handle_missing_values(
             "columns": request.columns,
             "affected_rows": affected_rows,
         })
+        persist_session(session_id, db)
         
         return {
             "success": True,
@@ -301,7 +304,8 @@ async def handle_missing_values(
 @router.post("/outliers")
 async def handle_outliers(
     request: OutliersRequest,
-    session_id: str = Depends(require_session)
+    session_id: str = Depends(require_session),
+    db: Session = Depends(get_db),
 ):
     """Handle outliers"""
     df = session_manager.get_dataframe(session_id)
@@ -358,6 +362,7 @@ async def handle_outliers(
             "winsorize_percent": request.winsorize_percent if outlier_method == "iqr_winsorize" else None,
             "affected_rows": affected_rows,
         })
+        persist_session(session_id, db)
         
         return {
             "success": True,
@@ -415,7 +420,8 @@ async def analyze_outlier_columns(
 @router.post("/encoding")
 async def handle_encoding(
     request: EncodingRequest,
-    session_id: str = Depends(require_session)
+    session_id: str = Depends(require_session),
+    db: Session = Depends(get_db),
 ):
     """Handle categorical encoding"""
     df = session_manager.get_dataframe(session_id)
@@ -466,6 +472,7 @@ async def handle_encoding(
                 "ordinal_mapping": request.ordinal_mapping if request.method == "ordinal" else None,
             },
         })
+        persist_session(session_id, db)
         
         return {
             "success": True,
@@ -475,6 +482,8 @@ async def handle_encoding(
             "total_columns": len(df.columns),
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -482,7 +491,8 @@ async def handle_encoding(
 @router.post("/scaling")
 async def handle_scaling(
     request: ScalingRequest,
-    session_id: str = Depends(require_session)
+    session_id: str = Depends(require_session),
+    db: Session = Depends(get_db),
 ):
     """Handle feature scaling"""
     df = session_manager.get_dataframe(session_id)
@@ -521,6 +531,7 @@ async def handle_scaling(
                 "feature_range": list(request.feature_range) if request.feature_range is not None else None,
             },
         })
+        persist_session(session_id, db)
         
         return {
             "success": True,
@@ -528,6 +539,8 @@ async def handle_scaling(
             "columns": valid_columns,
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -535,7 +548,8 @@ async def handle_scaling(
 @router.post("/feature-engineering")
 async def handle_feature_engineering(
     request: FeatureRequest,
-    session_id: str = Depends(require_session)
+    session_id: str = Depends(require_session),
+    db: Session = Depends(get_db),
 ):
     """Create new features"""
     df = session_manager.get_dataframe(session_id)
@@ -627,6 +641,7 @@ async def handle_feature_engineering(
         session_manager.add_history_snapshot(session_id, previous_df)
         history_payload["new_columns"] = new_columns
         session_manager.add_history(session_id, history_payload)
+        persist_session(session_id, db)
 
         return {
             "success": True,
@@ -651,7 +666,8 @@ async def get_history(session_id: str = Depends(require_session)):
 @router.post("/drop-columns")
 async def handle_drop_columns(
     request: DropColumnsRequest,
-    session_id: str = Depends(require_session)
+    session_id: str = Depends(require_session),
+    db: Session = Depends(get_db),
 ):
     """Drop specified columns from the dataframe"""
     df = session_manager.get_dataframe(session_id)
@@ -680,6 +696,7 @@ async def handle_drop_columns(
             "columns": existing_columns,
             "reason": request.reason,
         })
+        persist_session(session_id, db)
         
         return {
             "success": True,
@@ -756,12 +773,16 @@ async def analyze_droppable_columns(
 
 
 @router.post("/undo")
-async def undo_last_preprocessing(session_id: str = Depends(require_session)):
+async def undo_last_preprocessing(
+    session_id: str = Depends(require_session),
+    db: Session = Depends(get_db),
+):
     """Undo the last preprocessing action"""
     undone_action = session_manager.undo_last_history_action(session_id)
     current_df = session_manager.get_dataframe(session_id)
     if current_df is None:
         raise HTTPException(status_code=400, detail="No data loaded")
+    persist_session(session_id, db)
 
     return {
         "success": True,
@@ -775,13 +796,15 @@ async def undo_last_preprocessing(session_id: str = Depends(require_session)):
 @router.post("/undo-to")
 async def undo_to_history_item(
     request: UndoToHistoryRequest,
-    session_id: str = Depends(require_session)
+    session_id: str = Depends(require_session),
+    db: Session = Depends(get_db),
 ):
     """Undo the selected preprocessing action and all newer actions"""
     undo_result = session_manager.undo_to_history_index(session_id, request.history_index)
     current_df = session_manager.get_dataframe(session_id)
     if current_df is None:
         raise HTTPException(status_code=400, detail="No data loaded")
+    persist_session(session_id, db)
 
     return {
         "success": True,
@@ -794,7 +817,10 @@ async def undo_to_history_item(
 
 
 @router.post("/reset")
-async def reset_data(session_id: str = Depends(require_session)):
+async def reset_data(
+    session_id: str = Depends(require_session),
+    db: Session = Depends(get_db),
+):
     """Reset to original data"""
     original_df = session_manager.get_original_dataframe(session_id)
     if original_df is None:
@@ -805,6 +831,7 @@ async def reset_data(session_id: str = Depends(require_session)):
     if session:
         session["history"] = []
         session["history_snapshots"] = []
+    persist_session(session_id, db)
     
     return {
         "success": True,

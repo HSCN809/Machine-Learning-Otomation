@@ -291,7 +291,9 @@ export async function getDataValidation(): Promise<ValidationResponse> {
 }
 
 export async function resetUpload(): Promise<{ success: boolean; message: string }> {
-    return apiFetch('/api/upload/reset', { method: 'DELETE' });
+    const response = await apiFetch<{ success: boolean; message: string }>('/api/upload/reset', { method: 'DELETE' });
+    clearStoredSession();
+    return response;
 }
 
 interface EditorPreviewResponse {
