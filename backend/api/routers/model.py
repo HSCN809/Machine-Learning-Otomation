@@ -23,7 +23,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
 from sqlalchemy.orm import Session
 
-from ..dependencies import get_current_user, get_db, require_session, session_manager
+from ..dependencies import (
+    get_current_user,
+    get_db,
+    persist_session,
+    require_session,
+    session_manager,
+)
 from backend.modules.model_selection.persistence import TrainedModelRepository
 
 try:
@@ -276,6 +282,7 @@ def _store_training_metadata(
     problem_type: Optional[str] = None,
     results: Optional[List[Dict[str, Any]]] = None,
     active_job_id: Optional[str] = None,
+    db: Optional[Session] = None,
 ):
     if target_column is not None:
         session_manager.set_metadata(session_id, "training_target_column", target_column)
@@ -284,6 +291,57 @@ def _store_training_metadata(
     if results is not None:
         session_manager.set_metadata(session_id, "training_results", results)
     session_manager.set_metadata(session_id, "active_training_job_id", active_job_id)
+    if db is not None:
+        persist_session(session_id, db)
+
+
+def _build_result_payload(
+    *,
+    model_id: str,
+    model_name: str,
+    metrics: Optional[Dict[str, Any]] = None,
+    training_time: Optional[float] = None,
+    confusion_matrix: Optional[List[List[int]]] = None,
+    confusion_labels: Optional[List[str]] = None,
+    feature_importance: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    return {
+        "model_id": model_id,
+        "model_name": model_name,
+        "metrics": metrics or {},
+        "confusion_matrix": confusion_matrix,
+        "confusion_labels": confusion_labels,
+        "feature_importance": feature_importance or [],
+        "training_time": training_time,
+    }
+
+
+def _load_persisted_training_results(
+    session_id: str,
+    db: Session,
+) -> tuple[list[dict[str, Any]], Optional[str], Optional[str]]:
+    session = session_manager.get_session(session_id)
+    user_id = session.get("owner_user_id") if session else None
+    if not user_id:
+        return [], None, None
+
+    repo = TrainedModelRepository(db)
+    records = repo.list_models(dataset_session_id=session_id, user_id=user_id)
+    if not records:
+        return [], None, None
+
+    problem_type = records[0].problem_type
+    target_column = records[0].target_column
+    results = [
+        _build_result_payload(
+            model_id=record.model_id,
+            model_name=record.model_name,
+            metrics=record.metrics_json,
+            training_time=record.training_time,
+        )
+        for record in records
+    ]
+    return _sort_training_results(results, problem_type), problem_type, target_column
 
 
 def _create_job(session_id: str, request: TrainRequest) -> str:
@@ -540,6 +598,7 @@ def _run_training_job(job_id: str):
             problem_type=problem_type,
             results=[],
             active_job_id=job_id,
+            db=db,
         )
 
         results: List[Dict[str, Any]] = []
@@ -562,6 +621,7 @@ def _run_training_job(job_id: str):
                     problem_type=problem_type,
                     results=_sort_training_results(results, problem_type),
                     active_job_id=None,
+                    db=db,
                 )
                 return
 
@@ -596,6 +656,7 @@ def _run_training_job(job_id: str):
                 problem_type=problem_type,
                 results=sorted_results,
                 active_job_id=job_id,
+                db=db,
             )
 
         if not results:
@@ -615,6 +676,7 @@ def _run_training_job(job_id: str):
             problem_type=problem_type,
             results=final_results,
             active_job_id=None,
+            db=db,
         )
     except HTTPException as exc:
         _update_job(
@@ -624,7 +686,7 @@ def _run_training_job(job_id: str):
             error=exc.detail,
             finished_at=datetime.now().isoformat(),
         )
-        _store_training_metadata(session_id, active_job_id=None)
+        _store_training_metadata(session_id, active_job_id=None, db=db)
     except Exception as exc:
         _update_job(
             job_id,
@@ -633,7 +695,7 @@ def _run_training_job(job_id: str):
             error=str(exc),
             finished_at=datetime.now().isoformat(),
         )
-        _store_training_metadata(session_id, active_job_id=None)
+        _store_training_metadata(session_id, active_job_id=None, db=db)
     finally:
         db.close()
 
@@ -909,15 +971,17 @@ async def train_models(
                     })
                 feature_importance.sort(key=lambda x: x["importance"], reverse=True)
             
-            results.append({
-                "model_id": model_id,
-                "model_name": model_names.get(model_id, model_id),
-                "metrics": metrics,
-                "confusion_matrix": confusion,
-                "confusion_labels": confusion_labels,
-                "feature_importance": feature_importance[:10],  # Top 10
-                "training_time": round(training_time, 2),
-            })
+            results.append(
+                _build_result_payload(
+                    model_id=model_id,
+                    model_name=model_names.get(model_id, model_id),
+                    metrics=metrics,
+                    confusion_matrix=confusion,
+                    confusion_labels=confusion_labels,
+                    feature_importance=feature_importance[:10],
+                    training_time=round(training_time, 2),
+                )
+            )
             _store_trained_model_artifact(
                 session_id,
                 db,
@@ -938,9 +1002,14 @@ async def train_models(
         primary_metric = "accuracy" if is_classification else "r2"
         results = sorted(results, key=lambda item: item["metrics"].get(primary_metric, 0), reverse=True)
         
-        # Store results in session
-        session_manager.set_metadata(session_id, "training_results", results)
-        session_manager.set_metadata(session_id, "problem_type", problem_type)
+        _store_training_metadata(
+            session_id,
+            target_column=request.target_column,
+            problem_type=problem_type,
+            results=results,
+            active_job_id=None,
+            db=db,
+        )
         
         return {
             "success": True,
@@ -957,16 +1026,37 @@ async def train_models(
 
 
 @router.get("/results")
-async def get_results(session_id: str = Depends(require_session)):
+async def get_results(
+    session_id: str = Depends(require_session),
+    db: Session = Depends(get_db),
+):
     """Get training results"""
     results = session_manager.get_metadata(session_id, "training_results")
     problem_type = session_manager.get_metadata(session_id, "problem_type")
     target_column = session_manager.get_metadata(session_id, "training_target_column")
     active_job = _find_active_job_for_session(session_id)
-    
+
+    if not results:
+        persisted_results, persisted_problem_type, persisted_target_column = _load_persisted_training_results(
+            session_id,
+            db,
+        )
+        if persisted_results:
+            results = persisted_results
+            problem_type = persisted_problem_type
+            target_column = target_column or persisted_target_column
+            _store_training_metadata(
+                session_id,
+                target_column=target_column,
+                problem_type=problem_type,
+                results=results,
+                active_job_id=session_manager.get_metadata(session_id, "active_training_job_id"),
+                db=db,
+            )
+
     if not results and not active_job:
         return {"results": [], "problem_type": None, "target_column": target_column, "job": None}
-    
+
     return {
         "results": results or (active_job["results"] if active_job else []),
         "problem_type": problem_type or (active_job["problem_type"] if active_job else None),
@@ -976,14 +1066,20 @@ async def get_results(session_id: str = Depends(require_session)):
 
 
 @router.get("/comparison")
-async def get_comparison(session_id: str = Depends(require_session)):
+async def get_comparison(
+    session_id: str = Depends(require_session),
+    db: Session = Depends(get_db),
+):
     """Get model comparison"""
     results = session_manager.get_metadata(session_id, "training_results")
     problem_type = session_manager.get_metadata(session_id, "problem_type")
-    
+
+    if not results:
+        results, problem_type, _ = _load_persisted_training_results(session_id, db)
+
     if not results:
         return {"comparison": [], "best_model": None}
-    
+
     # Sort by primary metric
     if problem_type == "classification":
         sorted_results = sorted(results, key=lambda x: x["metrics"].get("accuracy", 0), reverse=True)
