@@ -11,6 +11,7 @@ import logging
 from .database import Base, engine
 from .dependencies import require_authenticated_user
 from .routers import auth, upload, eda, preprocessing, model
+from backend.modules.data_upload import models as data_upload_models  # noqa: F401
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)

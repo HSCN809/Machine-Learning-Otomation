@@ -5,6 +5,7 @@ Upload Router - File upload and data loading endpoints
 from datetime import date, datetime
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 from typing import Any, Optional
 import pandas as pd
 import numpy as np
@@ -16,7 +17,14 @@ import math
 # Add parent paths for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
-from ..dependencies import session_manager, get_session_id, require_session
+from ..dependencies import (
+    delete_persisted_session,
+    get_db,
+    get_session_id,
+    persist_session,
+    require_session,
+    session_manager,
+)
 
 router = APIRouter()
 
@@ -94,7 +102,8 @@ def _read_excel_content(content: bytes, filename: str) -> pd.DataFrame:
 @router.post("/file")
 async def upload_file(
     file: UploadFile = File(...),
-    session_id: str = Depends(get_session_id)
+    session_id: str = Depends(get_session_id),
+    db: Session = Depends(get_db),
 ):
     """Upload a file (CSV, Excel, JSON)"""
     try:
@@ -119,6 +128,7 @@ async def upload_file(
         # Store in session
         session_manager.set_dataframe(session_id, df, is_original=True)
         session_manager.set_metadata(session_id, "filename", file.filename)
+        persist_session(session_id, db)
         
         # Return summary
         return {
@@ -137,7 +147,8 @@ async def upload_file(
 @router.post("/sample/{dataset_name}")
 async def load_sample_dataset(
     dataset_name: str,
-    session_id: str = Depends(get_session_id)
+    session_id: str = Depends(get_session_id),
+    db: Session = Depends(get_db),
 ):
     """Load a sample dataset"""
     try:
@@ -153,6 +164,7 @@ async def load_sample_dataset(
         # Store in session
         session_manager.set_dataframe(session_id, df, is_original=True)
         session_manager.set_metadata(session_id, "filename", dataset_name)
+        persist_session(session_id, db)
         
         return {
             "success": True,
@@ -311,7 +323,8 @@ async def get_editor_preview(
 @router.post("/editor/commit")
 async def commit_editor_changes(
     request: EditorCommitRequest,
-    session_id: str = Depends(require_session)
+    session_id: str = Depends(require_session),
+    db: Session = Depends(get_db),
 ):
     """Apply manual editor changes to the session dataframe."""
     df = _get_editor_dataframe(session_id)
@@ -382,6 +395,7 @@ async def commit_editor_changes(
         "renamed_columns": request.renamed_columns,
     })
     session_manager.set_metadata(session_id, "editor_commits", editor_commits)
+    persist_session(session_id, db)
 
     return {
         "success": True,
@@ -428,11 +442,15 @@ def _generate_sample_data(dataset_name: str) -> Optional[pd.DataFrame]:
 
 
 @router.delete("/reset")
-async def reset_upload(session_id: str = Depends(get_session_id)):
+async def reset_upload(
+    session_id: str = Depends(get_session_id),
+    db: Session = Depends(get_db),
+):
     """Clear/reset the current session data"""
     try:
         # Clear the dataframe from session
         session_manager.delete_session(session_id)
+        delete_persisted_session(session_id, db)
         
         return {
             "success": True,

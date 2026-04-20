@@ -15,6 +15,7 @@ from backend.api.database import SessionLocal
 from backend.modules.auth.models import AuthSession, User
 from backend.modules.auth.security import hash_session_token
 from backend.modules.config import settings
+from backend.modules.data_upload.persistence import DataSessionRepository, dataframe_from_json
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,26 @@ class SessionManager:
         if session:
             session["last_accessed"] = datetime.now()
         return session
+
+    def restore_session(
+        self,
+        session_id: str,
+        df: pd.DataFrame,
+        original_df: pd.DataFrame,
+        metadata: Dict[str, Any],
+        created_at: Optional[datetime] = None,
+    ):
+        """Restore a persisted session into memory."""
+        self._sessions[session_id] = {
+            "created_at": created_at or datetime.now(),
+            "last_accessed": datetime.now(),
+            "data": df,
+            "original_data": original_df,
+            "history": [],
+            "history_snapshots": [],
+            "metadata": metadata,
+        }
+        logger.info(f"Restored persisted session: {session_id}")
     
     def set_dataframe(self, session_id: str, df: pd.DataFrame, is_original: bool = False):
         """Store DataFrame in session"""
@@ -167,16 +188,79 @@ class SessionManager:
 session_manager = SessionManager()
 
 
-async def get_session_id(x_session_id: Optional[str] = Header(None)) -> str:
+def get_db():
+    """Yield SQLAlchemy DB session."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def restore_persisted_session(session_id: str, db: Session) -> bool:
+    """Load a persisted dataset session into the in-memory manager."""
+    record = DataSessionRepository(db).get_session(session_id)
+    if record is None:
+        return False
+
+    session_manager.restore_session(
+        session_id=session_id,
+        df=dataframe_from_json(record.data_json),
+        original_df=dataframe_from_json(record.original_data_json),
+        metadata=record.metadata_json or {},
+        created_at=record.created_at,
+    )
+    return True
+
+
+def persist_session(session_id: str, db: Session):
+    """Persist the current in-memory dataset session to PostgreSQL."""
+    session = session_manager.get_session(session_id)
+    if not session or session.get("data") is None:
+        raise HTTPException(status_code=400, detail="No data loaded")
+
+    original_df = session.get("original_data")
+    if original_df is None:
+        original_df = session["data"].copy(deep=True)
+
+    DataSessionRepository(db).upsert_session(
+        session_id=session_id,
+        data=session["data"],
+        original_data=original_df,
+        metadata=session.get("metadata", {}),
+        created_at=session.get("created_at"),
+    )
+    db.commit()
+
+
+def delete_persisted_session(session_id: str, db: Session):
+    """Delete a persisted dataset session from PostgreSQL."""
+    DataSessionRepository(db).delete_session(session_id)
+    db.commit()
+
+
+async def get_session_id(
+    x_session_id: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+) -> str:
     """Dependency to get or create session ID"""
     if x_session_id and session_manager.get_session(x_session_id):
+        return x_session_id
+    if x_session_id and restore_persisted_session(x_session_id, db):
         return x_session_id
     return session_manager.create_session()
 
 
-async def require_session(x_session_id: str = Header(...)) -> str:
+async def require_session(
+    x_session_id: str = Header(...),
+    db: Session = Depends(get_db),
+) -> str:
     """Dependency that requires a valid session"""
-    if not x_session_id or not session_manager.get_session(x_session_id):
+    has_session = bool(x_session_id and session_manager.get_session(x_session_id))
+    if not has_session and x_session_id:
+        has_session = restore_persisted_session(x_session_id, db)
+
+    if not has_session:
         raise HTTPException(
             status_code=400,
             detail="Valid session ID required. Upload data first."
@@ -194,15 +278,6 @@ async def require_data(x_session_id: str = Header(...)) -> pd.DataFrame:
             detail="No data loaded. Please upload data first."
         )
     return df
-
-
-def get_db():
-    """Yield SQLAlchemy DB session."""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 def get_current_user(
