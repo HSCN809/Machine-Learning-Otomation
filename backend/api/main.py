@@ -12,6 +12,7 @@ from .database import Base, engine
 from .dependencies import require_authenticated_user
 from .routers import auth, upload, eda, preprocessing, model
 from backend.modules.data_upload import models as data_upload_models  # noqa: F401
+from backend.modules.model_selection import models as model_selection_models  # noqa: F401
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -22,7 +23,16 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Application lifespan handler"""
     logger.info("🚀 FastAPI Backend starting...")
-    Base.metadata.create_all(bind=engine)
+    # Alembic migration varsa calistir, yoksa dogrudan tablo olustur
+    try:
+        from alembic.config import Config
+        from alembic import command
+        alembic_cfg = Config("alembic.ini")
+        command.upgrade(alembic_cfg, "head")
+        logger.info("✅ Alembic migrations applied.")
+    except Exception as exc:
+        logger.warning(f"Alembic migration atlanamadi, fallback create_all: {exc}")
+        Base.metadata.create_all(bind=engine)
     yield
     logger.info("👋 FastAPI Backend shutting down...")
 

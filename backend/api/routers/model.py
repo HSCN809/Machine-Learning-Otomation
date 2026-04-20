@@ -21,7 +21,10 @@ from starlette.responses import StreamingResponse
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
-from ..dependencies import get_current_user, require_session, session_manager
+from sqlalchemy.orm import Session
+
+from ..dependencies import get_current_user, get_db, require_session, session_manager
+from backend.modules.model_selection.persistence import TrainedModelRepository
 
 try:
     import xgboost as xgb
@@ -234,6 +237,7 @@ def _sort_training_results(results: List[Dict[str, Any]], problem_type: str) -> 
 
 def _store_trained_model_artifact(
     session_id: str,
+    db: Session,
     *,
     model_id: str,
     model_name: str,
@@ -241,22 +245,28 @@ def _store_trained_model_artifact(
     target_column: str,
     problem_type: str,
     feature_columns: List[str],
+    metrics: Optional[Dict[str, Any]] = None,
+    training_time: Optional[float] = None,
 ):
-    artifact_payload = {
-        "model_id": model_id,
-        "model_name": model_name,
-        "target_column": target_column,
-        "problem_type": problem_type,
-        "feature_columns": feature_columns,
-        "trained_at": datetime.now().isoformat(),
-        "model": model,
-    }
-    artifacts = session_manager.get_metadata(session_id, "trained_model_artifacts") or {}
-    artifacts[model_id] = {
-        "filename": f"{model_id}_model.pkl",
-        "payload": pickle.dumps(artifact_payload),
-    }
-    session_manager.set_metadata(session_id, "trained_model_artifacts", artifacts)
+    """Eğitilmiş modeli PostgreSQL'e BYTEA olarak kaydet."""
+    session = session_manager.get_session(session_id)
+    user_id = session.get("owner_user_id") if session else None
+    if not user_id:
+        return
+
+    repo = TrainedModelRepository(db)
+    repo.save_model(
+        dataset_session_id=session_id,
+        user_id=user_id,
+        model_id=model_id,
+        model_name=model_name,
+        target_column=target_column,
+        problem_type=problem_type,
+        metrics=metrics or {},
+        feature_columns=feature_columns,
+        training_time=training_time,
+        model_object=model,
+    )
 
 
 def _store_training_metadata(
@@ -306,7 +316,7 @@ def _create_job(session_id: str, request: TrainRequest) -> str:
         results=[],
         active_job_id=job_id,
     )
-    session_manager.set_metadata(session_id, "trained_model_artifacts", {})
+    # trained_model_artifacts artik DB'de tutuluyor
     return job_id
 
 
@@ -500,11 +510,14 @@ def _train_single_model(
 
 
 def _run_training_job(job_id: str):
+    from backend.api.database import SessionLocal
+
     snapshot = _get_job_snapshot(job_id)
     if snapshot is None:
         return
 
     session_id = snapshot["session_id"]
+    db = SessionLocal()
 
     try:
         df = session_manager.get_dataframe(session_id)
@@ -560,13 +573,17 @@ def _run_training_job(job_id: str):
             result = _train_single_model(model_id, model, bundle)
             _store_trained_model_artifact(
                 session_id,
+                db,
                 model_id=model_id,
                 model_name=result["model_name"],
                 model=model,
                 target_column=snapshot["target_column"],
                 problem_type=problem_type,
                 feature_columns=bundle["X"].columns.tolist(),
+                metrics=result.get("metrics"),
+                training_time=result.get("training_time"),
             )
+            db.commit()
             results.append(result)
             sorted_results = _sort_training_results(results, problem_type)
             _update_job(
@@ -617,6 +634,8 @@ def _run_training_job(job_id: str):
             finished_at=datetime.now().isoformat(),
         )
         _store_training_metadata(session_id, active_job_id=None)
+    finally:
+        db.close()
 
 
 @router.get("/detect-problem")
@@ -773,7 +792,8 @@ async def stop_training(
 @router.post("/train")
 async def train_models(
     request: TrainRequest,
-    session_id: str = Depends(require_session)
+    session_id: str = Depends(require_session),
+    db: Session = Depends(get_db)
 ):
     """Train selected models"""
     df = session_manager.get_dataframe(session_id)
@@ -788,7 +808,7 @@ async def train_models(
             accuracy_score, precision_score, recall_score, f1_score, roc_auc_score,
             mean_squared_error, mean_absolute_error, r2_score
         )
-        session_manager.set_metadata(session_id, "trained_model_artifacts", {})
+        # trained_model_artifacts artik DB'de tutuluyor
         target = df[request.target_column]
         problem_type = _resolve_problem_type(request.problem_type, target)
         bundle = _prepare_training_bundle(df, request.target_column, request.test_size, problem_type)
@@ -900,13 +920,17 @@ async def train_models(
             })
             _store_trained_model_artifact(
                 session_id,
+                db,
                 model_id=model_id,
                 model_name=model_names.get(model_id, model_id),
                 model=model,
                 target_column=request.target_column,
                 problem_type=problem_type,
                 feature_columns=X.columns.tolist(),
+                metrics=metrics,
+                training_time=round(training_time, 2),
             )
+            db.commit()
 
         if not results:
             raise HTTPException(status_code=400, detail="No supported models were trained")
@@ -978,18 +1002,28 @@ async def get_comparison(session_id: str = Depends(require_session)):
 @router.get("/download-model")
 async def download_trained_model(
     model_id: str,
-    session_id: str = Depends(require_session)
+    session_id: str = Depends(require_session),
+    db: Session = Depends(get_db),
 ):
-    """Download a trained model artifact as a pickle file."""
-    artifacts = session_manager.get_metadata(session_id, "trained_model_artifacts") or {}
-    artifact = artifacts.get(model_id)
-    if not artifact:
+    """Download a trained model artifact as a pickle file from PostgreSQL."""
+    session = session_manager.get_session(session_id)
+    user_id = session.get("owner_user_id") if session else None
+    if not user_id:
+        raise HTTPException(status_code=400, detail="Valid session ID required.")
+
+    repo = TrainedModelRepository(db)
+    record = repo.get_model_by_model_id(
+        model_id=model_id,
+        dataset_session_id=session_id,
+        user_id=user_id,
+    )
+    if not record:
         raise HTTPException(status_code=404, detail="Requested trained model was not found")
 
     return StreamingResponse(
-        BytesIO(artifact["payload"]),
+        BytesIO(record.model_blob),
         media_type="application/octet-stream",
         headers={
-            "Content-Disposition": f'attachment; filename="{artifact["filename"]}"',
+            "Content-Disposition": f'attachment; filename="{record.model_id}_model.pkl"',
         },
     )
