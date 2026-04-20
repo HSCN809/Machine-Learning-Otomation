@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useDataEditor } from '@/hooks/useDataEditor';
 import type { DataEditorCellRef, DataEditorCellUpdate } from '@/types/data-upload';
+import { useVirtualizer } from '@tanstack/react-virtual';
 
 interface DataEditorProps {
     onSaved?: () => Promise<void> | void;
@@ -285,6 +286,13 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
         discardChanges,
         saveChanges,
     } = useDataEditor({ onSaved });
+
+    const rowVirtualizer = useVirtualizer({
+        count: rows.length,
+        getScrollElement: () => scrollContainerRef.current,
+        estimateSize: () => 61,
+        overscan: 5,
+    });
 
     const handleDeleteDataset = async () => {
         if (!onDelete || isDeleting || isSaving) {
@@ -1353,8 +1361,8 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                         <div ref={scrollContainerRef} className="max-h-[70vh] overflow-auto">
                             <table className="min-w-full text-sm">
                                 <thead className="sticky top-0 z-10 bg-[#101827]">
-                                    <tr className="border-b border-white/10">
-                                        <th className="px-4 py-3 text-left">
+                                    <tr className="border-b border-white/10 flex">
+                                        <th className="px-4 py-3 text-left shrink-0 w-16">
                                             <input
                                                 type="checkbox"
                                                 checked={allRowsSelected}
@@ -1366,11 +1374,11 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                                                 ].join(' ')}
                                             />
                                         </th>
-                                        <th className="px-4 py-3 text-left font-medium text-gray-400">#</th>
+                                        <th className="px-4 py-3 text-left font-medium text-gray-400 shrink-0 w-16">#</th>
                                         {columns.map((column) => (
                                             <th
                                                 key={column}
-                                                className="px-4 py-3 text-left font-medium text-gray-400"
+                                                className="px-4 py-3 text-left font-medium text-gray-400 flex-1 min-w-[200px]"
                                             >
                                                 {editingColumn === column ? (
                                                     <input
@@ -1424,19 +1432,36 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                                         ))}
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    {rows.map((row) => {
+                                <tbody
+                                    style={{
+                                        display: 'block',
+                                        position: 'relative',
+                                        height: `${rowVirtualizer.getTotalSize()}px`,
+                                    }}
+                                >
+                                    {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                                        const row = rows[virtualRow.index];
                                         const isDeleted = deletedRowSet.has(row.rowId);
 
                                         return (
                                             <tr
                                                 key={row.rowId}
+                                                data-index={virtualRow.index}
+                                                ref={rowVirtualizer.measureElement}
                                                 className={[
                                                     'border-b border-white/5 align-top transition-colors',
                                                     isDeleted ? 'bg-red-500/5 opacity-60' : 'hover:bg-white/5',
                                                 ].join(' ')}
+                                                style={{
+                                                    position: 'absolute',
+                                                    top: 0,
+                                                    left: 0,
+                                                    width: '100%',
+                                                    display: 'flex',
+                                                    transform: `translateY(${virtualRow.start}px)`,
+                                                }}
                                             >
-                                                <td className="px-4 py-3">
+                                                <td className="px-4 py-3 shrink-0 w-16">
                                                     <input
                                                         type="checkbox"
                                                         checked={selectedRowSet.has(row.rowId)}
@@ -1449,7 +1474,7 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                                                         ].join(' ')}
                                                     />
                                                 </td>
-                                                <td className="px-4 py-3 text-gray-400">
+                                                <td className="px-4 py-3 text-gray-400 shrink-0 w-16">
                                                     <span>{row.rowId + 1}</span>
                                                 </td>
                                                 {columns.map((column) => {
@@ -1467,7 +1492,7 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                                                         : updatedValue ?? stringifyValue(row.values[column]);
 
                                                     return (
-                                                        <td key={cellKey} className="relative px-2 py-2">
+                                                        <td key={cellKey} className="relative px-2 py-2 flex-1 min-w-[200px]">
                                                             {isEditingCell ? (
                                                                 <input
                                                                     autoFocus

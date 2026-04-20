@@ -1,6 +1,6 @@
 'use client';
 
-import { theme } from '@/styles/theme';
+
 
 interface ConfusionMatrixProps {
     matrix: number[][];

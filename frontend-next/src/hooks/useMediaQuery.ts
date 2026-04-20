@@ -1,22 +1,20 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 
 /**
  * Hook to detect media query matches
  */
 export function useMediaQuery(query: string): boolean {
-    const [matches, setMatches] = useState(false);
-
-    const updateMatches = useCallback((mediaQuery: MediaQueryList) => {
-        setMatches(mediaQuery.matches);
-    }, []);
+    const [matches, setMatches] = useState<boolean>(() => {
+        if (typeof window === 'undefined') return false;
+        return window.matchMedia(query).matches;
+    });
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
 
         const mediaQuery = window.matchMedia(query);
-        updateMatches(mediaQuery);
 
         const handler = (event: MediaQueryListEvent) => {
             setMatches(event.matches);
@@ -24,7 +22,7 @@ export function useMediaQuery(query: string): boolean {
 
         mediaQuery.addEventListener('change', handler);
         return () => mediaQuery.removeEventListener('change', handler);
-    }, [query, updateMatches]);
+    }, [query]);
 
     return matches;
 }
