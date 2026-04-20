@@ -1,11 +1,11 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar, Header } from '@/components/layout';
 import { ProtectedRouteBoundary } from '@/components/auth/ProtectedRouteBoundary';
 import {
-    DataEditor,
     FileDropzone,
     SampleDatasets,
     UploadProgress,
@@ -14,6 +14,13 @@ import { SessionPageSkeleton } from '@/components/common';
 import { useDataUpload } from '@/hooks/useDataUpload';
 import * as api from '@/lib/api';
 import { normalizeNextPath } from '@/lib/routing';
+
+const DataEditor = dynamic(
+    () => import('@/components/data-upload/DataEditor').then((module) => module.DataEditor),
+    {
+        loading: () => <SessionPageSkeleton variant="upload" />,
+    }
+);
 
 export default function DataUploadPage() {
     const router = useRouter();

@@ -1,5 +1,6 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { Grip, History, X } from 'lucide-react';
@@ -8,7 +9,6 @@ import { ProtectedRouteBoundary } from '@/components/auth/ProtectedRouteBoundary
 import {
     StepProgress,
     StepNavigation,
-    HistoryLog,
     FeatureEngineering,
     MissingValues,
     Outliers,
@@ -21,6 +21,13 @@ import { usePreprocessing, PREPROCESSING_STEPS } from '@/hooks/usePreprocessing'
 import { useDatasetBootstrap } from '@/hooks/useDatasetBootstrap';
 import { buildDataUploadHref } from '@/lib/routing';
 import { theme } from '@/styles/theme';
+
+const HistoryLog = dynamic(
+    () => import('@/components/preprocessing/HistoryLog').then((module) => module.HistoryLog),
+    {
+        loading: () => <SessionPageSkeleton variant="wizard" />,
+    }
+);
 
 export default function PreprocessingPage() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);

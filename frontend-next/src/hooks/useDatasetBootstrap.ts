@@ -14,10 +14,10 @@ interface UseDatasetBootstrapResult {
 }
 
 export function useDatasetBootstrap(loader: () => Promise<unknown>): UseDatasetBootstrapResult {
-    const hasSessionPointer = useSyncExternalStore(
+    const hasSessionPointer = useSyncExternalStore<boolean | null>(
         subscribeToStoredSession,
         hasStoredSession,
-        () => false
+        () => null
     );
     const [status, setStatus] = useState<DatasetBootstrapStatus>('checking');
 
@@ -25,6 +25,11 @@ export function useDatasetBootstrap(loader: () => Promise<unknown>): UseDatasetB
         let cancelled = false;
 
         async function bootstrapDataset() {
+            if (hasSessionPointer === null) {
+                setStatus('checking');
+                return;
+            }
+
             if (!hasSessionPointer) {
                 setStatus('empty');
                 return;

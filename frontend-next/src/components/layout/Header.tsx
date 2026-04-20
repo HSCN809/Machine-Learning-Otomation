@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
     ChevronDown,
@@ -11,8 +11,9 @@ import {
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
-import { getCurrentUser, logout, type AuthUser } from '@/lib/api';
+import { logout, type AuthUser } from '@/lib/api';
 import { theme } from '@/styles/theme';
+import { useAuthUserContext } from '@/context/AuthUserContext';
 
 interface HeaderProps {
     title?: string;
@@ -27,52 +28,26 @@ function getFallbackUser(): AuthUser {
     };
 }
 
-export function Header({ title = 'Dashboard', subtitle }: HeaderProps) {
+export const Header = memo(function Header({ title = 'Dashboard', subtitle }: HeaderProps) {
     const router = useRouter();
     const pathname = usePathname();
     const menuRef = useRef<HTMLDivElement | null>(null);
+    const { currentUser } = useAuthUserContext();
 
     const [menuOpen, setMenuOpen] = useState(false);
     const [isLoggingOut, setIsLoggingOut] = useState(false);
-    const [currentUser, setCurrentUser] = useState<AuthUser>(getFallbackUser);
+    const displayUser = currentUser ?? getFallbackUser();
 
     useEffect(() => {
-        let cancelled = false;
-
-        async function loadUser() {
-            try {
-                const response = await getCurrentUser();
-                if (!cancelled) {
-                    setCurrentUser(response.user);
-                }
-            } catch {
-                if (!cancelled) {
-                    setCurrentUser(getFallbackUser());
-                }
-            }
-        }
-
-        loadUser();
-
-        function handleUserUpdated(event: Event) {
-            const customEvent = event as CustomEvent<AuthUser>;
-            if (customEvent.detail) {
-                setCurrentUser(customEvent.detail);
-            }
-        }
-
         function handlePointerDown(event: MouseEvent) {
             if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
                 setMenuOpen(false);
             }
         }
 
-        window.addEventListener('auth:user-updated', handleUserUpdated as EventListener);
         window.addEventListener('mousedown', handlePointerDown);
 
         return () => {
-            cancelled = true;
-            window.removeEventListener('auth:user-updated', handleUserUpdated as EventListener);
             window.removeEventListener('mousedown', handlePointerDown);
         };
     }, []);
@@ -82,6 +57,7 @@ export function Header({ title = 'Dashboard', subtitle }: HeaderProps) {
         try {
             await logout();
             setMenuOpen(false);
+            window.dispatchEvent(new CustomEvent('auth:logged-out'));
             router.replace('/login');
             router.refresh();
         } finally {
@@ -155,7 +131,7 @@ export function Header({ title = 'Dashboard', subtitle }: HeaderProps) {
                             className="hidden text-sm font-medium sm:block"
                             style={{ color: theme.colors.text.primary }}
                         >
-                            {currentUser.full_name}
+                            {displayUser.full_name}
                         </span>
                         <ChevronDown
                             className={cn(
@@ -170,8 +146,8 @@ export function Header({ title = 'Dashboard', subtitle }: HeaderProps) {
                             className="absolute right-0 top-full mt-3 w-56 overflow-hidden rounded-2xl border border-white/10 bg-[#101827] p-2 shadow-[0_24px_60px_rgba(3,7,18,0.45)]"
                         >
                             <div className="border-b border-white/10 px-3 py-2">
-                                <p className="text-sm font-medium text-white">{currentUser.full_name}</p>
-                                <p className="mt-1 text-xs text-slate-400">{currentUser.email || 'Aktif oturum'}</p>
+                                <p className="text-sm font-medium text-white">{displayUser.full_name}</p>
+                                <p className="mt-1 text-xs text-slate-400">{displayUser.email || 'Aktif oturum'}</p>
                             </div>
 
                             <button
@@ -198,4 +174,4 @@ export function Header({ title = 'Dashboard', subtitle }: HeaderProps) {
             </div>
         </header>
     );
-}
+});

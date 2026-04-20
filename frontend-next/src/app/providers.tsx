@@ -1,6 +1,7 @@
 'use client';
 
 import { ReactNode } from 'react';
+import { AuthUserProvider } from '@/context/AuthUserContext';
 import { DataUploadProvider } from '@/context/DataUploadContext';
 
 interface ProvidersProps {
@@ -9,8 +10,10 @@ interface ProvidersProps {
 
 export function Providers({ children }: ProvidersProps) {
     return (
-        <DataUploadProvider>
-            {children}
-        </DataUploadProvider>
+        <AuthUserProvider>
+            <DataUploadProvider>
+                {children}
+            </DataUploadProvider>
+        </AuthUserProvider>
     );
 }

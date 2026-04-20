@@ -127,6 +127,8 @@ export default function LoginClient({ nextPath, registered = false }: LoginClien
             setPageState('success');
             setSuccessMessage('Giriş başarılı. Güvenli oturum oluşturuldu.');
 
+            window.dispatchEvent(new CustomEvent('auth:user-updated', { detail: status.user }));
+
             startTransition(() => {
                 router.replace(nextPath);
             });
