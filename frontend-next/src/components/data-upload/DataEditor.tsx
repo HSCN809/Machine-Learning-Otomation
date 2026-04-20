@@ -47,6 +47,81 @@ function getButtonClassName(disabled: boolean, tone: 'default' | 'danger' | 'pri
     ].join(' ');
 }
 
+function DataEditorSkeletonBlock({ className }: { className: string }) {
+    return <div className={`animate-pulse rounded-xl bg-white/5 ${className}`} />;
+}
+
+function DataEditorSkeleton() {
+    return (
+        <div className="space-y-6" aria-hidden="true">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="space-y-3">
+                    <DataEditorSkeletonBlock className="h-7 w-48" />
+                    <DataEditorSkeletonBlock className="h-4 w-full max-w-2xl" />
+                    <div className="flex flex-wrap gap-2">
+                        {Array.from({ length: 4 }).map((_, index) => (
+                            <DataEditorSkeletonBlock key={index} className="h-7 w-32 rounded-full" />
+                        ))}
+                    </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                    {Array.from({ length: 4 }).map((_, index) => (
+                        <DataEditorSkeletonBlock key={index} className="h-10 w-24" />
+                    ))}
+                </div>
+            </div>
+
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+                <div className="space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                        <div className="flex flex-wrap gap-2">
+                            {Array.from({ length: 5 }).map((_, index) => (
+                                <DataEditorSkeletonBlock key={index} className="h-7 w-28 rounded-full" />
+                            ))}
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            <DataEditorSkeletonBlock className="h-9 w-36" />
+                            <DataEditorSkeletonBlock className="h-9 w-32" />
+                        </div>
+                    </div>
+
+                    <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+                        <div className="min-w-[760px]">
+                            <div className="grid grid-cols-[56px_64px_repeat(4,minmax(120px,1fr))] gap-3 border-b border-white/10 bg-[#101827] px-4 py-3">
+                                {Array.from({ length: 6 }).map((_, index) => (
+                                    <DataEditorSkeletonBlock key={index} className="h-8 w-full" />
+                                ))}
+                            </div>
+                            <div className="divide-y divide-white/5">
+                                {Array.from({ length: 8 }).map((_, rowIndex) => (
+                                    <div
+                                        key={rowIndex}
+                                        className="grid grid-cols-[56px_64px_repeat(4,minmax(120px,1fr))] gap-3 px-4 py-3"
+                                    >
+                                        {Array.from({ length: 6 }).map((_, cellIndex) => (
+                                            <DataEditorSkeletonBlock
+                                                key={cellIndex}
+                                                className="h-9 w-full rounded-lg"
+                                            />
+                                        ))}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <aside className="space-y-4 rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <DataEditorSkeletonBlock className="h-6 w-40" />
+                    <DataEditorSkeletonBlock className="h-24 w-full" />
+                    <DataEditorSkeletonBlock className="h-10 w-full" />
+                    <DataEditorSkeletonBlock className="h-10 w-full" />
+                </aside>
+            </div>
+        </div>
+    );
+}
+
 function stringifyValue(value: unknown): string {
     if (value === null || value === undefined) {
         return '';
@@ -1120,11 +1195,7 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
     };
 
     if (isLoading && rows.length === 0) {
-        return (
-            <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-6 text-sm text-gray-400">
-                Veri düzenleyici yükleniyor...
-            </div>
-        );
+        return <DataEditorSkeleton />;
     }
 
     return (
