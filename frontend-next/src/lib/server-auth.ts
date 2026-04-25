@@ -1,3 +1,5 @@
+import { logger } from '@/lib/logger';
+
 export const AUTH_COOKIE_NAME =
     process.env.AUTH_COOKIE_NAME ||
     process.env.NEXT_PUBLIC_AUTH_COOKIE_NAME ||
@@ -19,6 +21,9 @@ export async function hasValidAuthSession(authCookie: string | undefined): Promi
         });
 
         if (!response.ok) {
+            logger.warn('Server auth status returned non-ok response', {
+                status: response.status,
+            });
             return false;
         }
 
@@ -28,7 +33,8 @@ export async function hasValidAuthSession(authCookie: string | undefined): Promi
         };
 
         return Boolean(status.authenticated && status.user);
-    } catch {
+    } catch (error) {
+        logger.error('Server auth status request failed', error);
         return false;
     }
 }

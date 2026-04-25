@@ -4,6 +4,7 @@ Model Router - Model training and evaluation endpoints
 
 import asyncio
 import json
+import logging
 import os
 import pickle
 import sys
@@ -38,6 +39,7 @@ except ImportError:
     xgb = None
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 TRAINING_JOBS: Dict[str, Dict[str, Any]] = {}
 TRAINING_JOBS_LOCK = threading.Lock()
 
@@ -514,8 +516,8 @@ def _train_single_model(
                 y_prob = model.predict_proba(bundle["X_test"])
                 if y_prob.shape[1] == 2:
                     metrics["auc"] = round(roc_auc_score(bundle["y_test"], y_prob[:, 1]), 4)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("AUC calculation failed for model %s: %s", model_id, exc)
 
         class_labels = np.unique(np.concatenate([np.asarray(bundle["y_test"]), np.asarray(y_pred)]))
         confusion = confusion_matrix(bundle["y_test"], y_pred, labels=class_labels).tolist()
@@ -679,6 +681,12 @@ def _run_training_job(job_id: str):
             db=db,
         )
     except HTTPException as exc:
+        logger.warning(
+            "Training job failed for job %s session %s: %s",
+            job_id,
+            session_id,
+            exc.detail,
+        )
         _update_job(
             job_id,
             status="failed",
@@ -688,6 +696,7 @@ def _run_training_job(job_id: str):
         )
         _store_training_metadata(session_id, active_job_id=None, db=db)
     except Exception as exc:
+        logger.exception("Training job crashed for job %s session %s", job_id, session_id)
         _update_job(
             job_id,
             status="failed",
@@ -927,8 +936,8 @@ async def train_models(
                         y_prob = model.predict_proba(X_test)
                         if y_prob.shape[1] == 2:
                             metrics["auc"] = round(roc_auc_score(y_test, y_prob[:, 1]), 4)
-                except:
-                    pass
+                except Exception as exc:
+                    logger.warning("AUC calculation failed for model %s: %s", model_id, exc)
                 
                 # Confusion matrix
                 from sklearn.metrics import confusion_matrix
@@ -1020,9 +1029,11 @@ async def train_models(
     except HTTPException:
         raise
     except ImportError as e:
-        raise HTTPException(status_code=500, detail=f"Missing sklearn: {str(e)}")
+        logger.exception("Model training dependency missing for session %s", session_id)
+        raise HTTPException(status_code=500, detail="Model eğitimi için gerekli bağımlılık eksik") from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Model training failed for session %s", session_id)
+        raise HTTPException(status_code=500, detail="Model eğitimi sırasında hata oluştu") from e
 
 
 @router.get("/results")

@@ -104,6 +104,8 @@ export default function ModelSelectionPage() {
     const datasetBootstrap = useDatasetBootstrap(loadColumns);
 
     const hasData = datasetBootstrap.isReady && columns.length > 0;
+    const hasBootstrapError = !hasData && (datasetBootstrap.isError || Boolean(error));
+    const bootstrapErrorMessage = error ?? 'Model verileri yüklenirken hata oluştu.';
     const currentStepInfo = STEPS[currentStep];
     const canSkip = currentStep < STEPS.length - 1;
     const currentTrainingModelName =
@@ -244,7 +246,14 @@ export default function ModelSelectionPage() {
                             <SessionPageSkeleton variant="wizard" />
                         )}
 
-                        {!datasetBootstrap.isChecking && !isLoading && !hasData && (
+                        {!datasetBootstrap.isChecking && !isLoading && hasBootstrapError && (
+                            <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-6">
+                                <h2 className="text-lg font-semibold text-red-100">Model verileri yüklenemedi</h2>
+                                <p className="mt-2 text-sm text-red-200/80">{bootstrapErrorMessage}</p>
+                            </div>
+                        )}
+
+                        {!datasetBootstrap.isChecking && !isLoading && !hasBootstrapError && !hasData && (
                             <NoDataWarning
                                 title="Veri Yüklenmedi"
                                 description="Model seçimi ve eğitimi yapabilmek için önce veri yüklemeniz gerekmektedir."

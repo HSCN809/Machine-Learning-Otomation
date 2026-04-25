@@ -7,6 +7,7 @@ from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from typing import Any, Optional
+import logging
 import pandas as pd
 import numpy as np
 import io
@@ -27,6 +28,7 @@ from ..dependencies import (
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class EditorCellUpdate(BaseModel):
@@ -143,7 +145,8 @@ async def upload_file(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("File upload failed for session %s", session_id)
+        raise HTTPException(status_code=500, detail="Dosya yüklenirken hata oluştu") from e
 
 
 @router.post("/sample/{dataset_name}")
@@ -180,7 +183,8 @@ async def load_sample_dataset(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Sample dataset load failed for session %s: %s", session_id, dataset_name)
+        raise HTTPException(status_code=500, detail="Örnek veri seti yüklenirken hata oluştu") from e
 
 
 @router.get("/summary")
@@ -211,7 +215,8 @@ async def get_summary(session_id: str = Depends(require_session)):
             ],
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Data summary failed for session %s", session_id)
+        raise HTTPException(status_code=500, detail="Veri özeti oluşturulurken hata oluştu") from e
 
 
 @router.get("/validate")
@@ -265,7 +270,8 @@ async def validate_upload(session_id: str = Depends(require_session)):
             "summary": data_summary
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Upload validation failed for session %s", session_id)
+        raise HTTPException(status_code=500, detail="Veri doğrulaması sırasında hata oluştu") from e
 
 
 @router.get("/preview")
@@ -398,6 +404,15 @@ async def commit_editor_changes(
     })
     session_manager.set_metadata(session_id, "editor_commits", editor_commits)
     persist_session(session_id, db)
+    logger.info(
+        "Manual editor commit applied for session %s: updated=%s cleared=%s deleted=%s trimmed=%s renamed=%s",
+        session_id,
+        len(request.updated_cells),
+        len(request.cleared_cells),
+        len(deleted_row_ids),
+        len(request.trim_columns),
+        len(request.renamed_columns),
+    )
 
     return {
         "success": True,
@@ -440,6 +455,7 @@ def _generate_sample_data(dataset_name: str) -> Optional[pd.DataFrame]:
         df = pd.read_csv(filepath)
         return df
     except Exception:
+        logger.exception("Sample dataset file could not be read: %s", filepath)
         return None
 
 
@@ -462,4 +478,5 @@ async def reset_upload(
             "message": "Session data cleared successfully"
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Upload reset failed for session %s", session_id)
+        raise HTTPException(status_code=500, detail="Oturum verisi temizlenirken hata oluştu") from e

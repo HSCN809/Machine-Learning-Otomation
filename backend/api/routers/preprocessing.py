@@ -41,6 +41,11 @@ from backend.modules.data_preprocessing.scaling.processor import apply_scaling_m
 router = APIRouter()
 
 
+def _raise_internal_error(log_message: str, user_message: str, exc: Exception, session_id: str) -> None:
+    logger.exception("%s failed for session %s", log_message, session_id)
+    raise HTTPException(status_code=500, detail=user_message) from exc
+
+
 # Request schemas
 class MissingValuesRequest(BaseModel):
     method: str  # fill_mean, fill_median, fill_mode, fill_knn, fill_interpolation, fill_regression, fill_ffill, fill_bfill, drop_columns
@@ -245,7 +250,14 @@ async def handle_missing_values(
         if request.method not in SUPPORTED_MISSING_VALUE_METHODS:
             raise HTTPException(status_code=400, detail=f"Unsupported missing values method: {request.method}")
         
-        for col in request.columns:
+        valid_columns = [col for col in request.columns if col in df.columns]
+        skipped_columns = [col for col in request.columns if col not in df.columns]
+        if skipped_columns:
+            logger.warning("Missing value preprocessing skipped unknown columns for session %s: %s", session_id, skipped_columns)
+        if not valid_columns:
+            raise HTTPException(status_code=400, detail="İşlem için geçerli sütun bulunamadı")
+
+        for col in valid_columns:
             if col not in df.columns:
                 continue
             
@@ -282,7 +294,10 @@ async def handle_missing_values(
         session_manager.add_history(session_id, {
             "step": "missing_values",
             "action": request.method,
-            "columns": request.columns,
+            "columns": valid_columns,
+            "params": {
+                "skipped_columns": skipped_columns,
+            },
             "affected_rows": affected_rows,
         })
         persist_session(session_id, db)
@@ -290,7 +305,8 @@ async def handle_missing_values(
         return {
             "success": True,
             "method": request.method,
-            "columns": request.columns,
+            "columns": valid_columns,
+            "skipped_columns": skipped_columns,
             "affected_rows": affected_rows,
             "remaining_nulls": int(df.isnull().sum().sum()),
         }
@@ -298,7 +314,7 @@ async def handle_missing_values(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        _raise_internal_error("Missing value preprocessing", "Eksik değer işlemi sırasında hata oluştu", e, session_id)
 
 
 @router.post("/outliers")
@@ -377,7 +393,7 @@ async def handle_outliers(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        _raise_internal_error("Outlier preprocessing", "Aykırı değer işlemi sırasında hata oluştu", e, session_id)
 
 
 @router.post("/outliers/analyze")
@@ -414,7 +430,7 @@ async def analyze_outlier_columns(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        _raise_internal_error("Outlier analysis", "Aykırı değer analizi sırasında hata oluştu", e, session_id)
 
 
 @router.post("/encoding")
@@ -432,7 +448,14 @@ async def handle_encoding(
         previous_df = df.copy(deep=True)
         new_columns = []
         
-        for col in request.columns:
+        valid_columns = [col for col in request.columns if col in df.columns]
+        skipped_columns = [col for col in request.columns if col not in df.columns]
+        if skipped_columns:
+            logger.warning("Encoding skipped unknown columns for session %s: %s", session_id, skipped_columns)
+        if not valid_columns:
+            raise HTTPException(status_code=400, detail="İşlem için geçerli sütun bulunamadı")
+
+        for col in valid_columns:
             if col not in df.columns:
                 continue
             
@@ -465,11 +488,12 @@ async def handle_encoding(
         session_manager.add_history(session_id, {
             "step": "encoding",
             "action": request.method,
-            "columns": request.columns,
+            "columns": valid_columns,
             "new_columns": new_columns,
             "params": {
                 "drop_first": request.drop_first if request.method == "onehot" else None,
                 "ordinal_mapping": request.ordinal_mapping if request.method == "ordinal" else None,
+                "skipped_columns": skipped_columns,
             },
         })
         persist_session(session_id, db)
@@ -477,7 +501,8 @@ async def handle_encoding(
         return {
             "success": True,
             "method": request.method,
-            "columns": request.columns,
+            "columns": valid_columns,
+            "skipped_columns": skipped_columns,
             "new_columns": new_columns,
             "total_columns": len(df.columns),
         }
@@ -485,7 +510,7 @@ async def handle_encoding(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        _raise_internal_error("Encoding preprocessing", "Kodlama işlemi sırasında hata oluştu", e, session_id)
 
 
 @router.post("/scaling")
@@ -504,6 +529,11 @@ async def handle_scaling(
         valid_columns = [
             col for col in request.columns if col in df.columns and np.issubdtype(df[col].dtype, np.number)
         ]
+        skipped_columns = [col for col in request.columns if col not in valid_columns]
+        if skipped_columns:
+            logger.warning("Scaling skipped invalid columns for session %s: %s", session_id, skipped_columns)
+        if not valid_columns:
+            raise HTTPException(status_code=400, detail="Ölçeklendirme için geçerli sayısal sütun bulunamadı")
 
         if request.method == "standard":
             df = apply_scaling_method(df, valid_columns, "standard_scaler")
@@ -529,6 +559,7 @@ async def handle_scaling(
             "columns": valid_columns,
             "params": {
                 "feature_range": list(request.feature_range) if request.feature_range is not None else None,
+                "skipped_columns": skipped_columns,
             },
         })
         persist_session(session_id, db)
@@ -537,12 +568,13 @@ async def handle_scaling(
             "success": True,
             "method": request.method,
             "columns": valid_columns,
+            "skipped_columns": skipped_columns,
         }
         
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        _raise_internal_error("Scaling preprocessing", "Ölçeklendirme işlemi sırasında hata oluştu", e, session_id)
 
 
 @router.post("/feature-engineering")
@@ -653,7 +685,7 @@ async def handle_feature_engineering(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        _raise_internal_error("Feature engineering preprocessing", "Özellik mühendisliği işlemi sırasında hata oluştu", e, session_id)
 
 
 @router.get("/history")
@@ -709,7 +741,7 @@ async def handle_drop_columns(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        _raise_internal_error("Drop columns preprocessing", "Sütun silme işlemi sırasında hata oluştu", e, session_id)
 
 
 @router.get("/drop-columns/analyze")
@@ -769,7 +801,7 @@ async def analyze_droppable_columns(
         }
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        _raise_internal_error("Droppable columns analysis", "Silinebilir sütun analizi sırasında hata oluştu", e, session_id)
 
 
 @router.post("/undo")
@@ -783,6 +815,7 @@ async def undo_last_preprocessing(
     if current_df is None:
         raise HTTPException(status_code=400, detail="No data loaded")
     persist_session(session_id, db)
+    logger.info("Preprocessing undo applied for session %s: action=%s", session_id, undone_action.get("action"))
 
     return {
         "success": True,
@@ -805,6 +838,12 @@ async def undo_to_history_item(
     if current_df is None:
         raise HTTPException(status_code=400, detail="No data loaded")
     persist_session(session_id, db)
+    logger.info(
+        "Preprocessing undo-to applied for session %s: history_index=%s undone_count=%s",
+        session_id,
+        request.history_index,
+        len(undo_result["undone_actions"]),
+    )
 
     return {
         "success": True,
@@ -832,6 +871,7 @@ async def reset_data(
         session["history"] = []
         session["history_snapshots"] = []
     persist_session(session_id, db)
+    logger.info("Preprocessing reset applied for session %s", session_id)
     
     return {
         "success": True,

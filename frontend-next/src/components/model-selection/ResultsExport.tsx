@@ -5,6 +5,8 @@ import { Download, FileJson, FileSpreadsheet, Package } from 'lucide-react';
 import { TrainingResult } from '@/types/model-selection';
 import { theme } from '@/styles/theme';
 import * as api from '@/lib/api';
+import { logger } from '@/lib/logger';
+import { notify } from '@/lib/notify';
 
 interface ResultsExportProps {
     results: TrainingResult[];
@@ -23,6 +25,7 @@ export function ResultsExport({ results }: ResultsExportProps) {
         anchor.download = 'model_results.json';
         anchor.click();
         URL.revokeObjectURL(url);
+        notify.success('JSON raporu indirildi');
     };
 
     const exportCSV = () => {
@@ -49,6 +52,7 @@ export function ResultsExport({ results }: ResultsExportProps) {
         anchor.download = 'model_results.csv';
         anchor.click();
         URL.revokeObjectURL(url);
+        notify.success('CSV raporu indirildi');
     };
 
     const handleModelDownload = async (result: TrainingResult) => {
@@ -56,8 +60,11 @@ export function ResultsExport({ results }: ResultsExportProps) {
             setDownloadError(null);
             setDownloadingModelId(result.modelId);
             await api.downloadTrainedModel(result.modelId);
+            notify.success(`${result.modelName} indirildi`);
         } catch (err) {
+            logger.error('Trained model download failed', err, { modelId: result.modelId });
             setDownloadError(err instanceof Error ? err.message : 'Model indirilemedi');
+            notify.error(err, 'Model indirilemedi');
         } finally {
             setDownloadingModelId(null);
         }

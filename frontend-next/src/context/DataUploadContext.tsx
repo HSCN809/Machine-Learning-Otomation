@@ -109,7 +109,12 @@ export function DataUploadProvider({ children }: { children: ReactNode }) {
         try {
             await api.resetUpload();
         } catch (err) {
-            logger.warn('Reset session failed', { error: err });
+            const message = getErrorMessage(err, 'Oturum verisi temizlenirken hata oluştu');
+            logger.error('Reset session failed', err);
+            setError(message);
+            setStatus('error');
+            notify.error(err, 'Oturum verisi temizlenirken hata oluştu');
+            return;
         }
 
         setStatus('idle');

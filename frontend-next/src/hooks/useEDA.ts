@@ -188,6 +188,8 @@ export function useEDA(): UseEDAReturn {
                 }
 
                 logger.error('Histogram data load failed', err, { column: selectedNumericColumn });
+                setHistogramData([]);
+                notify.error(err, 'Histogram verisi yüklenemedi');
             });
     }, [selectedNumericColumn]);
 
@@ -204,6 +206,8 @@ export function useEDA(): UseEDAReturn {
                 }
 
                 logger.error('Box plot data load failed', err, { column: selectedNumericColumn });
+                setBoxPlotData(null);
+                notify.error(err, 'Kutu grafiği verisi yüklenemedi');
             });
     }, [selectedNumericColumn]);
 
@@ -226,6 +230,8 @@ export function useEDA(): UseEDAReturn {
                 }
 
                 logger.error('Category distribution load failed', err, { column: selectedCategoricalColumn });
+                setCategoryData([]);
+                notify.error(err, 'Kategori dağılımı yüklenemedi');
             });
     }, [selectedCategoricalColumn]);
 
@@ -263,6 +269,8 @@ export function useEDA(): UseEDAReturn {
                     xColumn: scatterXColumn,
                     yColumn: scatterYColumn,
                 });
+                setScatterData([]);
+                notify.error(err, 'Saçılım grafiği verisi yüklenemedi');
             });
     }, [scatterXColumn, scatterYColumn]);
 

@@ -229,7 +229,13 @@ export function useModelSelection(): UseModelSelectionReturn {
         stream.onerror = () => {
             const terminalStatuses = new Set(['completed', 'failed', 'stopped']);
             if (!terminalStatuses.has(trainingStatusRef.current)) {
-                setError((prev) => prev ?? 'Egitim akisi baglantisi koptu');
+                const message = 'Eğitim akışı bağlantısı koptu';
+                logger.warn('Training stream connection lost', {
+                    jobId,
+                    status: trainingStatusRef.current,
+                });
+                setError((prev) => prev ?? message);
+                notify.error(new Error(message), message);
             }
             closeTrainingStream();
         };

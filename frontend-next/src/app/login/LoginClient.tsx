@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 
 import { getAuthStatus, login } from '@/lib/api';
+import { logger } from '@/lib/logger';
+import { notify } from '@/lib/notify';
 import { buildSignupHref, HOMEPAGE_PATH } from '@/lib/routing';
 
 const spaceGrotesk = Space_Grotesk({
@@ -85,6 +87,7 @@ export default function LoginClient({ nextPath, registered = false }: LoginClien
                     return;
                 }
 
+                logger.error('Login page bootstrap failed', error);
                 setPageState('error');
                 setErrorMessage(getErrorMessage(error));
             }
@@ -126,6 +129,7 @@ export default function LoginClient({ nextPath, registered = false }: LoginClien
             setAuthenticatedUser(status.user ?? response.user);
             setPageState('success');
             setSuccessMessage('Giriş başarılı. Güvenli oturum oluşturuldu.');
+            notify.success('Giriş başarılı');
 
             window.dispatchEvent(new CustomEvent('auth:user-updated', { detail: status.user }));
 
@@ -133,8 +137,10 @@ export default function LoginClient({ nextPath, registered = false }: LoginClien
                 router.replace(nextPath);
             });
         } catch (error) {
+            logger.error('Login submit failed', error, { email: email.trim() });
             setPageState('ready');
             setErrorMessage(getErrorMessage(error));
+            notify.error(error, 'Giriş sırasında hata oluştu');
         } finally {
             setIsSubmitting(false);
         }

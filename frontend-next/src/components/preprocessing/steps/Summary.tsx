@@ -6,6 +6,8 @@ import { CheckCircle, Download, ArrowRight } from 'lucide-react';
 import { ProcessingHistory, ColumnInfo } from '@/types/preprocessing';
 import { theme } from '@/styles/theme';
 import * as api from '@/lib/api';
+import { logger } from '@/lib/logger';
+import { notify } from '@/lib/notify';
 
 interface SummaryProps {
     history: ProcessingHistory[];
@@ -40,8 +42,11 @@ export function Summary({ history, columns, originalColumnCount }: SummaryProps)
             setIsDownloading(true);
             setDownloadError(null);
             await api.downloadProcessedData();
+            notify.success('İşlenmiş veri indirildi');
         } catch (err) {
-            setDownloadError(err instanceof Error ? err.message : 'Islenmis veri indirilemedi');
+            logger.error('Processed data download failed', err);
+            setDownloadError(err instanceof Error ? err.message : 'İşlenmiş veri indirilemedi');
+            notify.error(err, 'İşlenmiş veri indirilemedi');
         } finally {
             setIsDownloading(false);
         }

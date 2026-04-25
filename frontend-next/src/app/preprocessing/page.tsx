@@ -56,6 +56,7 @@ export default function PreprocessingPage() {
         history,
         columns,
         isLoading,
+        error,
         goToStep,
         nextStep,
         skipStep,
@@ -79,6 +80,8 @@ export default function PreprocessingPage() {
     const datasetBootstrap = useDatasetBootstrap(loadInitialData);
 
     const hasData = datasetBootstrap.isReady && columns.length > 0;
+    const hasBootstrapError = !hasData && (datasetBootstrap.isError || Boolean(error));
+    const bootstrapErrorMessage = error ?? 'Ön işleme verileri yüklenirken hata oluştu.';
     const currentStepInfo = PREPROCESSING_STEPS[currentStep];
     const isLastStep = currentStep === PREPROCESSING_STEPS.length - 1;
 
@@ -218,7 +221,14 @@ export default function PreprocessingPage() {
                                 <SessionPageSkeleton variant="wizard" />
                             )}
 
-                            {!datasetBootstrap.isChecking && !isLoading && !hasData && (
+                            {!datasetBootstrap.isChecking && !isLoading && hasBootstrapError && (
+                                <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-6">
+                                    <h2 className="text-lg font-semibold text-red-100">Ön işleme verileri yüklenemedi</h2>
+                                    <p className="mt-2 text-sm text-red-200/80">{bootstrapErrorMessage}</p>
+                                </div>
+                            )}
+
+                            {!datasetBootstrap.isChecking && !isLoading && !hasBootstrapError && !hasData && (
                                 <NoDataWarning
                                     title="Veri Yüklenmedi"
                                     description="Veri ön işleme yapabilmek için önce veri yüklemeniz gerekir."
@@ -245,6 +255,12 @@ export default function PreprocessingPage() {
                                                 'linear-gradient(135deg, rgba(17, 24, 39, 0.6) 0%, rgba(31, 41, 55, 0.4) 100%)',
                                         }}
                                     >
+                                        {error && (
+                                            <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 p-4">
+                                                <p className="text-sm text-red-200">{error}</p>
+                                            </div>
+                                        )}
+
                                         <div className="mb-6 flex items-center gap-3 border-b border-white/10 pb-4">
                                             <span className="text-3xl">{currentStepInfo?.icon}</span>
                                             <div>

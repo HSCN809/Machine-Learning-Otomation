@@ -12,6 +12,7 @@ import {
 import { usePathname } from 'next/navigation';
 
 import { getAuthStatus, type AuthUser } from '@/lib/api';
+import { logger } from '@/lib/logger';
 import { isProtectedPath } from '@/lib/routing';
 
 type AuthResolutionStatus = 'idle' | 'loading' | 'authenticated' | 'unauthenticated' | 'error';
@@ -56,6 +57,7 @@ export function AuthUserProvider({ children }: { children: ReactNode }) {
             setCurrentUser(null);
             setStatus('unauthenticated');
         } catch (error) {
+            logger.error('Auth refresh failed', error);
             setCurrentUser(null);
             setErrorMessage(getErrorMessage(error));
             setStatus('error');

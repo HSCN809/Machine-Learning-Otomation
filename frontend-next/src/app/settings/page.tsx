@@ -17,6 +17,8 @@ import {
     updateProfile,
     type AuthUser,
 } from '@/lib/api';
+import { logger } from '@/lib/logger';
+import { notify } from '@/lib/notify';
 
 type PageState = 'bootstrap' | 'ready' | 'error';
 
@@ -71,6 +73,7 @@ export default function SettingsPage() {
                     return;
                 }
 
+                logger.error('Settings bootstrap failed', error);
                 setPageState('error');
                 setPageError(getErrorMessage(error));
             }
@@ -103,8 +106,11 @@ export default function SettingsPage() {
                 window.dispatchEvent(new CustomEvent('auth:user-updated', { detail: response.user }));
             }
             setProfileMessage(response.message);
+            notify.success(response.message || 'Profil bilgileri güncellendi');
         } catch (error) {
+            logger.error('Profile update failed', error, { email: email.trim() });
             setProfileError(getErrorMessage(error));
+            notify.error(error, 'Profil bilgileri güncellenemedi');
         } finally {
             setProfilePending(false);
         }
@@ -126,8 +132,11 @@ export default function SettingsPage() {
             setPasswordMessage(response.message);
             setCurrentPassword('');
             setNewPassword('');
+            notify.success(response.message || 'Parola güncellendi');
         } catch (error) {
+            logger.error('Password change failed', error);
             setPasswordError(getErrorMessage(error));
+            notify.error(error, 'Parola güncellenemedi');
         } finally {
             setPasswordPending(false);
         }
@@ -149,10 +158,13 @@ export default function SettingsPage() {
         setDeletePending(true);
         try {
             const response = await deleteAccount(deletePassword);
+            notify.success(response.message || 'Hesap silindi');
             router.replace(response.requires_setup ? '/signup' : '/login');
             router.refresh();
         } catch (error) {
+            logger.error('Account delete failed', error);
             setDeleteError(getErrorMessage(error));
+            notify.error(error, 'Hesap silinemedi');
         } finally {
             setDeletePending(false);
         }

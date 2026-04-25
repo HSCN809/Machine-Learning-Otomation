@@ -7,6 +7,8 @@ import { JetBrains_Mono, Space_Grotesk } from 'next/font/google';
 import { ArrowRight, BrainCircuit, ShieldCheck } from 'lucide-react';
 
 import { getAuthStatus, setupFirstUser } from '@/lib/api';
+import { logger } from '@/lib/logger';
+import { notify } from '@/lib/notify';
 import { buildLoginHref, HOMEPAGE_PATH } from '@/lib/routing';
 
 const spaceGrotesk = Space_Grotesk({
@@ -71,6 +73,7 @@ export default function SignupClient({ nextPath }: SignupClientProps) {
                     return;
                 }
 
+                logger.error('Signup page bootstrap failed', error);
                 setPageState('error');
                 setErrorMessage(getErrorMessage(error));
             }
@@ -104,13 +107,16 @@ export default function SignupClient({ nextPath }: SignupClientProps) {
         try {
             await setupFirstUser(fullName.trim(), email.trim(), password);
             setSuccessMessage('Hesabınız oluşturuldu. Giriş sayfasına yönlendiriliyorsunuz.');
+            notify.success('Hesap oluşturuldu');
 
             startTransition(() => {
                 router.replace(`${buildLoginHref(nextPath)}&registered=1`);
             });
         } catch (error) {
+            logger.error('Signup submit failed', error, { email: email.trim() });
             setPageState('ready');
             setErrorMessage(getErrorMessage(error));
+            notify.error(error, 'Kayıt sırasında hata oluştu');
         } finally {
             setIsSubmitting(false);
         }
