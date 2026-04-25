@@ -12,6 +12,8 @@ import {
     CategoryData,
 } from '@/types/eda';
 import * as api from '@/lib/api';
+import { logger } from '@/lib/logger';
+import { getErrorMessage, notify } from '@/lib/notify';
 
 interface UseEDAReturn {
     edaData: EDAData | null;
@@ -157,8 +159,10 @@ export function useEDA(): UseEDAReturn {
                 return false;
             }
 
-            console.error('EDA Error:', err);
-            setError(err instanceof Error ? err.message : 'EDA verisi yüklenirken hata oluştu');
+            const message = getErrorMessage(err, 'EDA verisi yüklenirken hata oluştu');
+            logger.error('EDA data load failed', err);
+            setError(message);
+            notify.error(err, 'EDA verisi yüklenirken hata oluştu');
             throw err;
         } finally {
             setIsLoading(false);
@@ -183,7 +187,7 @@ export function useEDA(): UseEDAReturn {
                     return;
                 }
 
-                console.error(err);
+                logger.error('Histogram data load failed', err, { column: selectedNumericColumn });
             });
     }, [selectedNumericColumn]);
 
@@ -199,7 +203,7 @@ export function useEDA(): UseEDAReturn {
                     return;
                 }
 
-                console.error(err);
+                logger.error('Box plot data load failed', err, { column: selectedNumericColumn });
             });
     }, [selectedNumericColumn]);
 
@@ -221,7 +225,7 @@ export function useEDA(): UseEDAReturn {
                     return;
                 }
 
-                console.error(err);
+                logger.error('Category distribution load failed', err, { column: selectedCategoricalColumn });
             });
     }, [selectedCategoricalColumn]);
 
@@ -255,7 +259,10 @@ export function useEDA(): UseEDAReturn {
                     return;
                 }
 
-                console.error(err);
+                logger.error('Scatter data load failed', err, {
+                    xColumn: scatterXColumn,
+                    yColumn: scatterYColumn,
+                });
             });
     }, [scatterXColumn, scatterYColumn]);
 

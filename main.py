@@ -11,14 +11,18 @@ Usage:
 import subprocess
 import sys
 import os
-import threading
 import time
 from pathlib import Path
+
+from backend.modules.utils.app_logging import configure_logging, get_logger
+
+configure_logging()
+logger = get_logger(__name__)
 
 
 def start_backend(port: int = 8000, reload: bool = True):
     """Start FastAPI backend server"""
-    print("🚀 Starting FastAPI Backend on port", port)
+    logger.info("Starting FastAPI backend on port %s", port)
     
     # Change to project root for proper imports
     project_root = Path(__file__).parent
@@ -37,23 +41,23 @@ def start_backend(port: int = 8000, reload: bool = True):
             log_level="info"
         )
     except ImportError:
-        print("❌ uvicorn not installed. Run: pip install uvicorn")
+        logger.error("uvicorn is not installed. Run: pip install uvicorn")
         sys.exit(1)
 
 
 def start_frontend():
     """Start Next.js frontend dev server"""
-    print("🌐 Starting Next.js Frontend on port 3000")
+    logger.info("Starting Next.js frontend on port 3000")
     
     frontend_dir = Path(__file__).parent / "frontend-next"
     
     if not frontend_dir.exists():
-        print(f"❌ Frontend directory not found: {frontend_dir}")
+        logger.error("Frontend directory not found: %s", frontend_dir)
         return
     
     # Check if node_modules exists
     if not (frontend_dir / "node_modules").exists():
-        print("📦 Installing npm dependencies...")
+        logger.info("Installing npm dependencies")
         subprocess.run(["npm", "install"], cwd=frontend_dir, shell=True)
     
     # Start Next.js dev server
@@ -81,15 +85,10 @@ if __name__ == "__main__":
         start_frontend()
     else:
         # Start both backend and frontend
-        print("=" * 50)
-        print("🤖 DataScience Copilot - Starting Application")
-        print("=" * 50)
-        print()
-        print("📌 Backend:  http://localhost:8000")
-        print("📌 Frontend: http://localhost:3000")
-        print("📌 API Docs: http://localhost:8000/docs")
-        print()
-        print("=" * 50)
+        logger.info("DataScience Copilot starting")
+        logger.info("Backend:  http://localhost:8000")
+        logger.info("Frontend: http://localhost:3000")
+        logger.info("API Docs: http://localhost:8000/docs")
         
         # Start backend as separate process
         start_backend_process()

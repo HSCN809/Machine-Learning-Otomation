@@ -8,6 +8,8 @@ import {
     EditableRow,
 } from '@/types/data-upload';
 import * as api from '@/lib/api';
+import { logger } from '@/lib/logger';
+import { getErrorMessage, notify } from '@/lib/notify';
 
 const EMPTY_DRAFT: DataEditorDraft = {
     updatedCells: [],
@@ -150,8 +152,8 @@ export function useDataEditor({ onSaved }: UseDataEditorOptions = {}): UseDataEd
                     shouldAppend ? mergeRows(previousRows, response.rows) : response.rows
                 );
             } catch (err) {
-                console.error('Data editor page load error:', err);
-                setError(err instanceof Error ? err.message : 'Veri duzenleyici yuklenemedi');
+                logger.error('Data editor page load failed', err, { page: nextPage });
+                setError(getErrorMessage(err, 'Veri düzenleyici yüklenemedi'));
             } finally {
                 loadingPagesRef.current.delete(nextPage);
                 if (shouldAppend) {
@@ -429,13 +431,15 @@ export function useDataEditor({ onSaved }: UseDataEditorOptions = {}): UseDataEd
         const hasEmptyRenamedColumns = renamedColumnNames.some((name) => name.length === 0);
 
         if (hasEmptyRenamedColumns) {
-            setError('Sutun adlari bos birakilamaz');
+            setError('Sütun adları boş bırakılamaz');
+            notify.warning('Sütun adları boş bırakılamaz');
             return false;
         }
 
         const nextColumnNames = columns.map((column) => getColumnDisplayName(column).trim());
         if (new Set(nextColumnNames).size !== nextColumnNames.length) {
-            setError('Sutun adlari kaydetmeden once benzersiz olmalidir');
+            setError('Sütun adları kaydetmeden önce benzersiz olmalıdır');
+            notify.warning('Sütun adları kaydetmeden önce benzersiz olmalıdır');
             return false;
         }
 
@@ -451,10 +455,13 @@ export function useDataEditor({ onSaved }: UseDataEditorOptions = {}): UseDataEd
             setSelectedRows([]);
             setSelectedTrimColumns([]);
             setActiveCell(null);
+            notify.success('Değişiklikler kaydedildi');
             return true;
         } catch (err) {
-            console.error('Data editor save error:', err);
-            setError(err instanceof Error ? err.message : 'Veri duzenleme degisiklikleri kaydedilemedi');
+            const message = getErrorMessage(err, 'Veri düzenleme değişiklikleri kaydedilemedi');
+            logger.error('Data editor save failed', err);
+            setError(message);
+            notify.error(err, 'Veri düzenleme değişiklikleri kaydedilemedi');
             return false;
         } finally {
             setIsSaving(false);

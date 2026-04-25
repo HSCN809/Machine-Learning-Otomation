@@ -6,16 +6,17 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
+from time import perf_counter
 
 # Routers
 from .dependencies import require_authenticated_user
 from .routers import auth, upload, eda, preprocessing, model
 from backend.modules.data_upload import models as data_upload_models  # noqa: F401
 from backend.modules.model_selection import models as model_selection_models  # noqa: F401
+from backend.modules.utils.app_logging import configure_logging, get_logger
 
-# Setup logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+configure_logging()
+logger = get_logger(__name__)
 
 
 @asynccontextmanager
@@ -58,6 +59,27 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def log_http_requests(request, call_next):
+    """Log request method, path, status code, and duration."""
+
+    started_at = perf_counter()
+    method = request.method
+    path = request.url.path
+
+    try:
+        response = await call_next(request)
+    except Exception:
+        duration_ms = (perf_counter() - started_at) * 1000
+        logger.exception("%s %s failed in %.1fms", method, path, duration_ms)
+        raise
+
+    duration_ms = (perf_counter() - started_at) * 1000
+    level = logging.WARNING if response.status_code >= 400 else logging.INFO
+    logger.log(level, "%s %s -> %s %.1fms", method, path, response.status_code, duration_ms)
+    return response
 
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])

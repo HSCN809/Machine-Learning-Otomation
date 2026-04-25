@@ -2,7 +2,6 @@
 
 import { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
-import { theme } from '@/styles/theme';
 import { Download, Maximize2 } from 'lucide-react';
 
 interface ChartCardProps {

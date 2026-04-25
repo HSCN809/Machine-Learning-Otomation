@@ -11,6 +11,8 @@ import {
     REGRESSION_MODELS,
 } from '@/types/model-selection';
 import * as api from '@/lib/api';
+import { logger } from '@/lib/logger';
+import { getErrorMessage, notify } from '@/lib/notify';
 
 interface ColumnInfo {
     name: string;
@@ -154,7 +156,7 @@ export function useModelSelection(): UseModelSelectionReturn {
             const merged = mergeAvailableModels(nextProblemType, response.models);
             setAvailableModels(merged.length > 0 ? merged : getStaticModels(nextProblemType));
         } catch (err) {
-            console.error('Load available models error:', err);
+            logger.error('Available models load failed', err, { problemType: nextProblemType });
             setAvailableModels(getStaticModels(nextProblemType));
         }
     }, []);
@@ -185,6 +187,7 @@ export function useModelSelection(): UseModelSelectionReturn {
             setCurrentStep(4);
             setCompletedSteps((prev) => (prev.includes(3) ? prev : [...prev, 3]));
             closeTrainingStream();
+            notify.success('Model eğitimi tamamlandı');
             return;
         }
 
@@ -192,13 +195,15 @@ export function useModelSelection(): UseModelSelectionReturn {
             setError(snapshot.error ?? 'Egitim sirasinda hata olustu');
             setCurrentStep(3);
             closeTrainingStream();
+            notify.error(snapshot.error ?? new Error('Eğitim sırasında hata oluştu'), 'Eğitim sırasında hata oluştu');
             return;
         }
 
         if (snapshot.status === 'stopped') {
-            setError('Egitim durduruldu');
+            setError('Eğitim durduruldu');
             setCurrentStep(3);
             closeTrainingStream();
+            notify.info('Eğitim durduruldu');
             return;
         }
 
@@ -217,7 +222,7 @@ export function useModelSelection(): UseModelSelectionReturn {
                 const snapshot = JSON.parse(event.data) as api.TrainingJobSnapshot;
                 applyTrainingSnapshot(snapshot);
             } catch (err) {
-                console.error('Training stream parse error:', err);
+                logger.error('Training stream parse failed', err);
             }
         };
 
@@ -281,8 +286,10 @@ export function useModelSelection(): UseModelSelectionReturn {
                 return;
             }
 
-            console.error('Load columns error:', err);
-            setError(err instanceof Error ? err.message : 'Sutunlar yuklenirken hata olustu');
+            const message = getErrorMessage(err, 'Sütunlar yüklenirken hata oluştu');
+            logger.error('Model selection columns load failed', err);
+            setError(message);
+            notify.error(err, 'Sütunlar yüklenirken hata oluştu');
         } finally {
             setIsLoading(false);
         }
@@ -409,11 +416,14 @@ export function useModelSelection(): UseModelSelectionReturn {
             const response = await api.startModelTraining(targetColumn, problemType, selectedModels, 0.2, modelParams);
             setTrainingJobId(response.job_id);
             connectToTrainingStream(response.job_id);
+            notify.info('Model eğitimi başlatıldı');
         } catch (err) {
-            console.error('Training error:', err);
-            setError(err instanceof Error ? err.message : 'Egitim sirasinda hata olustu');
+            const message = getErrorMessage(err, 'Eğitim sırasında hata oluştu');
+            logger.error('Model training failed to start', err);
+            setError(message);
             setIsTraining(false);
             setTrainingStatus('failed');
+            notify.error(err, 'Eğitim sırasında hata oluştu');
         }
     }, [connectToTrainingStream, modelParams, problemType, selectedModels, targetColumn]);
 
@@ -426,9 +436,12 @@ export function useModelSelection(): UseModelSelectionReturn {
             setError(null);
             await api.stopModelTraining(trainingJobId);
             setTrainingStatus('stopping');
+            notify.info('Eğitim durduruluyor');
         } catch (err) {
-            console.error('Stop training error:', err);
-            setError(err instanceof Error ? err.message : 'Egitim durdurulamadi');
+            const message = getErrorMessage(err, 'Eğitim durdurulamadı');
+            logger.error('Model training stop failed', err, { trainingJobId });
+            setError(message);
+            notify.error(err, 'Eğitim durdurulamadı');
         }
     }, [trainingJobId]);
 

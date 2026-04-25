@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -36,18 +36,8 @@ export function ChartCarousel({ slides, className }: ChartCarouselProps) {
         };
     }, []);
 
-    useEffect(() => {
-        if (slides.length === 0) {
-            setActiveIndex(0);
-            return;
-        }
-
-        if (activeIndex >= slides.length) {
-            setActiveIndex(0);
-        }
-    }, [activeIndex, slides.length]);
-
-    const currentSlide = slides[activeIndex];
+    const displayIndex = slides.length === 0 ? 0 : Math.min(activeIndex, slides.length - 1);
+    const currentSlide = slides[displayIndex];
     const isAnimating = phase !== 'idle';
     const showNavigation = slides.length > 1;
 
@@ -61,8 +51,8 @@ export function ChartCarousel({ slides, className }: ChartCarouselProps) {
         [direction, phase]
     );
 
-    const goToSlide = (nextIndex: number, nextDirection: 'forward' | 'backward') => {
-        if (slides.length <= 1 || isAnimating || nextIndex === activeIndex) {
+    const goToSlide = useCallback((nextIndex: number, nextDirection: 'forward' | 'backward') => {
+        if (slides.length <= 1 || isAnimating || nextIndex === displayIndex) {
             return;
         }
 
@@ -77,17 +67,17 @@ export function ChartCarousel({ slides, className }: ChartCarouselProps) {
                 setPhase('idle');
             }, ENTER_DURATION_MS);
         }, EXIT_DURATION_MS);
-    };
+    }, [displayIndex, isAnimating, slides.length]);
 
-    const handlePrevious = () => {
-        const nextIndex = (activeIndex - 1 + slides.length) % slides.length;
+    const handlePrevious = useCallback(() => {
+        const nextIndex = (displayIndex - 1 + slides.length) % slides.length;
         goToSlide(nextIndex, 'backward');
-    };
+    }, [displayIndex, goToSlide, slides.length]);
 
-    const handleNext = () => {
-        const nextIndex = (activeIndex + 1) % slides.length;
+    const handleNext = useCallback(() => {
+        const nextIndex = (displayIndex + 1) % slides.length;
         goToSlide(nextIndex, 'forward');
-    };
+    }, [displayIndex, goToSlide, slides.length]);
 
     useEffect(() => {
         if (!showNavigation) {
@@ -120,7 +110,7 @@ export function ChartCarousel({ slides, className }: ChartCarouselProps) {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [activeIndex, isAnimating, showNavigation, slides.length]);
+    }, [handleNext, handlePrevious, showNavigation]);
 
     if (!currentSlide) {
         return null;
@@ -144,7 +134,7 @@ export function ChartCarousel({ slides, className }: ChartCarouselProps) {
                 <div className="min-w-0">
                     <div className="mx-auto w-full max-w-[1080px] overflow-hidden">
                         <div className="mb-3 text-center text-xs font-medium tracking-[0.18em] text-gray-400">
-                            {currentSlide.label} {' / '} {activeIndex + 1} / {slides.length}
+                            {currentSlide.label} {' / '} {displayIndex + 1} / {slides.length}
                         </div>
                         <div className={stageClassName}>{currentSlide.content}</div>
                     </div>

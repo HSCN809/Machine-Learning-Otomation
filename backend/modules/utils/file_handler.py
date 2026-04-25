@@ -2,6 +2,7 @@
 
 import os
 import tempfile
+import logging
 from pathlib import Path
 from typing import Optional
 
@@ -12,6 +13,8 @@ except ImportError:
     STREAMLIT_AVAILABLE = False
 
 from backend.modules.config.settings import TEMP_DIR
+
+logger = logging.getLogger(__name__)
 
 
 def save_uploaded_file(uploaded_file) -> Optional[str]:
@@ -45,7 +48,7 @@ def save_uploaded_file(uploaded_file) -> Optional[str]:
         if STREAMLIT_AVAILABLE:
             st.error(f"Dosya kaydedilirken hata oluştu: {str(e)}")
         else:
-            print(f"Dosya kaydedilirken hata oluştu: {str(e)}")
+            logger.error("Dosya kaydedilirken hata oluştu: %s", e)
         return None
 
 
@@ -69,8 +72,7 @@ def cleanup_temp_files(file_path: Optional[str] = None):
                     if current_time - file_time > 3600:  # 1 hour
                         os.remove(file)
     except Exception as e:
-        # Silently fail for cleanup operations
-        pass
+        logger.debug("Temp file cleanup failed: %s", e, exc_info=True)
 
 
 def get_file_size_mb(file_path: str) -> float:

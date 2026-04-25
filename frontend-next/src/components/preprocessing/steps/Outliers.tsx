@@ -7,6 +7,7 @@ import { ColumnInfo, OutlierConfig, OutlierMethod } from '@/types/preprocessing'
 import { Info, Loader2, X } from 'lucide-react';
 import { theme } from '@/styles/theme';
 import { analyzeOutliers, isSessionRequiredError } from '@/lib/api';
+import { logger } from '@/lib/logger';
 
 interface OutliersProps {
     numericColumns: ColumnInfo[];
@@ -129,7 +130,7 @@ export const Outliers = React.memo(function Outliers({ numericColumns, onApply, 
                     return;
                 }
 
-                console.error('Outlier analysis error:', err);
+                logger.error('Outlier analysis failed', err);
                 setDetectedColumns([]);
                 setSelectedColumns([]);
                 setAnalysisError(err instanceof Error ? err.message : 'Aykırı değer analizi sırasında hata oluştu');

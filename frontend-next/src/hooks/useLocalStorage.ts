@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { logger } from '@/lib/logger';
 
 /**
  * Hook to persist state in localStorage
@@ -17,7 +18,7 @@ export function useLocalStorage<T>(
             const item = window.localStorage.getItem(key);
             return item ? JSON.parse(item) : initialValue;
         } catch (error) {
-            console.error(`Error reading localStorage key "${key}":`, error);
+            logger.error('Local storage read failed', error, { key });
             return initialValue;
         }
     });
@@ -30,7 +31,7 @@ export function useLocalStorage<T>(
                 window.localStorage.setItem(key, JSON.stringify(valueToStore));
             }
         } catch (error) {
-            console.error(`Error setting localStorage key "${key}":`, error);
+            logger.error('Local storage write failed', error, { key });
         }
     };
 

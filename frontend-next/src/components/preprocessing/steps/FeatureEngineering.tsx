@@ -3,6 +3,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import { ColumnSelector } from '../ColumnSelector';
 import * as api from '@/lib/api';
+import { logger } from '@/lib/logger';
 import {
     BinningStrategy,
     ColumnInfo,
@@ -837,7 +838,7 @@ function DropColumnsTab({ columns, isLoading, onDropColumns }: DropColumnsTabPro
                     setRecommendations(analysis.recommendations);
                 }
             } catch (err) {
-                console.error('Analysis error:', err);
+                logger.error('Droppable columns analysis failed', err);
             }
         }
         loadAnalysis();

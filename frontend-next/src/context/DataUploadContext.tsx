@@ -10,6 +10,8 @@ import {
     SampleDataset,
 } from '@/types/data-upload';
 import * as api from '@/lib/api';
+import { logger } from '@/lib/logger';
+import { getErrorMessage, notify } from '@/lib/notify';
 
 export const SAMPLE_DATASETS: SampleDataset[] = [
     { id: 'titanic', name: 'Titanic', description: 'Titanic yolcu verileri', emoji: '🚢', rows: 891, columns: 12 },
@@ -107,7 +109,7 @@ export function DataUploadProvider({ children }: { children: ReactNode }) {
         try {
             await api.resetUpload();
         } catch (err) {
-            console.log('Reset session:', err);
+            logger.warn('Reset session failed', { error: err });
         }
 
         setStatus('idle');
@@ -162,10 +164,13 @@ export function DataUploadProvider({ children }: { children: ReactNode }) {
                 setDataSummary(buildDataSummary(summary, preview.data));
                 setValidationReport(buildValidationReport(validation));
                 setStatus('success');
+                notify.success('Dosya yüklendi');
             } catch (err) {
-                console.error('Upload error:', err);
-                setError(err instanceof Error ? err.message : 'Yukleme sirasinda hata olustu');
+                const message = getErrorMessage(err, 'Yükleme sırasında hata oluştu');
+                logger.error('Upload failed', err);
+                setError(message);
                 setStatus('error');
+                notify.error(err, 'Yükleme sırasında hata oluştu');
             }
         },
         [buildDataSummary, buildValidationReport]
@@ -204,10 +209,13 @@ export function DataUploadProvider({ children }: { children: ReactNode }) {
                 setDataSummary(buildDataSummary(summary, []));
                 setValidationReport(buildValidationReport(validation));
                 setStatus('success');
+                notify.success('Örnek veri seti yüklendi');
             } catch (err) {
-                console.error('Sample dataset error:', err);
-                setError(err instanceof Error ? err.message : 'Veri seti yuklenirken hata olustu');
+                const message = getErrorMessage(err, 'Veri seti yüklenirken hata oluştu');
+                logger.error('Sample dataset load failed', err);
+                setError(message);
                 setStatus('error');
+                notify.error(err, 'Veri seti yüklenirken hata oluştu');
             }
         },
         [buildDataSummary, buildValidationReport]
@@ -230,7 +238,7 @@ export function DataUploadProvider({ children }: { children: ReactNode }) {
                 .then((validation) => setValidationReport(buildValidationReport(validation)))
                 .catch((validationError) => {
                     if (!api.isSessionRequiredError(validationError)) {
-                        console.error('Session validation hydration error:', validationError);
+                        logger.error('Session validation hydration failed', validationError);
                     }
                 });
         } catch (err) {
@@ -241,8 +249,8 @@ export function DataUploadProvider({ children }: { children: ReactNode }) {
                 setValidationReport(null);
                 setStatus('idle');
             } else {
-                console.error('Session hydration error:', err);
-                setError(err instanceof Error ? err.message : 'Oturum verisi yuklenirken hata olustu');
+                logger.error('Session hydration failed', err);
+                setError(getErrorMessage(err, 'Oturum verisi yüklenirken hata oluştu'));
                 setStatus('error');
             }
         } finally {

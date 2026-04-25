@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/lib/logger';
 
 const BACKEND_BASE_URL = process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -66,7 +67,11 @@ async function forward(request: NextRequest, params: { path: string[] }) {
         });
 
         return proxyResponse;
-    } catch {
+    } catch (error) {
+        logger.error('Backend proxy request failed', error, {
+            method: request.method,
+            targetUrl: targetUrl.toString(),
+        });
         return NextResponse.json(
             {
                 detail: 'Backend service unavailable. Start FastAPI server and verify PostgreSQL connection.',
