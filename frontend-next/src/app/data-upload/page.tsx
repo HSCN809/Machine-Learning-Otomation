@@ -9,6 +9,7 @@ import { FileDropzone, SavedDatasets, SampleDatasets, UploadProgress } from '@/c
 import { SessionPageSkeleton } from '@/components/common';
 import { useDataUpload } from '@/hooks/useDataUpload';
 import { normalizeNextPath } from '@/lib/routing';
+import * as api from '@/lib/api';
 
 const DataEditor = dynamic(
     () => import('@/components/data-upload/DataEditor').then((module) => module.DataEditor),
@@ -82,11 +83,13 @@ export default function DataUploadPage() {
 
     const handleFileUpload = (file: File) => {
         setShowDropzone(false);
+        api.clearStoredSession();
         uploadFile(file);
     };
 
     const handleSampleSelect = (datasetId: string) => {
         setShowDropzone(false);
+        api.clearStoredSession();
         loadSampleDataset(datasetId);
     };
 
@@ -243,7 +246,7 @@ export default function DataUploadPage() {
                                         'linear-gradient(135deg, rgba(17, 24, 39, 0.6) 0%, rgba(31, 41, 55, 0.4) 100%)',
                                 }}
                             >
-                                <DataEditor onSaved={hydrateSession} onDelete={reset} />
+                                <DataEditor key={activeDatasetId} onSaved={hydrateSession} onDelete={reset} />
                             </section>
                         )}
                     </main>

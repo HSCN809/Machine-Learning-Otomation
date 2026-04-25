@@ -153,7 +153,7 @@ export function SavedDatasets({
             ) : null}
 
             {sortedDatasets.length > 0 ? (
-                <div className="grid gap-3 xl:grid-cols-2">
+                <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
                     {sortedDatasets.map((dataset) => {
                         const isActive = dataset.id === activeDatasetId;
                         const isRenaming = dataset.id === renamingDatasetId;
@@ -163,7 +163,7 @@ export function SavedDatasets({
                             <article
                                 key={dataset.id}
                                 className={cn(
-                                    'rounded-2xl border p-4 transition-colors',
+                                    'min-w-[340px] rounded-2xl border p-4 transition-colors',
                                     isActive
                                         ? 'border-cyan-400/40 bg-cyan-400/10'
                                         : 'border-white/10 bg-white/[0.04]'
