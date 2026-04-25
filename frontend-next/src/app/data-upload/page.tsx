@@ -162,7 +162,7 @@ export default function DataUploadPage() {
                             >
                                 <SavedDatasets
                                     datasets={savedDatasets}
-                                    activeDatasetId={activeDatasetId}
+                                    activeDatasetId={showDropzone ? null : activeDatasetId}
                                     loading={isSavedDatasetsLoading}
                                     disabled={isLoading || isInitializing}
                                     onLoad={handleSavedDatasetLoad}

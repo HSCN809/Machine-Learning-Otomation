@@ -32,6 +32,11 @@ function formatUpdatedAt(value: string): string {
     }).format(date);
 }
 
+function truncateText(text: string, maxLength: number): string {
+    if (text.length <= maxLength) return text;
+    return text.slice(0, maxLength) + '...';
+}
+
 export function SavedDatasets({
     datasets,
     activeDatasetId,
@@ -205,8 +210,11 @@ export function SavedDatasets({
                                                 </div>
                                             ) : (
                                                 <div className="flex flex-wrap items-center gap-2">
-                                                    <h3 className="truncate text-base font-semibold text-white">
-                                                        {dataset.name}
+                                                    <h3
+                                                        className="truncate text-base font-semibold text-white"
+                                                        title={dataset.name}
+                                                    >
+                                                        {truncateText(dataset.name, 30)}
                                                     </h3>
                                                     {isActive ? (
                                                         <span className="rounded-full border border-cyan-400/30 bg-cyan-400/15 px-2.5 py-1 text-[11px] font-medium text-cyan-100">
