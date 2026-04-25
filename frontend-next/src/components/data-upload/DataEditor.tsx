@@ -1677,31 +1677,37 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                                 <span>Yeniden adlandırılan sütun</span>
                                 <span>{draft.renamedColumns.length}</span>
                             </div>
+                            <div className="flex items-center justify-between">
+                                <span>Kırpılacak sütun</span>
+                                <span>{draft.trimColumns.length}</span>
+                            </div>
                         </div>
 
                         <div className="mt-4 space-y-2">
                             <p className="text-xs font-medium uppercase tracking-[0.2em] text-gray-500">
                                 Kırpma Kuyruğu
                             </p>
-                            {draft.trimColumns.length === 0 && (
-                                <p className="text-sm text-gray-500">Bekleyen kırpma işlemi yok.</p>
-                            )}
-                            {draft.trimColumns.map((column) => (
-                                <div
-                                    key={column}
-                                    className="flex items-center justify-between gap-3 rounded-xl border border-white/10 px-3 py-2 text-sm text-gray-200"
-                                >
-                                    <span className="truncate">{getColumnDisplayName(column)}</span>
-                                    <button
-                                        type="button"
-                                        onClick={() => removeTrimColumn(column)}
-                                        disabled={isSaving}
-                                        className={getButtonClassName(isSaving)}
+                            <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
+                                {draft.trimColumns.length === 0 && (
+                                    <p className="text-sm text-gray-500">Bekleyen kırpma işlemi yok.</p>
+                                )}
+                                {draft.trimColumns.map((column) => (
+                                    <div
+                                        key={column}
+                                        className="flex items-center justify-between gap-3 rounded-xl border border-white/10 px-3 py-2 text-sm text-gray-200"
                                     >
-                                        Kaldır
-                                    </button>
-                                </div>
-                            ))}
+                                        <span className="truncate">{getColumnDisplayName(column)}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => removeTrimColumn(column)}
+                                            disabled={isSaving}
+                                            className={getButtonClassName(isSaving)}
+                                        >
+                                            Kaldır
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 </aside>
