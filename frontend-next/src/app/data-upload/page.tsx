@@ -27,7 +27,6 @@ export default function DataUploadPage() {
     const router = useRouter();
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [isBootstrapping, setIsBootstrapping] = useState(true);
-    const bootstrapStartedRef = useRef(false);
     const nextPath = useMemo(
         () =>
             normalizeNextPath(
@@ -59,12 +58,12 @@ export default function DataUploadPage() {
         reset,
     } = useDataUpload();
 
-    useEffect(() => {
-        if (bootstrapStartedRef.current) {
-            return;
-        }
+    const hydrateSessionRef = useRef(hydrateSession);
+    const refreshSavedDatasetsRef = useRef(refreshSavedDatasets);
+    hydrateSessionRef.current = hydrateSession;
+    refreshSavedDatasetsRef.current = refreshSavedDatasets;
 
-        bootstrapStartedRef.current = true;
+    useEffect(() => {
         let cancelled = false;
 
         const bootstrap = async () => {
@@ -72,10 +71,10 @@ export default function DataUploadPage() {
                 const hasContextData = Boolean(dataSummary);
                 const hasStoredSession = api.hasStoredSession();
 
-                await refreshSavedDatasets();
+                await refreshSavedDatasetsRef.current();
 
                 if (!hasContextData && hasStoredSession && status === 'idle') {
-                    await hydrateSession();
+                    await hydrateSessionRef.current();
                 }
             } finally {
                 if (!cancelled) {
@@ -89,7 +88,8 @@ export default function DataUploadPage() {
         return () => {
             cancelled = true;
         };
-    }, [dataSummary, hydrateSession, refreshSavedDatasets, status]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const handleSavedDatasetLoad = async (datasetId: string) => {
         const isSwitchingDataset = Boolean(activeDatasetId && activeDatasetId !== datasetId);
