@@ -5,15 +5,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar, Header } from '@/components/layout';
 import { ProtectedRouteBoundary } from '@/components/auth/ProtectedRouteBoundary';
-import {
-    FileDropzone,
-    SavedDatasets,
-    SampleDatasets,
-    UploadProgress,
-} from '@/components/data-upload';
+import { FileDropzone, SavedDatasets, SampleDatasets, UploadProgress } from '@/components/data-upload';
 import { SessionPageSkeleton } from '@/components/common';
 import { useDataUpload } from '@/hooks/useDataUpload';
-import * as api from '@/lib/api';
 import { normalizeNextPath } from '@/lib/routing';
 
 const DataEditor = dynamic(
@@ -27,6 +21,8 @@ export default function DataUploadPage() {
     const router = useRouter();
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [isBootstrapping, setIsBootstrapping] = useState(true);
+    const [showDropzone, setShowDropzone] = useState(true);
+    const fileDropzoneSectionRef = useRef<HTMLElement | null>(null);
     const nextPath = useMemo(
         () =>
             normalizeNextPath(
@@ -58,24 +54,12 @@ export default function DataUploadPage() {
         reset,
     } = useDataUpload();
 
-    const hydrateSessionRef = useRef(hydrateSession);
-    const refreshSavedDatasetsRef = useRef(refreshSavedDatasets);
-    hydrateSessionRef.current = hydrateSession;
-    refreshSavedDatasetsRef.current = refreshSavedDatasets;
-
     useEffect(() => {
         let cancelled = false;
 
         const bootstrap = async () => {
             try {
-                const hasContextData = Boolean(dataSummary);
-                const hasStoredSession = api.hasStoredSession();
-
-                await refreshSavedDatasetsRef.current();
-
-                if (!hasContextData && hasStoredSession && status === 'idle') {
-                    await hydrateSessionRef.current();
-                }
+                await refreshSavedDatasets();
             } finally {
                 if (!cancelled) {
                     setIsBootstrapping(false);
@@ -91,6 +75,21 @@ export default function DataUploadPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    const handleNewUpload = () => {
+        setShowDropzone(true);
+        fileDropzoneSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+
+    const handleFileUpload = (file: File) => {
+        setShowDropzone(false);
+        uploadFile(file);
+    };
+
+    const handleSampleSelect = (datasetId: string) => {
+        setShowDropzone(false);
+        loadSampleDataset(datasetId);
+    };
+
     const handleSavedDatasetLoad = async (datasetId: string) => {
         const isSwitchingDataset = Boolean(activeDatasetId && activeDatasetId !== datasetId);
 
@@ -104,6 +103,7 @@ export default function DataUploadPage() {
             }
         }
 
+        setShowDropzone(false);
         await loadSavedDataset(datasetId);
     };
 
@@ -165,13 +165,15 @@ export default function DataUploadPage() {
                                     onLoad={handleSavedDatasetLoad}
                                     onRename={handleSavedDatasetRename}
                                     onDelete={handleSavedDatasetDelete}
+                                    onNewUpload={handleNewUpload}
                                 />
                             </section>
                         )}
 
-                        {!showSessionSkeleton && (status === 'idle' || status === 'error') && (
+                        {!showSessionSkeleton && showDropzone && (
                             <>
                                 <section
+                                    ref={fileDropzoneSectionRef}
                                     className="rounded-2xl border border-white/10 p-6"
                                     style={{
                                         background:
@@ -179,7 +181,7 @@ export default function DataUploadPage() {
                                     }}
                                 >
                                     <h2 className="mb-4 text-lg font-semibold text-white">Dosya Yükle</h2>
-                                    <FileDropzone onFileSelect={uploadFile} disabled={isLoading} />
+                                    <FileDropzone onFileSelect={handleFileUpload} disabled={isLoading} />
                                 </section>
 
                                 <div className="flex items-center gap-4">
@@ -196,7 +198,7 @@ export default function DataUploadPage() {
                                     }}
                                 >
                                     <SampleDatasets
-                                        onSelect={loadSampleDataset}
+                                        onSelect={handleSampleSelect}
                                         disabled={isLoading}
                                         loading={isLoading}
                                     />
@@ -213,7 +215,7 @@ export default function DataUploadPage() {
                             />
                         )}
 
-                        {!showSessionSkeleton && showEditor && nextPath && (
+                        {!showSessionSkeleton && !showDropzone && showEditor && nextPath && (
                             <section className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-5">
                                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                                     <div>
@@ -233,7 +235,7 @@ export default function DataUploadPage() {
                             </section>
                         )}
 
-                        {!showSessionSkeleton && showEditor && (
+                        {!showSessionSkeleton && !showDropzone && showEditor && (
                             <section
                                 className="rounded-2xl border border-white/10 p-6"
                                 style={{

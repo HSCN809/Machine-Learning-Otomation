@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Check, Database, Pencil, Play, Trash2, X } from 'lucide-react';
+import { Check, Database, Pencil, Play, Trash2, Upload, X } from 'lucide-react';
 import type { PersistedDatasetSummary } from '@/types/data-upload';
 import { cn } from '@/lib/utils';
 
@@ -13,6 +13,7 @@ interface SavedDatasetsProps {
     onLoad: (datasetId: string) => Promise<void> | void;
     onRename: (datasetId: string, name: string) => Promise<void> | void;
     onDelete: (datasetId: string) => Promise<void> | void;
+    onNewUpload?: () => void;
 }
 
 type PendingAction =
@@ -39,6 +40,7 @@ export function SavedDatasets({
     onLoad,
     onRename,
     onDelete,
+    onNewUpload,
 }: SavedDatasetsProps) {
     const [renamingDatasetId, setRenamingDatasetId] = useState<string | null>(null);
     const [renameValue, setRenameValue] = useState('');
@@ -112,9 +114,26 @@ export function SavedDatasets({
 
     return (
         <div className="space-y-4">
-            <div className="flex items-center gap-2">
-                <Database className="h-5 w-5 text-cyan-400" />
-                <h2 className="text-lg font-semibold text-white">Kayıtlı Veri Setleri</h2>
+            <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                    <Database className="h-5 w-5 text-cyan-400" />
+                    <h2 className="text-lg font-semibold text-white">Kayıtlı Veri Setleri</h2>
+                </div>
+                {onNewUpload ? (
+                    <button
+                        type="button"
+                        onClick={onNewUpload}
+                        disabled={disabled}
+                        className={cn(
+                            'flex cursor-pointer items-center gap-2 rounded-xl border border-cyan-400/30 px-3 py-2 text-sm font-medium transition-all duration-200',
+                            'bg-cyan-400/10 text-cyan-300 hover:bg-cyan-400/20 hover:text-cyan-200',
+                            'disabled:cursor-not-allowed disabled:opacity-50'
+                        )}
+                    >
+                        <Upload className="h-4 w-4" />
+                        <span className="hidden sm:inline">Yeni Veri Seti Yükle</span>
+                    </button>
+                ) : null}
             </div>
 
             <p className="text-sm text-gray-400">
@@ -221,9 +240,7 @@ export function SavedDatasets({
                                             <Play className="h-4 w-4" />
                                             {isPending && pendingAction?.type === 'load'
                                                 ? 'Yükleniyor...'
-                                                : isActive
-                                                  ? 'Yeniden yükle'
-                                                  : 'Yükle'}
+                                                : 'Yükle'}
                                         </button>
                                         <button
                                             type="button"
