@@ -87,7 +87,7 @@ export default function LoginClient({ nextPath, registered = false }: LoginClien
                     return;
                 }
 
-                logger.error('Login page bootstrap failed', error);
+                logger.warn('Login page bootstrap failed', { message: getErrorMessage(error) });
                 setPageState('error');
                 setErrorMessage(getErrorMessage(error));
             }
