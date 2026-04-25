@@ -7,6 +7,7 @@ import { Sidebar, Header } from '@/components/layout';
 import { ProtectedRouteBoundary } from '@/components/auth/ProtectedRouteBoundary';
 import {
     FileDropzone,
+    SavedDatasets,
     SampleDatasets,
     UploadProgress,
 } from '@/components/data-upload';
@@ -44,9 +45,17 @@ export default function DataUploadPage() {
         error,
         uploadedFile,
         dataSummary,
+        isInitializing,
+        savedDatasets,
+        activeDatasetId,
+        isSavedDatasetsLoading,
         uploadFile,
         loadSampleDataset,
+        loadSavedDataset,
+        renameSavedDataset,
+        deleteSavedDataset,
         hydrateSession,
+        refreshSavedDatasets,
         reset,
     } = useDataUpload();
 
@@ -63,6 +72,8 @@ export default function DataUploadPage() {
                 const hasContextData = Boolean(dataSummary);
                 const hasStoredSession = api.hasStoredSession();
 
+                await refreshSavedDatasets();
+
                 if (!hasContextData && hasStoredSession && status === 'idle') {
                     await hydrateSession();
                 }
@@ -78,7 +89,39 @@ export default function DataUploadPage() {
         return () => {
             cancelled = true;
         };
-    }, [dataSummary, hydrateSession, status]);
+    }, [dataSummary, hydrateSession, refreshSavedDatasets, status]);
+
+    const handleSavedDatasetLoad = async (datasetId: string) => {
+        const isSwitchingDataset = Boolean(activeDatasetId && activeDatasetId !== datasetId);
+
+        if (isSwitchingDataset) {
+            const confirmed = window.confirm(
+                'Aktif veri seti değiştirilecek. Mevcut veri setindeki değişiklikleri kaydettiğinizden emin misiniz? Kaydedilmemiş değişiklikler kaybolabilir. Devam etmek istiyor musunuz?'
+            );
+
+            if (!confirmed) {
+                return;
+            }
+        }
+
+        await loadSavedDataset(datasetId);
+    };
+
+    const handleSavedDatasetRename = async (datasetId: string, name: string) => {
+        await renameSavedDataset(datasetId, name);
+    };
+
+    const handleSavedDatasetDelete = async (datasetId: string) => {
+        const confirmed = window.confirm(
+            'Bu veri seti kalıcı olarak silinecek. Bu veri setine bağlı preprocessing geçmişi ve model kayıtları da kaldırılacak. Devam etmek istiyor musunuz?'
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        await deleteSavedDataset(datasetId);
+    };
 
     const isLoading = status === 'uploading' || status === 'validating';
     const showEditor = status === 'success' && dataSummary;
@@ -105,6 +148,26 @@ export default function DataUploadPage() {
 
                     <main className="space-y-8 p-6">
                         {showSessionSkeleton && <SessionPageSkeleton variant="upload" />}
+
+                        {!showSessionSkeleton && (
+                            <section
+                                className="rounded-2xl border border-white/10 p-6"
+                                style={{
+                                    background:
+                                        'linear-gradient(135deg, rgba(17, 24, 39, 0.6) 0%, rgba(31, 41, 55, 0.4) 100%)',
+                                }}
+                            >
+                                <SavedDatasets
+                                    datasets={savedDatasets}
+                                    activeDatasetId={activeDatasetId}
+                                    loading={isSavedDatasetsLoading}
+                                    disabled={isLoading || isInitializing}
+                                    onLoad={handleSavedDatasetLoad}
+                                    onRename={handleSavedDatasetRename}
+                                    onDelete={handleSavedDatasetDelete}
+                                />
+                            </section>
+                        )}
 
                         {!showSessionSkeleton && (status === 'idle' || status === 'error') && (
                             <>

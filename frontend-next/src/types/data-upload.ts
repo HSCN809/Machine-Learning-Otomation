@@ -105,6 +105,15 @@ export interface DataEditorCommitResponse {
     renamedColumns: number;
 }
 
+export interface PersistedDatasetSummary {
+    id: string;
+    name: string;
+    rows: number;
+    columns: number;
+    createdAt: string;
+    updatedAt: string;
+}
+
 export interface SampleDataset {
     id: string;
     name: string;

@@ -6,6 +6,7 @@ import type {
     DataEditorCommitResponse,
     DataEditorDraft,
     DataEditorPageResponse,
+    PersistedDatasetSummary,
 } from '@/types/data-upload';
 import type { FeatureConfig } from '@/types/preprocessing';
 
@@ -38,6 +39,10 @@ function setSessionId(id: string): void {
         localStorage.setItem('ml_session_id', id);
     }
     notifyStoredSessionChange();
+}
+
+export function setStoredSessionId(id: string): void {
+    setSessionId(id);
 }
 
 export function clearStoredSession(): void {
@@ -209,6 +214,26 @@ export interface UploadResponse {
     column_names: string[];
 }
 
+interface SavedDatasetApiResponse {
+    id: string;
+    name: string;
+    rows: number;
+    columns: number;
+    created_at: string;
+    updated_at: string;
+}
+
+function mapSavedDataset(dataset: SavedDatasetApiResponse): PersistedDatasetSummary {
+    return {
+        id: dataset.id,
+        name: dataset.name,
+        rows: dataset.rows,
+        columns: dataset.columns,
+        createdAt: dataset.created_at,
+        updatedAt: dataset.updated_at,
+    };
+}
+
 export async function uploadFile(file: File): Promise<UploadResponse> {
     const formData = new FormData();
     formData.append('file', file);
@@ -235,6 +260,48 @@ export async function loadSampleDataset(datasetName: string): Promise<UploadResp
     }
 
     return response;
+}
+
+export async function getSavedDatasets(): Promise<PersistedDatasetSummary[]> {
+    const response = await apiFetch<{ datasets: SavedDatasetApiResponse[] }>('/api/upload/saved-datasets');
+    return response.datasets.map(mapSavedDataset);
+}
+
+export async function loadSavedDataset(datasetId: string): Promise<UploadResponse> {
+    const response = await apiFetch<UploadResponse>(`/api/upload/saved-datasets/${datasetId}/load`, {
+        method: 'POST',
+    });
+
+    if (response.session_id) {
+        setSessionId(response.session_id);
+    }
+
+    return response;
+}
+
+export async function renameSavedDataset(
+    datasetId: string,
+    name: string
+): Promise<PersistedDatasetSummary> {
+    const response = await apiFetch<{ success: boolean; dataset: SavedDatasetApiResponse }>(
+        `/api/upload/saved-datasets/${datasetId}`,
+        {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name }),
+        }
+    );
+
+    return mapSavedDataset(response.dataset);
+}
+
+export async function deleteSavedDataset(
+    datasetId: string
+): Promise<{ success: boolean; message: string }> {
+    return apiFetch<{ success: boolean; message: string }>(
+        `/api/upload/saved-datasets/${datasetId}`,
+        { method: 'DELETE' }
+    );
 }
 
 export interface DataSummary {

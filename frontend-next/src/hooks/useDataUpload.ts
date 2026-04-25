@@ -5,6 +5,7 @@ import {
     SAMPLE_DATASETS as CONTEXT_SAMPLE_DATASETS
 } from '@/context/DataUploadContext';
 import {
+    PersistedDatasetSummary,
     UploadedFile,
     DataSummary,
     ValidationReport,
@@ -23,11 +24,18 @@ interface UseDataUploadReturn {
     dataSummary: DataSummary | null;
     validationReport: ValidationReport | null;
     isInitializing: boolean;
+    savedDatasets: PersistedDatasetSummary[];
+    activeDatasetId: string | null;
+    isSavedDatasetsLoading: boolean;
 
     // Actions
     uploadFile: (file: File) => Promise<void>;
     loadSampleDataset: (datasetId: string) => Promise<void>;
+    loadSavedDataset: (datasetId: string) => Promise<void>;
+    renameSavedDataset: (datasetId: string, name: string) => Promise<void>;
+    deleteSavedDataset: (datasetId: string) => Promise<void>;
     hydrateSession: () => Promise<void>;
+    refreshSavedDatasets: () => Promise<void>;
     reset: () => Promise<void>;
 }
 

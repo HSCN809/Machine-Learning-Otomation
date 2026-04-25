@@ -23,9 +23,13 @@ from ..dependencies import (
     get_db,
     get_session_id,
     persist_session,
+    require_authenticated_user,
     require_session,
+    restore_persisted_session,
     session_manager,
 )
+from backend.modules.auth.models import User
+from backend.modules.data_upload.persistence import DataSessionRepository
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -53,6 +57,10 @@ class EditorCommitRequest(BaseModel):
     deleted_row_ids: list[int] = Field(default_factory=list)
     trim_columns: list[str] = Field(default_factory=list)
     renamed_columns: list[EditorColumnRename] = Field(default_factory=list)
+
+
+class SavedDatasetRenameRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=512)
 
 
 def _serialize_editor_value(value: Any) -> Any:
@@ -93,6 +101,19 @@ def _clear_downstream_metadata(session_id: str):
         "trained_model_artifacts",
     ):
         session["metadata"].pop(key, None)
+
+
+def _serialize_saved_dataset(record) -> dict[str, Any]:
+    metadata = record.metadata_json or {}
+    name = metadata.get("filename") or record.filename or "Adsiz veri seti"
+    return {
+        "id": record.id,
+        "name": str(name),
+        "rows": record.row_count,
+        "columns": record.column_count,
+        "created_at": record.created_at.isoformat(),
+        "updated_at": record.updated_at.isoformat(),
+    }
 
 
 def _read_excel_content(content: bytes, filename: str) -> pd.DataFrame:
@@ -185,6 +206,105 @@ async def load_sample_dataset(
     except Exception as e:
         logger.exception("Sample dataset load failed for session %s: %s", session_id, dataset_name)
         raise HTTPException(status_code=500, detail="Örnek veri seti yüklenirken hata oluştu") from e
+
+
+@router.get("/saved-datasets")
+async def list_saved_datasets(
+    current_user: User = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+):
+    """List persisted datasets for the authenticated user."""
+    repository = DataSessionRepository(db)
+    records = repository.list_sessions(current_user.id)
+    return {
+        "datasets": [_serialize_saved_dataset(record) for record in records],
+    }
+
+
+@router.post("/saved-datasets/{dataset_session_id}/load")
+async def load_saved_dataset(
+    dataset_session_id: str,
+    current_user: User = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+):
+    """Restore a persisted dataset and mark it as the active session."""
+    repository = DataSessionRepository(db)
+    record = repository.get_session(dataset_session_id, current_user.id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Kayitli veri seti bulunamadi")
+
+    if not session_manager.owns_session(dataset_session_id, current_user.id):
+        restored = restore_persisted_session(dataset_session_id, current_user.id, db)
+        if not restored:
+            raise HTTPException(status_code=404, detail="Kayitli veri seti bulunamadi")
+
+    df = session_manager.get_dataframe(dataset_session_id)
+    if df is None:
+        raise HTTPException(status_code=400, detail="Kayitli veri seti yuklenemedi")
+
+    return {
+        "success": True,
+        "session_id": record.id,
+        "filename": record.filename,
+        "rows": record.row_count,
+        "columns": record.column_count,
+        "column_names": df.columns.tolist(),
+    }
+
+
+@router.patch("/saved-datasets/{dataset_session_id}")
+async def rename_saved_dataset(
+    dataset_session_id: str,
+    request: SavedDatasetRenameRequest,
+    current_user: User = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+):
+    """Rename a persisted dataset."""
+    next_name = request.name.strip()
+    if not next_name:
+        raise HTTPException(status_code=400, detail="Veri seti adi bos birakilamaz")
+
+    repository = DataSessionRepository(db)
+    record = repository.rename_session(dataset_session_id, current_user.id, next_name)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Kayitli veri seti bulunamadi")
+
+    memory_session = session_manager.get_session(dataset_session_id)
+    if memory_session and memory_session.get("owner_user_id") == current_user.id:
+        memory_session.setdefault("metadata", {})["filename"] = next_name
+
+    db.commit()
+    return {
+        "success": True,
+        "dataset": _serialize_saved_dataset(record),
+    }
+
+
+@router.delete("/saved-datasets/{dataset_session_id}")
+async def delete_saved_dataset(
+    dataset_session_id: str,
+    current_user: User = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+):
+    """Delete a persisted dataset and its related records."""
+    repository = DataSessionRepository(db)
+    record = repository.get_session(dataset_session_id, current_user.id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Kayitli veri seti bulunamadi")
+
+    repository.delete_session(dataset_session_id, current_user.id)
+    db.commit()
+    session_manager.delete_session(dataset_session_id)
+
+    logger.info(
+        "Persisted dataset deleted for user %s: dataset_session_id=%s",
+        current_user.id,
+        dataset_session_id,
+    )
+    return {
+        "success": True,
+        "message": "Kayitli veri seti silindi",
+    }
 
 
 @router.get("/summary")

@@ -182,6 +182,66 @@ class DataUploadPersistenceTests(unittest.TestCase):
             self.assertIsNotNone(repository.get_session("scoped-session-1", self.user_id))
             self.assertIsNone(repository.get_session("scoped-session-1", self.other_user_id))
 
+    def test_list_sessions_returns_only_owner_records_sorted_by_updated_at(self):
+        df = pd.DataFrame({"city": ["Ankara"], "value": [10]})
+
+        with self.Session() as db:
+            self.create_default_users(db)
+            repository = DataSessionRepository(db)
+            repository.upsert_session(
+                session_id="list-session-1",
+                user_id=self.user_id,
+                data=df,
+                original_data=df.copy(deep=True),
+                metadata={"filename": "first.csv"},
+            )
+            repository.upsert_session(
+                session_id="list-session-2",
+                user_id=self.user_id,
+                data=df,
+                original_data=df.copy(deep=True),
+                metadata={"filename": "second.csv"},
+            )
+            repository.upsert_session(
+                session_id="list-session-3",
+                user_id=self.other_user_id,
+                data=df,
+                original_data=df.copy(deep=True),
+                metadata={"filename": "other.csv"},
+            )
+            db.commit()
+
+            renamed = repository.rename_session("list-session-1", self.user_id, "first-renamed.csv")
+            self.assertIsNotNone(renamed)
+            db.commit()
+
+            records = repository.list_sessions(self.user_id)
+
+            self.assertEqual([record.id for record in records], ["list-session-1", "list-session-2"])
+
+    def test_rename_session_updates_filename_and_metadata_for_owner(self):
+        df = pd.DataFrame({"city": ["Ankara"], "value": [10]})
+
+        with self.Session() as db:
+            self.create_default_users(db)
+            repository = DataSessionRepository(db)
+            repository.upsert_session(
+                session_id="rename-session-1",
+                user_id=self.user_id,
+                data=df,
+                original_data=df.copy(deep=True),
+                metadata={"filename": "cities.csv"},
+            )
+            db.commit()
+
+            record = repository.rename_session("rename-session-1", self.user_id, "cities-v2.csv")
+            db.commit()
+
+            self.assertIsNotNone(record)
+            self.assertEqual(record.filename, "cities-v2.csv")
+            self.assertEqual(record.metadata_json["filename"], "cities-v2.csv")
+            self.assertIsNone(repository.rename_session("rename-session-1", self.other_user_id, "nope.csv"))
+
     def test_delete_session_only_deletes_owner_record(self):
         df = pd.DataFrame({"city": ["Ankara"], "value": [10]})
 

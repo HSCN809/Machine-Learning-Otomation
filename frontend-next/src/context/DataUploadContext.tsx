@@ -1,12 +1,13 @@
 'use client';
 
-import React, { createContext, useCallback, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useState, ReactNode } from 'react';
 import {
     UploadedFile,
     DataSummary,
     ValidationReport,
     ValidationIssue,
     UploadStatus,
+    PersistedDatasetSummary,
     SampleDataset,
 } from '@/types/data-upload';
 import * as api from '@/lib/api';
@@ -28,9 +29,16 @@ interface DataUploadContextType {
     dataSummary: DataSummary | null;
     validationReport: ValidationReport | null;
     isInitializing: boolean;
+    savedDatasets: PersistedDatasetSummary[];
+    activeDatasetId: string | null;
+    isSavedDatasetsLoading: boolean;
     uploadFile: (file: File) => Promise<void>;
     loadSampleDataset: (datasetId: string) => Promise<void>;
+    loadSavedDataset: (datasetId: string) => Promise<void>;
+    renameSavedDataset: (datasetId: string, name: string) => Promise<void>;
+    deleteSavedDataset: (datasetId: string) => Promise<void>;
     hydrateSession: () => Promise<void>;
+    refreshSavedDatasets: () => Promise<void>;
     reset: () => Promise<void>;
 }
 
@@ -44,6 +52,9 @@ export function DataUploadProvider({ children }: { children: ReactNode }) {
     const [dataSummary, setDataSummary] = useState<DataSummary | null>(null);
     const [validationReport, setValidationReport] = useState<ValidationReport | null>(null);
     const [isInitializing, setIsInitializing] = useState(false);
+    const [savedDatasets, setSavedDatasets] = useState<PersistedDatasetSummary[]>([]);
+    const [activeDatasetId, setActiveDatasetId] = useState<string | null>(api.getStoredSessionId());
+    const [isSavedDatasetsLoading, setIsSavedDatasetsLoading] = useState(false);
 
     const buildDataSummary = useCallback(
         (summary: api.DataSummary, preview: Record<string, unknown>[]): DataSummary => ({
@@ -105,6 +116,33 @@ export function DataUploadProvider({ children }: { children: ReactNode }) {
         };
     }, []);
 
+    useEffect(() => {
+        return api.subscribeToStoredSession(() => {
+            setActiveDatasetId(api.getStoredSessionId());
+        });
+    }, []);
+
+    const clearLoadedState = useCallback((nextStatus: UploadStatus = 'idle') => {
+        setStatus(nextStatus);
+        setProgress(0);
+        setError(null);
+        setUploadedFile(null);
+        setDataSummary(null);
+        setValidationReport(null);
+        setIsInitializing(false);
+    }, []);
+
+    const refreshSavedDatasets = useCallback(async () => {
+        try {
+            setIsSavedDatasetsLoading(true);
+            setSavedDatasets(await api.getSavedDatasets());
+        } catch (err) {
+            logger.error('Saved dataset list load failed', err);
+        } finally {
+            setIsSavedDatasetsLoading(false);
+        }
+    }, []);
+
     const reset = useCallback(async () => {
         try {
             await api.resetUpload();
@@ -117,14 +155,9 @@ export function DataUploadProvider({ children }: { children: ReactNode }) {
             return;
         }
 
-        setStatus('idle');
-        setProgress(0);
-        setError(null);
-        setUploadedFile(null);
-        setDataSummary(null);
-        setValidationReport(null);
-        setIsInitializing(false);
-    }, []);
+        clearLoadedState('idle');
+        await refreshSavedDatasets();
+    }, [clearLoadedState, refreshSavedDatasets]);
 
     const uploadFile = useCallback(
         async (file: File) => {
@@ -169,6 +202,7 @@ export function DataUploadProvider({ children }: { children: ReactNode }) {
                 setDataSummary(buildDataSummary(summary, preview.data));
                 setValidationReport(buildValidationReport(validation));
                 setStatus('success');
+                await refreshSavedDatasets();
                 notify.success('Dosya yüklendi');
             } catch (err) {
                 const message = getErrorMessage(err, 'Yükleme sırasında hata oluştu');
@@ -178,7 +212,7 @@ export function DataUploadProvider({ children }: { children: ReactNode }) {
                 notify.error(err, 'Yükleme sırasında hata oluştu');
             }
         },
-        [buildDataSummary, buildValidationReport]
+        [buildDataSummary, buildValidationReport, refreshSavedDatasets]
     );
 
     const loadSampleDataset = useCallback(
@@ -214,6 +248,7 @@ export function DataUploadProvider({ children }: { children: ReactNode }) {
                 setDataSummary(buildDataSummary(summary, []));
                 setValidationReport(buildValidationReport(validation));
                 setStatus('success');
+                await refreshSavedDatasets();
                 notify.success('Örnek veri seti yüklendi');
             } catch (err) {
                 const message = getErrorMessage(err, 'Veri seti yüklenirken hata oluştu');
@@ -223,7 +258,7 @@ export function DataUploadProvider({ children }: { children: ReactNode }) {
                 notify.error(err, 'Veri seti yüklenirken hata oluştu');
             }
         },
-        [buildDataSummary, buildValidationReport]
+        [buildDataSummary, buildValidationReport, refreshSavedDatasets]
     );
 
     const hydrateSession = useCallback(async () => {
@@ -239,6 +274,17 @@ export function DataUploadProvider({ children }: { children: ReactNode }) {
             setDataSummary(buildDataSummary(summary, preview.data));
             setValidationReport(null);
             setStatus('success');
+            const currentDatasetId = api.getStoredSessionId();
+            const activeSavedDataset = savedDatasets.find((dataset) => dataset.id === currentDatasetId);
+            if (activeSavedDataset) {
+                setUploadedFile({
+                    name: activeSavedDataset.name,
+                    size: 0,
+                    type: 'saved',
+                } as UploadedFile);
+            }
+
+            await refreshSavedDatasets();
             void api.getDataValidation()
                 .then((validation) => setValidationReport(buildValidationReport(validation)))
                 .catch((validationError) => {
@@ -248,11 +294,7 @@ export function DataUploadProvider({ children }: { children: ReactNode }) {
                 });
         } catch (err) {
             if (api.isSessionRequiredError(err)) {
-                setError(null);
-                setUploadedFile(null);
-                setDataSummary(null);
-                setValidationReport(null);
-                setStatus('idle');
+                clearLoadedState('idle');
             } else {
                 logger.error('Session hydration failed', err);
                 setError(getErrorMessage(err, 'Oturum verisi yüklenirken hata oluştu'));
@@ -261,7 +303,85 @@ export function DataUploadProvider({ children }: { children: ReactNode }) {
         } finally {
             setIsInitializing(false);
         }
-    }, [buildDataSummary, buildValidationReport]);
+    }, [
+        buildDataSummary,
+        buildValidationReport,
+        clearLoadedState,
+        refreshSavedDatasets,
+        savedDatasets,
+    ]);
+
+    const loadSavedDataset = useCallback(
+        async (datasetId: string) => {
+            try {
+                setIsInitializing(true);
+                setError(null);
+                await api.loadSavedDataset(datasetId);
+                await hydrateSession();
+                notify.success('Kayıtlı veri seti yüklendi');
+            } catch (err) {
+                const message = getErrorMessage(err, 'Kayıtlı veri seti yüklenemedi');
+                logger.error('Saved dataset load failed', err, { datasetId });
+                setError(message);
+                notify.error(err, 'Kayıtlı veri seti yüklenemedi');
+            } finally {
+                setIsInitializing(false);
+            }
+        },
+        [hydrateSession]
+    );
+
+    const renameSavedDataset = useCallback(
+        async (datasetId: string, name: string) => {
+            try {
+                setError(null);
+                const trimmedName = name.trim();
+                if (!trimmedName) {
+                    throw new Error('Veri seti adı boş bırakılamaz');
+                }
+
+                await api.renameSavedDataset(datasetId, trimmedName);
+                if (activeDatasetId === datasetId && uploadedFile) {
+                    setUploadedFile({
+                        ...uploadedFile,
+                        name: trimmedName,
+                    });
+                }
+
+                await refreshSavedDatasets();
+                notify.success('Veri seti adı güncellendi');
+            } catch (err) {
+                const message = getErrorMessage(err, 'Veri seti adı güncellenemedi');
+                logger.error('Saved dataset rename failed', err, { datasetId });
+                setError(message);
+                notify.error(err, 'Veri seti adı güncellenemedi');
+            }
+        },
+        [activeDatasetId, refreshSavedDatasets, uploadedFile]
+    );
+
+    const deleteSavedDataset = useCallback(
+        async (datasetId: string) => {
+            try {
+                setError(null);
+                await api.deleteSavedDataset(datasetId);
+
+                if (activeDatasetId === datasetId) {
+                    api.clearStoredSession();
+                    clearLoadedState('idle');
+                }
+
+                await refreshSavedDatasets();
+                notify.success('Veri seti silindi');
+            } catch (err) {
+                const message = getErrorMessage(err, 'Veri seti silinemedi');
+                logger.error('Saved dataset delete failed', err, { datasetId });
+                setError(message);
+                notify.error(err, 'Veri seti silinemedi');
+            }
+        },
+        [activeDatasetId, clearLoadedState, refreshSavedDatasets]
+    );
 
     return (
         <DataUploadContext.Provider
@@ -273,9 +393,16 @@ export function DataUploadProvider({ children }: { children: ReactNode }) {
                 dataSummary,
                 validationReport,
                 isInitializing,
+                savedDatasets,
+                activeDatasetId,
+                isSavedDatasetsLoading,
                 uploadFile,
                 loadSampleDataset,
+                loadSavedDataset,
+                renameSavedDataset,
+                deleteSavedDataset,
                 hydrateSession,
+                refreshSavedDatasets,
                 reset,
             }}
         >

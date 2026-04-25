@@ -6,3 +6,4 @@ export { ValidationReport } from './ValidationReport';
 export { DataPreview } from './DataPreview';
 export { DataEditor } from './DataEditor';
 export { IssueCard } from './IssueCard';
+export { SavedDatasets } from './SavedDatasets';

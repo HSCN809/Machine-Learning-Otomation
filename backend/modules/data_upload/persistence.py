@@ -38,6 +38,15 @@ class DataSessionRepository:
             )
         )
 
+    def list_sessions(self, user_id: str) -> list[DatasetSession]:
+        return list(
+            self.db.scalars(
+                select(DatasetSession)
+                .where(DatasetSession.user_id == user_id)
+                .order_by(DatasetSession.updated_at.desc(), DatasetSession.created_at.desc())
+            ).all()
+        )
+
     def upsert_session(
         self,
         *,
@@ -81,6 +90,23 @@ class DataSessionRepository:
         record = self.get_session(session_id, user_id)
         if record is not None:
             self.db.delete(record)
+
+    def rename_session(
+        self,
+        session_id: str,
+        user_id: str,
+        filename: str,
+    ) -> DatasetSession | None:
+        record = self.get_session(session_id, user_id)
+        if record is None:
+            return None
+
+        metadata_payload = dict(record.metadata_json or {})
+        metadata_payload["filename"] = filename
+
+        record.filename = filename
+        record.metadata_json = metadata_payload
+        return record
 
     def list_preprocessing_history(self, session_id: str, user_id: str) -> list[dict[str, Any]]:
         events = self.db.scalars(
