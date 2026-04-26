@@ -546,9 +546,8 @@ export function usePreprocessing(): UsePreprocessingReturn {
     const categoricalColumns = useMemo(
         () => columns.filter(
             (col) =>
-                col.type === 'categorical' ||
-                col.type === 'text' ||
-                semanticCategoricalColumnNames.has(col.name)
+                (col.type === 'categorical' || col.type === 'text') &&
+                !semanticCategoricalColumnNames.has(col.name)
         ),
         [columns, semanticCategoricalColumnNames]
     );
