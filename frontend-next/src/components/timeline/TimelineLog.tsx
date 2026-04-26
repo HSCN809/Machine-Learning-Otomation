@@ -231,7 +231,7 @@ export function TimelineLog({
                 </label>
             </div>
 
-            <div className="max-h-[70vh] overflow-y-auto px-5 py-4">
+            <div className="px-5 py-4">
                 {filteredEvents.length === 0 && (
                     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-gray-400">
                         Aramanızla eşleşen timeline kaydı bulunamadı.

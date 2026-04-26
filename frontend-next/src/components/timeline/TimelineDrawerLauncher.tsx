@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Grip, History, X } from 'lucide-react';
 import { PixelTrail } from '@/components/common';
 import { theme } from '@/styles/theme';
@@ -35,6 +35,23 @@ export function TimelineDrawerLauncher({
     const dragStartRef = useRef({ x: 0, y: 0 });
     const didDragRef = useRef(false);
     const { events, count, canUndoLast, isLoading, undoLast } = useDatasetTimeline({ enabled });
+
+    useEffect(() => {
+        if (!isOpen) {
+            return;
+        }
+
+        const previousBodyOverflow = document.body.style.overflow;
+        const previousHtmlOverflow = document.documentElement.style.overflow;
+
+        document.body.style.overflow = 'hidden';
+        document.documentElement.style.overflow = 'hidden';
+
+        return () => {
+            document.body.style.overflow = previousBodyOverflow;
+            document.documentElement.style.overflow = previousHtmlOverflow;
+        };
+    }, [isOpen]);
 
     if (!visible) {
         return null;
@@ -141,7 +158,7 @@ export function TimelineDrawerLauncher({
             <aside
                 className={`fixed right-0 top-0 z-50 h-screen w-full max-w-md border-l border-white/10 bg-[#0D1528]/95 shadow-2xl backdrop-blur-xl transition-transform duration-300 ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
             >
-                <div className="flex h-full flex-col">
+                <div className="flex h-full flex-col overflow-y-auto">
                     <div className="flex items-start justify-between border-b border-white/10 px-5 py-5">
                         <div>
                             <p className="text-sm font-medium uppercase tracking-[0.2em] text-cyan-400/80">
@@ -162,7 +179,7 @@ export function TimelineDrawerLauncher({
                         </button>
                     </div>
 
-                    <div className="flex-1 overflow-hidden p-5">
+                    <div className="p-5">
                         <TimelineLog
                             events={events}
                             canUndoLast={canUndoLast}
