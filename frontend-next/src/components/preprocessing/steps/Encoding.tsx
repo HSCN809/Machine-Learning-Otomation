@@ -94,6 +94,7 @@ export const Encoding = React.memo(function Encoding({ categoricalColumns, onApp
                 onChange={setSelectedColumns}
                 label="Uygulanacak Kategorik Sütunlar"
                 showMissing={false}
+                showUniqueCount
                 disabled={isLoading || categoricalColumns.length === 0}
             />
 

@@ -71,6 +71,31 @@ def _record_preprocessing_timeline_event(
     session_manager.add_timeline_snapshot(session_id, event["id"], previous_df)
 
 
+def _get_semantic_categorical_columns(session_id: str, df: pd.DataFrame) -> set[str]:
+    semantic_columns: set[str] = set()
+
+    for event in session_manager.get_timeline_events(session_id):
+        if event.get("category") != "preprocessing":
+            continue
+
+        payload = event.get("payload") or {}
+        event_step = event.get("step")
+        payload_step = payload.get("step")
+        if event_step != "encoding" and payload_step != "encoding":
+            continue
+
+        for key in ("columns", "new_columns"):
+            column_names = payload.get(key)
+            if not isinstance(column_names, list):
+                continue
+
+            for column_name in column_names:
+                if isinstance(column_name, str) and column_name in df.columns:
+                    semantic_columns.add(column_name)
+
+    return semantic_columns
+
+
 # Request schemas
 class MissingValuesRequest(BaseModel):
     method: str  # fill_mean, fill_median, fill_mode, fill_knn, fill_interpolation, fill_regression, fill_ffill, fill_bfill, drop_columns
@@ -578,8 +603,13 @@ async def handle_scaling(
     
     try:
         previous_df = df.copy(deep=True)
+        semantic_categorical_columns = _get_semantic_categorical_columns(session_id, df)
         valid_columns = [
-            col for col in request.columns if col in df.columns and np.issubdtype(df[col].dtype, np.number)
+            col
+            for col in request.columns
+            if col in df.columns
+            and col not in semantic_categorical_columns
+            and pd.api.types.is_numeric_dtype(df[col])
         ]
         skipped_columns = [col for col in request.columns if col not in valid_columns]
         if skipped_columns:

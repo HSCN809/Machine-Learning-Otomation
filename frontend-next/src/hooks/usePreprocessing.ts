@@ -500,40 +500,57 @@ export function usePreprocessing(): UsePreprocessingReturn {
         }
     }, [loadColumns, notifyDatasetMutation]);
 
-    // Memoized column filters
-    const numericColumns = useMemo(() =>
-        columns.filter(col => col.type === 'numeric'), [columns]);
-
-    const scalingColumns = useMemo(() => {
-        const encodedColumnNames = new Set<string>();
-        const scaledColumnNames = new Set<string>();
+    const semanticCategoricalColumnNames = useMemo(() => {
+        const currentColumnNames = new Set(columns.map((column) => column.name));
+        const semanticColumns = new Set<string>();
 
         for (const item of history) {
-            if (item.stepKey === 'encoding') {
-                if (item.method === 'onehot' || item.method === 'binary') {
-                    item.newColumns?.forEach((column) => encodedColumnNames.add(column));
-                    continue;
-                }
-
-                if (item.method === 'label' || item.method === 'ordinal' || item.method === 'frequency' || item.method === 'binary') {
-                    item.columns?.forEach((column) => encodedColumnNames.add(column));
-                }
+            if (item.stepKey !== 'encoding') {
                 continue;
             }
 
+            item.columns?.forEach((column) => {
+                if (currentColumnNames.has(column)) {
+                    semanticColumns.add(column);
+                }
+            });
+
+            item.newColumns?.forEach((column) => {
+                if (currentColumnNames.has(column)) {
+                    semanticColumns.add(column);
+                }
+            });
+        }
+
+        return semanticColumns;
+    }, [columns, history]);
+
+    // Memoized column filters
+    const numericColumns = useMemo(
+        () => columns.filter((col) => col.type === 'numeric' && !semanticCategoricalColumnNames.has(col.name)),
+        [columns, semanticCategoricalColumnNames]
+    );
+
+    const scalingColumns = useMemo(() => {
+        const scaledColumnNames = new Set<string>();
+
+        for (const item of history) {
             if (item.stepKey === 'scaling') {
                 item.columns?.forEach((column) => scaledColumnNames.add(column));
             }
         }
 
-        return numericColumns.filter(
-            (column) => !encodedColumnNames.has(column.name) && !scaledColumnNames.has(column.name)
-        );
+        return numericColumns.filter((column) => !scaledColumnNames.has(column.name));
     }, [history, numericColumns]);
 
     const categoricalColumns = useMemo(
-        () => columns.filter((col) => col.type === 'categorical' || col.type === 'text'),
-        [columns]
+        () => columns.filter(
+            (col) =>
+                col.type === 'categorical' ||
+                col.type === 'text' ||
+                semanticCategoricalColumnNames.has(col.name)
+        ),
+        [columns, semanticCategoricalColumnNames]
     );
 
     const columnsWithMissing = useMemo(() =>

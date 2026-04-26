@@ -13,6 +13,7 @@ interface ColumnSelectorProps {
     label?: string;
     multiSelect?: boolean;
     showType?: boolean;
+    showUniqueCount?: boolean;
     showMissing?: boolean;
     showOutliers?: boolean;
     disabled?: boolean;
@@ -25,6 +26,7 @@ export function ColumnSelector({
     label = 'Sütun Seç',
     multiSelect = true,
     showType = true,
+    showUniqueCount = false,
     showMissing = true,
     showOutliers = false,
     disabled = false,
@@ -160,6 +162,11 @@ export function ColumnSelector({
                                                     }}
                                                 >
                                                     {column.type}
+                                                </span>
+                                            )}
+                                            {showUniqueCount && (
+                                                <span className="text-xs text-gray-400">
+                                                    {column.uniqueCount} benzersiz
                                                 </span>
                                             )}
                                             {showMissing && column.missingCount > 0 && (
