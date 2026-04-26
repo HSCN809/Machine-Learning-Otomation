@@ -63,6 +63,9 @@ export default function DataUploadPage() {
         const bootstrap = async () => {
             try {
                 await refreshSavedDatasets();
+                if (!cancelled) {
+                    setShowDropzone(!api.hasStoredSession());
+                }
             } finally {
                 if (!cancelled) {
                     setIsBootstrapping(false);
@@ -75,8 +78,7 @@ export default function DataUploadPage() {
         return () => {
             cancelled = true;
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [refreshSavedDatasets]);
 
     const handleNewUpload = () => {
         setShowDropzone(true);
@@ -134,7 +136,9 @@ export default function DataUploadPage() {
     };
 
     const isLoading = status === 'uploading' || status === 'validating';
+    const hasActiveSession = Boolean(activeDatasetId);
     const showEditor = status === 'success' && Boolean(dataSummary);
+    const showActiveEditor = !showDropzone && (showEditor || hasActiveSession);
     const showSessionSkeleton = isBootstrapping;
 
     const handleEditorSaved = async () => {
@@ -234,7 +238,7 @@ export default function DataUploadPage() {
                             />
                         )}
 
-                        {!showSessionSkeleton && !showDropzone && showEditor && nextPath && (
+                        {!showSessionSkeleton && showActiveEditor && nextPath && (
                             <section className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-5">
                                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                                     <div>
@@ -254,7 +258,7 @@ export default function DataUploadPage() {
                             </section>
                         )}
 
-                        {!showSessionSkeleton && !showDropzone && showEditor && (
+                        {!showSessionSkeleton && showActiveEditor && (
                             <section
                                 className="rounded-2xl border border-white/10 p-6"
                                 style={{
@@ -273,7 +277,7 @@ export default function DataUploadPage() {
                 </div>
                 <TimelineDrawerLauncher
                     visible={!showSessionSkeleton}
-                    enabled={!showDropzone && showEditor && Boolean(activeDatasetId)}
+                    enabled={showActiveEditor}
                     onAfterUndo={handleTimelineUndo}
                 />
             </div>
