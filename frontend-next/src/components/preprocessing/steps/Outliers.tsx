@@ -163,8 +163,6 @@ export const Outliers = React.memo(function Outliers({ numericColumns, onApply, 
     const canApply = selectedColumns.length > 0 && !isAnalyzing;
     const showThreshold = method.startsWith('iqr');
     const showWinsorizePercent = method === 'iqr_winsorize';
-    const showNoOutlierCard = !analysisError && !isAnalyzing && detectedColumns.length === 0;
-
     const handleMethodChange = (value: string) => {
         const nextMethod = value as OutlierMethod;
         setSelectedColumns([]);
@@ -263,7 +261,6 @@ export const Outliers = React.memo(function Outliers({ numericColumns, onApply, 
                 </div>
             )}
 
-            {!showNoOutlierCard && (
                 <ColumnSelector
                     columns={detectedColumns}
                     selectedColumns={selectedColumns}
@@ -273,7 +270,6 @@ export const Outliers = React.memo(function Outliers({ numericColumns, onApply, 
                     showOutliers
                     disabled={isLoading || isAnalyzing}
                 />
-            )}
 
             {analysisError && (
                 <p className="text-xs text-red-400">{analysisError}</p>
@@ -285,18 +281,6 @@ export const Outliers = React.memo(function Outliers({ numericColumns, onApply, 
                 <p className="text-xs text-gray-400">Seçilen yöntemde aykırı değer tespit edilen sütun bulunamadı.</p>
             )}
 
-            {showNoOutlierCard && (
-                <div
-                    className="rounded-xl border p-4"
-                    style={{
-                        borderColor: 'rgba(148, 163, 184, 0.35)',
-                        background: 'rgba(148, 163, 184, 0.08)',
-                    }}
-                >
-                    <p className="text-sm font-medium text-gray-200">Bilgi</p>
-                    <p className="mt-1 text-sm text-gray-300">Seçilen yöntemde aykırı değer tespit edilmedi.</p>
-                </div>
-            )}
 
             {/* Apply button */}
             <button
