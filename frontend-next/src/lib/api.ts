@@ -482,6 +482,7 @@ export interface NumericStat {
     mean: number;
     std: number;
     variance: number;
+    skewness: number;
     min: number;
     q25: number;
     median: number;

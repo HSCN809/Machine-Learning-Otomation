@@ -150,4 +150,5 @@ export interface ColumnInfo {
     uniqueCount: number;
     outlierCount?: number;
     outlierPercentage?: number;
+    distributionSummary?: string;
 }

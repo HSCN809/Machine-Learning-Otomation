@@ -179,6 +179,9 @@ async def get_numeric_stats(session_id: str = Depends(require_session)):
         
         variance = float(col_data.var()) if len(col_data) > 1 else 0.0
         std = float(col_data.std()) if len(col_data) > 1 else 0.0
+        skewness = float(col_data.skew()) if len(col_data) > 2 else 0.0
+        if pd.isna(skewness):
+            skewness = 0.0
             
         stats.append({
             "column": col,
@@ -187,6 +190,7 @@ async def get_numeric_stats(session_id: str = Depends(require_session)):
             "mean": round(float(col_data.mean()), 4),
             "std": round(std, 4),
             "variance": round(variance, 6),
+            "skewness": round(skewness, 4),
             "min": round(float(col_data.min()), 4),
             "q25": round(float(col_data.quantile(0.25)), 4),
             "median": round(float(col_data.median()), 4),

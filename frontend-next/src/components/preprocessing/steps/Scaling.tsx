@@ -1,11 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { MethodSelector } from '../MethodSelector';
 import { ColumnSelector } from '../ColumnSelector';
 import { ColumnInfo, ScalingConfig, ScalingMethod } from '@/types/preprocessing';
 import { Loader2 } from 'lucide-react';
 import { theme } from '@/styles/theme';
+import { analyzeOutliers, getNumericStats, isSessionRequiredError, NumericStat } from '@/lib/api';
+import { logger } from '@/lib/logger';
 
 interface ScalingProps {
     numericColumns: ColumnInfo[];
@@ -36,9 +38,135 @@ const METHOD_DETAILS_MARKDOWN: Record<ScalingMethod, string> = {
 
 import React from 'react';
 
+function formatPercentage(value: number): string {
+    const normalized = Math.max(0, value);
+    return normalized % 1 === 0 ? normalized.toFixed(0) : normalized.toFixed(1);
+}
+
+function buildDistributionSummary(stat: NumericStat, outlierPercentage: number): string {
+    const absoluteSkewness = Math.abs(stat.skewness);
+    const iqr = Math.max(0, stat.q75 - stat.q25);
+    const range = Math.max(0, stat.max - stat.min);
+    const relativeSpread = range > 0 ? iqr / range : 0;
+
+    if (range === 0 || iqr === 0 || stat.std === 0) {
+        return 'Dar aralık, düşük varyasyon';
+    }
+
+    if (outlierPercentage >= 10) {
+        return 'Geniş aralık, aykırı baskın';
+    }
+
+    if (relativeSpread <= 0.18) {
+        return 'Dar aralık, düşük varyasyon';
+    }
+
+    if (absoluteSkewness >= 1) {
+        return `${stat.skewness > 0 ? 'Sağa' : 'Sola'} çarpık, %${formatPercentage(outlierPercentage)} aykırı`;
+    }
+
+    if (absoluteSkewness >= 0.5) {
+        return `${stat.skewness > 0 ? 'Hafif sağa' : 'Hafif sola'} çarpık, %${formatPercentage(outlierPercentage)} aykırı`;
+    }
+
+    if (outlierPercentage >= 3) {
+        return `Dengeli dağılım, %${formatPercentage(outlierPercentage)} aykırı`;
+    }
+
+    return 'Dengeli dağılım, düşük aykırı';
+}
+
 export const Scaling = React.memo(function Scaling({ numericColumns, onApply, isLoading }: ScalingProps) {
     const [method, setMethod] = useState<ScalingMethod>('standard');
     const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
+    const [enrichedColumns, setEnrichedColumns] = useState<ColumnInfo[]>(numericColumns);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [analysisError, setAnalysisError] = useState<string | null>(null);
+
+    useEffect(() => {
+        let isCancelled = false;
+
+        const run = async () => {
+            setSelectedColumns((previous) =>
+                previous.filter((columnName) => numericColumns.some((column) => column.name === columnName))
+            );
+
+            if (numericColumns.length === 0) {
+                setEnrichedColumns([]);
+                setAnalysisError(null);
+                return;
+            }
+
+            setEnrichedColumns(numericColumns);
+
+            try {
+                setIsAnalyzing(true);
+                setAnalysisError(null);
+
+                const [numericStatsResponse, outlierAnalysisResponse] = await Promise.all([
+                    getNumericStats(),
+                    analyzeOutliers('iqr_cap', numericColumns.map((column) => column.name), 1.5),
+                ]);
+
+                if (isCancelled) {
+                    return;
+                }
+
+                const statsByColumn = new Map(
+                    numericStatsResponse.stats.map((stat) => [stat.column, stat] as const)
+                );
+                const outliersByColumn = new Map(
+                    outlierAnalysisResponse.columns.map((item) => [item.column, item] as const)
+                );
+
+                setEnrichedColumns(
+                    numericColumns.map((column) => {
+                        const stat = statsByColumn.get(column.name);
+                        const outlier = outliersByColumn.get(column.name);
+
+                        if (!stat) {
+                            return column;
+                        }
+
+                        return {
+                            ...column,
+                            outlierCount: outlier?.outlier_count ?? column.outlierCount,
+                            outlierPercentage: outlier?.outlier_percentage ?? column.outlierPercentage,
+                            distributionSummary: buildDistributionSummary(
+                                stat,
+                                outlier?.outlier_percentage ?? 0
+                            ),
+                        };
+                    })
+                );
+            } catch (err) {
+                if (isCancelled) {
+                    return;
+                }
+
+                if (isSessionRequiredError(err)) {
+                    setEnrichedColumns([]);
+                    setSelectedColumns([]);
+                    setAnalysisError(null);
+                    return;
+                }
+
+                logger.error('Scaling distribution analysis failed', err);
+                setEnrichedColumns(numericColumns);
+                setAnalysisError('Dağılım özeti alınamadı, sütunlar yine seçilebilir.');
+            } finally {
+                if (!isCancelled) {
+                    setIsAnalyzing(false);
+                }
+            }
+        };
+
+        void run();
+
+        return () => {
+            isCancelled = true;
+        };
+    }, [numericColumns]);
 
     const handleApply = async () => {
         if (selectedColumns.length === 0) return;
@@ -70,13 +198,21 @@ export const Scaling = React.memo(function Scaling({ numericColumns, onApply, is
 
             {/* Column selector */}
             <ColumnSelector
-                columns={numericColumns}
+                columns={enrichedColumns}
                 selectedColumns={selectedColumns}
                 onChange={setSelectedColumns}
                 label="Uygulanacak Sayısal Sütunlar"
                 showMissing={false}
+                showSummary
                 disabled={isLoading}
             />
+
+            {analysisError && (
+                <p className="text-xs text-red-400">{analysisError}</p>
+            )}
+            {!analysisError && isAnalyzing && (
+                <p className="text-xs text-cyan-300">Sütun dağılımları analiz ediliyor...</p>
+            )}
 
             {/* Apply button */}
             <button

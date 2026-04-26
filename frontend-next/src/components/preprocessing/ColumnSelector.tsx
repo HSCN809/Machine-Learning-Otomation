@@ -16,6 +16,7 @@ interface ColumnSelectorProps {
     showUniqueCount?: boolean;
     showMissing?: boolean;
     showOutliers?: boolean;
+    showSummary?: boolean;
     disabled?: boolean;
 }
 
@@ -29,6 +30,7 @@ export function ColumnSelector({
     showUniqueCount = false,
     showMissing = true,
     showOutliers = false,
+    showSummary = false,
     disabled = false,
 }: ColumnSelectorProps) {
     const [search, setSearch] = useState('');
@@ -180,6 +182,11 @@ export function ColumnSelector({
                                                 </span>
                                             )}
                                         </div>
+                                        {showSummary && column.distributionSummary && (
+                                            <p className="mt-1 text-xs text-gray-400">
+                                                {column.distributionSummary}
+                                            </p>
+                                        )}
                                     </div>
                                 </button>
                             );
