@@ -117,6 +117,7 @@ export default function DataUploadPage() {
     };
 
     const handleSavedDatasetDelete = async (datasetId: string) => {
+        const wasActiveDataset = activeDatasetId === datasetId;
         const confirmed = window.confirm(
             'Bu veri seti kalıcı olarak silinecek. Bu veri setine bağlı preprocessing geçmişi ve model kayıtları da kaldırılacak. Devam etmek istiyor musunuz?'
         );
@@ -126,6 +127,10 @@ export default function DataUploadPage() {
         }
 
         await deleteSavedDataset(datasetId);
+
+        if (wasActiveDataset) {
+            setShowDropzone(true);
+        }
     };
 
     const isLoading = status === 'uploading' || status === 'validating';
