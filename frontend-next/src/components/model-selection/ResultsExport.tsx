@@ -16,8 +16,13 @@ export function ResultsExport({ results }: ResultsExportProps) {
     const [downloadError, setDownloadError] = useState<string | null>(null);
     const [downloadingModelId, setDownloadingModelId] = useState<string | null>(null);
 
-    const escapeCsvValue = (value: string | number | null | undefined) =>
-        `"${String(value ?? '').replace(/"/g, '""')}"`;
+    const escapeExcelXml = (value: string | number | null | undefined) =>
+        String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&apos;');
 
     const exportJSON = () => {
         const data = JSON.stringify(results, null, 2);
@@ -31,7 +36,7 @@ export function ResultsExport({ results }: ResultsExportProps) {
         notify.success('JSON raporu indirildi');
     };
 
-    const exportCSV = () => {
+    const exportExcel = () => {
         const headers = ['Model', 'Doğruluk', 'Kesinlik', 'Duyarlılık', 'F1', 'AUC', 'R2', 'MSE', 'RMSE', 'MAE', 'Eğitim Süresi'];
         const rows = results.map((result) => [
             result.modelName,
@@ -47,18 +52,33 @@ export function ResultsExport({ results }: ResultsExportProps) {
             result.trainingTime,
         ]);
 
-        const csv = [
-            headers.map(escapeCsvValue).join(','),
-            ...rows.map((row) => row.map(escapeCsvValue).join(',')),
-        ].join('\r\n');
-        const blob = new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8;' });
+        const buildCell = (value: string | number) => {
+            const isNumber = typeof value === 'number' && Number.isFinite(value);
+            const cellType = isNumber ? 'Number' : 'String';
+            return `<Cell><Data ss:Type="${cellType}">${escapeExcelXml(value)}</Data></Cell>`;
+        };
+
+        const xmlWorkbook = `<?xml version="1.0" encoding="UTF-8"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+ <Worksheet ss:Name="Model Sonuclari">
+  <Table>
+   <Row>${headers.map((header) => buildCell(header)).join('')}</Row>
+${rows.map((row) => `   <Row>${row.map((value) => buildCell(value)).join('')}</Row>`).join('\n')}
+  </Table>
+ </Worksheet>
+</Workbook>`;
+
+        const blob = new Blob([xmlWorkbook], { type: 'application/vnd.ms-excel;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const anchor = document.createElement('a');
         anchor.href = url;
-        anchor.download = 'model_results.csv';
+        anchor.download = 'model_results.xls';
         anchor.click();
         URL.revokeObjectURL(url);
-        notify.success('CSV raporu indirildi');
+        notify.success('Excel raporu indirildi');
     };
 
     const handleModelDownload = async (result: TrainingResult) => {
@@ -78,7 +98,7 @@ export function ResultsExport({ results }: ResultsExportProps) {
 
     const exportFormats = [
         { name: 'JSON', icon: FileJson, action: exportJSON, color: theme.colors.primary.cyan },
-        { name: 'CSV', icon: FileSpreadsheet, action: exportCSV, color: theme.colors.secondary.green },
+        { name: 'Excel', icon: FileSpreadsheet, action: exportExcel, color: theme.colors.secondary.green },
     ];
 
     return (
