@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.api.database import SessionLocal
+from backend.api.redis_cache import cache_invalidate_session
 from backend.modules.auth.models import AuthSession, User
 from backend.modules.auth.security import hash_session_token
 from backend.modules.config import settings
@@ -110,6 +111,12 @@ class SessionManager:
             session["history_snapshots"] = []
         
         logger.info(f"Session {session_id}: DataFrame set with shape {df.shape}")
+
+        # Invalidate Redis EDA cache when data changes
+        try:
+            cache_invalidate_session(session_id)
+        except Exception:
+            pass
     
     def get_dataframe(self, session_id: str) -> Optional[pd.DataFrame]:
         """Get DataFrame from session"""
@@ -238,6 +245,7 @@ class SessionManager:
                 history_snapshots.pop()
 
         session["history"] = self._build_legacy_history(timeline_events)
+        cache_invalidate_session(session_id)
         return {
             "removed_event": removed_event,
             "remaining_count": len(timeline_events),
@@ -257,6 +265,7 @@ class SessionManager:
         restored_df = snapshots.pop()
         undone_action = history.pop()
         session["data"] = restored_df.copy(deep=True)
+        cache_invalidate_session(session_id)
         return undone_action
 
     def undo_to_history_index(self, session_id: str, history_index: int) -> Dict[str, Any]:
@@ -277,6 +286,7 @@ class SessionManager:
         session["data"] = restored_df
         del history[history_index:]
         del snapshots[history_index:]
+        cache_invalidate_session(session_id)
         return {
             "undone_actions": undone_actions,
             "remaining_history_count": len(history),

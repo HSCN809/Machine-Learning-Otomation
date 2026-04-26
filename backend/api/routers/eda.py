@@ -19,6 +19,7 @@ from pandas.api.types import (
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
 from ..dependencies import session_manager, require_session
+from ..redis_cache import make_cache_key, cache_get, cache_set
 
 router = APIRouter()
 
@@ -124,6 +125,11 @@ async def get_column_types(session_id: str = Depends(require_session)):
 @router.get("/numeric-stats")
 async def get_numeric_stats(session_id: str = Depends(require_session)):
     """Get statistics for numeric columns"""
+    cache_key = make_cache_key("numeric_stats", session_id)
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     df = _get_dataframe(session_id)
     
     numeric_df = df.select_dtypes(include=['number'])
@@ -160,7 +166,9 @@ async def get_numeric_stats(session_id: str = Depends(require_session)):
             "null_percentage": round(null_percentage, 2),
         })
     
-    return {"stats": stats}
+    result = {"stats": stats}
+    cache_set(cache_key, result, ttl_seconds=600)
+    return result
 
 
 @router.get("/categorical-stats")
@@ -205,6 +213,11 @@ async def get_categorical_stats(session_id: str = Depends(require_session)):
 @router.get("/correlation")
 async def get_correlation(session_id: str = Depends(require_session)):
     """Get correlation matrix for numeric columns"""
+    cache_key = make_cache_key("correlation", session_id)
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     df = _get_dataframe(session_id)
     
     numeric_df = df.select_dtypes(include=['number'])
@@ -224,10 +237,12 @@ async def get_correlation(session_id: str = Depends(require_session)):
                 "value": round(float(corr_value), 4) if pd.notna(corr_value) else 0.0,
             })
     
-    return {
+    result = {
         "correlation": correlation_data,
         "columns": corr_matrix.columns.tolist(),
     }
+    cache_set(cache_key, result, ttl_seconds=600)
+    return result
 
 
 @router.get("/histogram/{column}")
@@ -328,6 +343,11 @@ async def get_scatter_data(
     session_id: str = Depends(require_session)
 ):
     """Get scatter plot data for two numeric columns"""
+    cache_key = make_cache_key("scatter", session_id, x_column, y_column, sample_size)
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     df = _get_dataframe(session_id)
     x_series = _get_series(df, x_column)
     y_series = _get_series(df, y_column)
@@ -362,10 +382,12 @@ async def get_scatter_data(
             "y": round(float(row["y"]), 4),
         })
     
-    return {
+    result = {
         "data": data,
         "x_column": x_column,
         "y_column": y_column,
         "total_points": len(data),
     }
+    cache_set(cache_key, result, ttl_seconds=300)
+    return result
 

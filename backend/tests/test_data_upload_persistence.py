@@ -1,6 +1,7 @@
 import asyncio
 import unittest
 from io import BytesIO
+from unittest.mock import patch
 
 import pandas as pd
 from fastapi import HTTPException, UploadFile
@@ -10,6 +11,7 @@ from sqlalchemy.orm import sessionmaker
 
 from backend.api.database import Base
 from backend.api.dependencies import persist_session, restore_persisted_session, session_manager
+from backend.api.redis_cache import make_cache_key
 from backend.api.routers.preprocessing import MissingValuesRequest, handle_missing_values
 from backend.api.routers.upload import upload_file
 from backend.modules.auth.models import User
@@ -434,6 +436,63 @@ class DataUploadPersistenceTests(unittest.TestCase):
             session_manager.undo_last_timeline_event(session_id)
 
         self.assertEqual(exc.exception.status_code, 409)
+
+    def test_make_cache_key_scopes_entries_by_session_id(self):
+        key = make_cache_key("numeric_stats", "session-1")
+
+        self.assertTrue(key.startswith("be:numeric_stats:session-1:"))
+
+    def test_set_dataframe_invalidates_session_cache(self):
+        df = pd.DataFrame({"city": ["Ankara"], "value": [10]})
+        session_id = session_manager.create_session(owner_user_id=self.user_id)
+        self.addCleanup(session_manager.delete_session, session_id)
+
+        with patch("backend.api.dependencies.cache_invalidate_session") as invalidate_cache:
+            session_manager.set_dataframe(session_id, df.copy(deep=True), is_original=True)
+
+        invalidate_cache.assert_called_once_with(session_id)
+
+    def test_undo_last_timeline_event_invalidates_session_cache(self):
+        df = pd.DataFrame({"city": ["Ankara"], "value": [10]})
+        session_id = session_manager.create_session(owner_user_id=self.user_id)
+        self.addCleanup(session_manager.delete_session, session_id)
+        session_manager.set_dataframe(session_id, df.copy(deep=True), is_original=True)
+        event = session_manager.add_timeline_event(
+            session_id,
+            {
+                "category": "editor",
+                "action": "manual_edit_commit",
+                "title": "Edit kaydedildi",
+                "description": "Editor degisikligi kaydedildi.",
+                "undoable": True,
+            },
+        )
+        session_manager.add_timeline_snapshot(session_id, event["id"], df.copy(deep=True))
+
+        with patch("backend.api.dependencies.cache_invalidate_session") as invalidate_cache:
+            session_manager.undo_last_timeline_event(session_id)
+
+        invalidate_cache.assert_called_once_with(session_id)
+
+    def test_undo_last_history_action_invalidates_session_cache(self):
+        df = pd.DataFrame({"city": ["Ankara"], "value": [10]})
+        session_id = session_manager.create_session(owner_user_id=self.user_id)
+        self.addCleanup(session_manager.delete_session, session_id)
+        session_manager.set_dataframe(session_id, df.copy(deep=True), is_original=True)
+        session_manager.add_history_snapshot(session_id, df.copy(deep=True))
+        session_manager.add_history(
+            session_id,
+            {
+                "step": "missing_values",
+                "action": "fill_mean",
+                "columns": ["value"],
+            },
+        )
+
+        with patch("backend.api.dependencies.cache_invalidate_session") as invalidate_cache:
+            session_manager.undo_last_history_action(session_id)
+
+        invalidate_cache.assert_called_once_with(session_id)
 
 
 if __name__ == "__main__":

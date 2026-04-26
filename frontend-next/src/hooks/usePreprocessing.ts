@@ -302,6 +302,13 @@ export function usePreprocessing(): UsePreprocessingReturn {
         setHistory(nextHistory);
     }, []);
 
+    const notifyDatasetMutation = useCallback(() => {
+        const currentSessionId = api.getStoredSessionId();
+        if (currentSessionId) {
+            api.setStoredSessionId(currentSessionId);
+        }
+    }, []);
+
     // Actions - connected to API
     const applyMissingValues = useCallback(async (config: MissingValueConfig) => {
         try {
@@ -311,6 +318,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
             await api.applyMissingValues(config.method, config.columns);
 
             await refreshColumnsAndHistory();
+            notifyDatasetMutation();
             notify.success('Eksik değer işlemi uygulandı');
         } catch (err) {
             const message = getErrorMessage(err, 'İşlem sırasında hata oluştu');
@@ -320,7 +328,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
         } finally {
             setIsLoading(false);
         }
-    }, [refreshColumnsAndHistory]);
+    }, [notifyDatasetMutation, refreshColumnsAndHistory]);
 
     const applyOutliers = useCallback(async (config: OutlierConfig) => {
         try {
@@ -335,6 +343,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
             );
 
             await refreshColumnsAndHistory();
+            notifyDatasetMutation();
             notify.success('Aykırı değer işlemi uygulandı');
         } catch (err) {
             const message = getErrorMessage(err, 'İşlem sırasında hata oluştu');
@@ -344,7 +353,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
         } finally {
             setIsLoading(false);
         }
-    }, [refreshColumnsAndHistory]);
+    }, [notifyDatasetMutation, refreshColumnsAndHistory]);
 
     const applyEncoding = useCallback(async (config: EncodingConfig) => {
         try {
@@ -359,6 +368,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
             );
 
             await refreshColumnsAndHistory();
+            notifyDatasetMutation();
             notify.success('Kodlama işlemi uygulandı');
         } catch (err) {
             const message = getErrorMessage(err, 'İşlem sırasında hata oluştu');
@@ -368,7 +378,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
         } finally {
             setIsLoading(false);
         }
-    }, [refreshColumnsAndHistory]);
+    }, [notifyDatasetMutation, refreshColumnsAndHistory]);
 
     const applyScaling = useCallback(async (config: ScalingConfig) => {
         try {
@@ -378,6 +388,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
             await api.applyScaling(config.method, config.columns, config.featureRange);
 
             await refreshColumnsAndHistory();
+            notifyDatasetMutation();
             notify.success('Ölçeklendirme işlemi uygulandı');
         } catch (err) {
             const message = getErrorMessage(err, 'İşlem sırasında hata oluştu');
@@ -387,7 +398,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
         } finally {
             setIsLoading(false);
         }
-    }, [refreshColumnsAndHistory]);
+    }, [notifyDatasetMutation, refreshColumnsAndHistory]);
 
     const applyFeatureEngineering = useCallback(async (config: FeatureConfig) => {
         try {
@@ -397,6 +408,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
             await api.applyFeatureEngineering(config);
 
             await refreshColumnsAndHistory();
+            notifyDatasetMutation();
             notify.success('Özellik mühendisliği işlemi uygulandı');
         } catch (err) {
             const message = getErrorMessage(err, 'İşlem sırasında hata oluştu');
@@ -406,7 +418,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
         } finally {
             setIsLoading(false);
         }
-}, [refreshColumnsAndHistory]);
+}, [notifyDatasetMutation, refreshColumnsAndHistory]);
 
     const dropColumns = useCallback(async (config: DropColumnConfig) => {
         try {
@@ -414,6 +426,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
             setError(null);
             await api.dropColumns(config.columns, config.reason);
             await refreshColumnsAndHistory();
+            notifyDatasetMutation();
             notify.success('Sütunlar silindi');
         } catch (err) {
             const message = getErrorMessage(err, 'İşlem sırasında hata oluştu');
@@ -423,7 +436,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
         } finally {
             setIsLoading(false);
         }
-    }, [refreshColumnsAndHistory]);
+    }, [notifyDatasetMutation, refreshColumnsAndHistory]);
 
     const undoLastAction = useCallback(async () => {
         if (history.length === 0) {
@@ -435,6 +448,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
             setError(null);
             await api.undoLastTimelineEvent();
             await refreshColumnsAndHistory();
+            notifyDatasetMutation();
             notify.success('Son işlem geri alındı');
         } catch (err) {
             const message = getErrorMessage(err, 'Geri alma sırasında hata oluştu');
@@ -444,7 +458,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
         } finally {
             setIsLoading(false);
         }
-    }, [history.length, refreshColumnsAndHistory]);
+    }, [history.length, notifyDatasetMutation, refreshColumnsAndHistory]);
 
     const undoToHistoryItem = useCallback(async (historyIndex: number) => {
         try {
@@ -452,6 +466,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
             setError(null);
             await api.undoPreprocessingTo(historyIndex);
             await refreshColumnsAndHistory();
+            notifyDatasetMutation();
             notify.success('Seçili işleme geri dönüldü');
         } catch (err) {
             const message = getErrorMessage(err, 'Seçili işlem geri alınırken hata oluştu');
@@ -461,7 +476,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
         } finally {
             setIsLoading(false);
         }
-    }, [refreshColumnsAndHistory]);
+    }, [notifyDatasetMutation, refreshColumnsAndHistory]);
 
     const resetAll = useCallback(async () => {
         try {
@@ -473,6 +488,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
             setCurrentStep(0);
             await loadColumns();
             setError(null);
+            notifyDatasetMutation();
             notify.success('Ön işleme adımları sıfırlandı');
         } catch (err) {
             const message = getErrorMessage(err, 'Sıfırlama sırasında hata oluştu');
@@ -482,7 +498,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
         } finally {
             setIsLoading(false);
         }
-    }, [loadColumns]);
+    }, [loadColumns, notifyDatasetMutation]);
 
     // Memoized column filters
     const numericColumns = useMemo(() =>

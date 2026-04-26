@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
+import { redisClient, CACHE_TTL } from '@/lib/redis';
 
 const BACKEND_BASE_URL = process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -42,6 +43,33 @@ async function forward(request: NextRequest, params: { path: string[] }) {
         cache: 'no-store',
     };
 
+    const isGet = request.method === 'GET';
+    const hasSessionHeader = Boolean(headers.get('x-session-id'));
+    const hasAuthCookie = Boolean(headers.get('cookie'));
+    const isAuthRoute = targetPath.startsWith('api/auth');
+    const shouldUseProxyCache = isGet && !hasSessionHeader && !hasAuthCookie && !isAuthRoute;
+    const cacheKey = shouldUseProxyCache ? `proxy_cache:${targetUrl.toString()}` : null;
+
+    if (cacheKey) {
+        try {
+            const cachedData = await redisClient.get(cacheKey);
+            if (cachedData) {
+                logger.info(`Cache hit for ${targetUrl.toString()}`);
+                const { status, headers: cachedHeaders, body } = JSON.parse(cachedData);
+                
+                const responseHeaders = new Headers(cachedHeaders);
+                responseHeaders.set('X-Cache', 'HIT');
+                
+                return new NextResponse(body, {
+                    status,
+                    headers: responseHeaders,
+                });
+            }
+        } catch (error) {
+            logger.error('Redis cache read error', error);
+        }
+    }
+
     if (request.method !== 'GET' && request.method !== 'HEAD') {
         init.body = await request.arrayBuffer();
     }
@@ -57,7 +85,9 @@ async function forward(request: NextRequest, params: { path: string[] }) {
             responseHeaders.set(key, value);
         });
 
-        const proxyResponse = new NextResponse(response.body, {
+        const responseBody = await response.text();
+
+        const proxyResponse = new NextResponse(responseBody, {
             status: response.status,
             headers: responseHeaders,
         });
@@ -65,6 +95,20 @@ async function forward(request: NextRequest, params: { path: string[] }) {
         getSetCookieHeaders(response.headers).forEach((setCookie) => {
             proxyResponse.headers.append('Set-Cookie', setCookie);
         });
+
+        if (cacheKey && response.ok) {
+            try {
+                const cacheData = JSON.stringify({
+                    status: response.status,
+                    headers: Array.from(responseHeaders.entries()),
+                    body: responseBody
+                });
+                await redisClient.setex(cacheKey, CACHE_TTL.SHORT, cacheData);
+                proxyResponse.headers.set('X-Cache', 'MISS');
+            } catch (error) {
+                logger.error('Redis cache write error', error);
+            }
+        }
 
         return proxyResponse;
     } catch (error) {

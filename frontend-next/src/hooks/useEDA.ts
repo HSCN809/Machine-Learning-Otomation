@@ -1,12 +1,9 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useSyncExternalStore } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
     EDAData,
-    NumericStats,
-    CategoricalStats,
-    ColumnType,
-    CorrelationData,
     HistogramData,
     BoxPlotData,
     CategoryData,
@@ -14,6 +11,7 @@ import {
 import * as api from '@/lib/api';
 import { logger } from '@/lib/logger';
 import { getErrorMessage, notify } from '@/lib/notify';
+import { clearDatasetQueries, datasetQueryKeys, invalidateDatasetQueries } from '@/lib/query-cache';
 
 interface UseEDAReturn {
     edaData: EDAData | null;
@@ -34,25 +32,21 @@ interface UseEDAReturn {
 }
 
 export function useEDA(): UseEDAReturn {
-    const [edaData, setEdaData] = useState<EDAData | null>(null);
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const queryClient = useQueryClient();
+    const sessionId = useSyncExternalStore(api.subscribeToStoredSession, api.getStoredSessionId, () => null);
     const [selectedNumericColumn, setSelectedNumericColumn] = useState<string | null>(null);
     const [selectedCategoricalColumn, setSelectedCategoricalColumn] = useState<string | null>(null);
     const [scatterXColumn, setScatterXColumn] = useState<string | null>(null);
     const [scatterYColumn, setScatterYColumn] = useState<string | null>(null);
 
-    // Chart data from API
-    const [histogramData, setHistogramData] = useState<HistogramData[]>([]);
-    const [boxPlotData, setBoxPlotData] = useState<BoxPlotData | null>(null);
-    const [categoryData, setCategoryData] = useState<CategoryData[]>([]);
-
-    const loadEDAData = useCallback(async (): Promise<boolean> => {
-        try {
-            setIsLoading(true);
-            setError(null);
-
-            // Fetch from real API
+    const {
+        data: edaData = null,
+        isLoading: isEdaLoading,
+        error: edaError,
+        refetch: refetchEda,
+    } = useQuery({
+        queryKey: datasetQueryKeys.edaSummary(sessionId),
+        queryFn: async () => {
             const [summary, columnTypes, numericStats, categoricalStats, correlation] = await Promise.all([
                 api.getEDASummary(),
                 api.getColumnTypes(),
@@ -61,22 +55,19 @@ export function useEDA(): UseEDAReturn {
                 api.getCorrelation(),
             ]);
 
-            // Filter constants
             const VARIANCE_THRESHOLD = 0.001;
             const NULL_PERCENTAGE_THRESHOLD = 50;
             const MIN_CARDINALITY = 2;
             const MAX_CARDINALITY = 50;
 
-            // Filter numeric columns: variance > 0.001 AND null% < 50 AND not all values unique (ID columns)
             const filteredNumericColumns = numericStats.stats
                 .filter(stat =>
                     stat.variance > VARIANCE_THRESHOLD &&
                     stat.null_percentage < NULL_PERCENTAGE_THRESHOLD &&
-                    stat.unique_count < stat.count  // Exclude columns where all values are unique (IDs)
+                    stat.unique_count < stat.count
                 )
                 .map(stat => stat.column);
 
-            // Filter categorical columns: 2 <= unique <= 50 AND null% < 50
             const filteredCategoricalColumns = categoricalStats.stats
                 .filter(stat =>
                     stat.unique >= MIN_CARDINALITY &&
@@ -85,201 +76,181 @@ export function useEDA(): UseEDAReturn {
                 )
                 .map(stat => stat.column);
 
-            // Transform API response to EDAData format
-            const transformedColumnTypes: ColumnType[] = columnTypes.columns.map(col => ({
-                name: col.name,
-                dtype: col.dtype,
-                type: col.type,
-                nullCount: col.null_count,
-                nullPercentage: col.null_percentage,
-            }));
-
-            const transformedNumericStats: NumericStats[] = numericStats.stats.map(stat => ({
-                column: stat.column,
-                count: stat.count,
-                mean: stat.mean,
-                std: stat.std,
-                min: stat.min,
-                q25: stat.q25,
-                median: stat.median,
-                q75: stat.q75,
-                max: stat.max,
-            }));
-
-            const transformedCategoricalStats: CategoricalStats[] = categoricalStats.stats.map(stat => ({
-                column: stat.column,
-                count: stat.count,
-                unique: stat.unique,
-                top: stat.top || '',
-                frequency: stat.frequency,
-            }));
-
-            const transformedCorrelation: CorrelationData[] = correlation.correlation.map(item => ({
-                x: item.x,
-                y: item.y,
-                value: item.value,
-            }));
-
             const data: EDAData = {
-                numericStats: transformedNumericStats,
-                categoricalStats: transformedCategoricalStats,
-                columnTypes: transformedColumnTypes,
-                correlationMatrix: transformedCorrelation,
+                numericStats: numericStats.stats.map(stat => ({
+                    column: stat.column,
+                    count: stat.count,
+                    mean: stat.mean,
+                    std: stat.std,
+                    min: stat.min,
+                    q25: stat.q25,
+                    median: stat.median,
+                    q75: stat.q75,
+                    max: stat.max,
+                })),
+                categoricalStats: categoricalStats.stats.map(stat => ({
+                    column: stat.column,
+                    count: stat.count,
+                    unique: stat.unique,
+                    top: stat.top || '',
+                    frequency: stat.frequency,
+                })),
+                columnTypes: columnTypes.columns.map(col => ({
+                    name: col.name,
+                    dtype: col.dtype,
+                    type: col.type,
+                    nullCount: col.null_count,
+                    nullPercentage: col.null_percentage,
+                })),
+                correlationMatrix: correlation.correlation.map(item => ({
+                    x: item.x,
+                    y: item.y,
+                    value: item.value,
+                })),
                 numericColumns: filteredNumericColumns,
                 categoricalColumns: filteredCategoricalColumns,
                 duplicateRows: summary.duplicate_rows,
             };
 
-            setEdaData(data);
+            return data;
+        },
+        enabled: Boolean(sessionId),
+        retry: false,
+        staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    });
 
-            // Set default selections from filtered columns
-            if (filteredNumericColumns.length > 0) {
-                setSelectedNumericColumn(filteredNumericColumns[0]);
-                if (filteredNumericColumns.length > 1) {
-                    setScatterXColumn(filteredNumericColumns[0]);
-                    setScatterYColumn(filteredNumericColumns[1]);
-                }
-            }
-            if (filteredCategoricalColumns.length > 0) {
-                setSelectedCategoricalColumn(filteredCategoricalColumns[0]);
-            }
-            return true;
-        } catch (err) {
-            if (api.isSessionRequiredError(err)) {
-                setEdaData(null);
-                setError(null);
-                setSelectedNumericColumn(null);
-                setSelectedCategoricalColumn(null);
-                setScatterXColumn(null);
-                setScatterYColumn(null);
-                setHistogramData([]);
-                setBoxPlotData(null);
-                setCategoryData([]);
-                setScatterData([]);
-                return false;
-            }
+    const numericColumns = edaData?.numericColumns ?? [];
+    const categoricalColumns = edaData?.categoricalColumns ?? [];
+    const defaultScatterXColumn = numericColumns[0] ?? null;
+    const defaultScatterYColumn = numericColumns.find((column) => column !== defaultScatterXColumn) ?? null;
 
-            const message = getErrorMessage(err, 'EDA verisi yüklenirken hata oluştu');
-            logger.error('EDA data load failed', err);
-            setError(message);
-            notify.error(err, 'EDA verisi yüklenirken hata oluştu');
-            throw err;
-        } finally {
-            setIsLoading(false);
+    const resolvedSelectedNumericColumn =
+        selectedNumericColumn && numericColumns.includes(selectedNumericColumn)
+            ? selectedNumericColumn
+            : numericColumns[0] ?? null;
+
+    const resolvedSelectedCategoricalColumn =
+        selectedCategoricalColumn && categoricalColumns.includes(selectedCategoricalColumn)
+            ? selectedCategoricalColumn
+            : categoricalColumns[0] ?? null;
+
+    const resolvedScatterXColumn =
+        scatterXColumn && numericColumns.includes(scatterXColumn)
+            ? scatterXColumn
+            : defaultScatterXColumn;
+
+    const scatterYFallback =
+        scatterYColumn && numericColumns.includes(scatterYColumn)
+            ? scatterYColumn
+            : defaultScatterYColumn;
+
+    const resolvedScatterYColumn =
+        scatterYFallback && scatterYFallback !== resolvedScatterXColumn
+            ? scatterYFallback
+            : numericColumns.find((column) => column !== resolvedScatterXColumn) ?? null;
+
+    const { data: histogramData = [] } = useQuery({
+        queryKey: datasetQueryKeys.edaHistogram(sessionId, resolvedSelectedNumericColumn),
+        queryFn: async () => {
+            if (!resolvedSelectedNumericColumn) return [];
+            const result = await api.getHistogram(resolvedSelectedNumericColumn);
+            return result.data.map(d => ({
+                bin: d.bin,
+                count: d.count,
+                percentage: d.percentage,
+            }));
+        },
+        enabled: Boolean(sessionId && resolvedSelectedNumericColumn),
+        retry: false,
+        staleTime: 5 * 60 * 1000,
+    });
+
+    const { data: boxPlotData = null } = useQuery({
+        queryKey: datasetQueryKeys.edaBoxplot(sessionId, resolvedSelectedNumericColumn),
+        queryFn: async () => {
+            if (!resolvedSelectedNumericColumn) return null;
+            return await api.getBoxPlot(resolvedSelectedNumericColumn);
+        },
+        enabled: Boolean(sessionId && resolvedSelectedNumericColumn),
+        retry: false,
+        staleTime: 5 * 60 * 1000,
+    });
+
+    const { data: categoryData = [] } = useQuery({
+        queryKey: datasetQueryKeys.edaCategory(sessionId, resolvedSelectedCategoricalColumn),
+        queryFn: async () => {
+            if (!resolvedSelectedCategoricalColumn) return [];
+            const result = await api.getCategoryDistribution(resolvedSelectedCategoricalColumn);
+            return result.data.map(d => ({
+                name: d.name,
+                value: d.value,
+                percentage: d.percentage,
+            }));
+        },
+        enabled: Boolean(sessionId && resolvedSelectedCategoricalColumn),
+        retry: false,
+        staleTime: 5 * 60 * 1000,
+    });
+
+    const { data: scatterData = [] } = useQuery({
+        queryKey: datasetQueryKeys.edaScatter(sessionId, resolvedScatterXColumn, resolvedScatterYColumn),
+        queryFn: async () => {
+            if (!resolvedScatterXColumn || !resolvedScatterYColumn || resolvedScatterXColumn === resolvedScatterYColumn) {
+                return [];
+            }
+            const result = await api.getScatterData(resolvedScatterXColumn, resolvedScatterYColumn);
+            return result.data;
+        },
+        enabled: Boolean(
+            sessionId &&
+            resolvedScatterXColumn &&
+            resolvedScatterYColumn &&
+            resolvedScatterXColumn !== resolvedScatterYColumn
+        ),
+        retry: false,
+        staleTime: 5 * 60 * 1000,
+    });
+
+    const loadEDAData = useCallback(async (): Promise<boolean> => {
+        if (!sessionId) {
+            return false;
         }
-    }, []);
-
-    // Load histogram when numeric column changes
-    useEffect(() => {
-        if (!selectedNumericColumn) return;
-
-        api.getHistogram(selectedNumericColumn)
-            .then(result => {
-                setHistogramData(result.data.map(d => ({
-                    bin: d.bin,
-                    count: d.count,
-                    percentage: d.percentage,
-                })));
-            })
-            .catch(err => {
-                if (api.isSessionRequiredError(err)) {
-                    setHistogramData([]);
-                    return;
-                }
-
-                logger.error('Histogram data load failed', err, { column: selectedNumericColumn });
-                setHistogramData([]);
-                notify.error(err, 'Histogram verisi yüklenemedi');
-            });
-    }, [selectedNumericColumn]);
-
-    // Load box plot when numeric column changes
-    useEffect(() => {
-        if (!selectedNumericColumn) return;
-
-        api.getBoxPlot(selectedNumericColumn)
-            .then(result => setBoxPlotData(result))
-            .catch(err => {
-                if (api.isSessionRequiredError(err)) {
-                    setBoxPlotData(null);
-                    return;
-                }
-
-                logger.error('Box plot data load failed', err, { column: selectedNumericColumn });
-                setBoxPlotData(null);
-                notify.error(err, 'Kutu grafiği verisi yüklenemedi');
-            });
-    }, [selectedNumericColumn]);
-
-    // Load category distribution when categorical column changes
-    useEffect(() => {
-        if (!selectedCategoricalColumn) return;
-
-        api.getCategoryDistribution(selectedCategoricalColumn)
-            .then(result => {
-                setCategoryData(result.data.map(d => ({
-                    name: d.name,
-                    value: d.value,
-                    percentage: d.percentage,
-                })));
-            })
-            .catch(err => {
-                if (api.isSessionRequiredError(err)) {
-                    setCategoryData([]);
-                    return;
-                }
-
-                logger.error('Category distribution load failed', err, { column: selectedCategoricalColumn });
-                setCategoryData([]);
-                notify.error(err, 'Kategori dağılımı yüklenemedi');
-            });
-    }, [selectedCategoricalColumn]);
+        const result = await refetchEda();
+        if (result.isError) {
+            if (!api.isSessionRequiredError(result.error)) {
+                notify.error(result.error, 'EDA verisi yüklenirken hata oluştu');
+                logger.error('EDA data load failed', result.error);
+            }
+            return false;
+        }
+        return true;
+    }, [refetchEda, sessionId]);
 
     const setScatterColumns = useCallback((x: string, y: string) => {
         setScatterXColumn(x);
         setScatterYColumn(y);
     }, []);
 
-    // Scatter data from API
-    const [scatterData, setScatterData] = useState<{ x: number; y: number }[]>([]);
-
-    // Load scatter data when columns change
     useEffect(() => {
-        if (!scatterXColumn || !scatterYColumn) {
-            setScatterData([]);
-            return;
-        }
+        return api.subscribeToStoredSession(() => {
+            if (api.getStoredSessionId()) {
+                void invalidateDatasetQueries(queryClient);
+                return;
+            }
+            clearDatasetQueries(queryClient);
+        });
+    }, [queryClient]);
 
-        if (scatterXColumn === scatterYColumn) {
-            setScatterData([]);
-            return;
-        }
-
-        api.getScatterData(scatterXColumn, scatterYColumn)
-            .then(result => {
-                setScatterData(result.data);
-            })
-            .catch(err => {
-                if (api.isSessionRequiredError(err)) {
-                    setScatterData([]);
-                    return;
-                }
-
-                logger.error('Scatter data load failed', err, {
-                    xColumn: scatterXColumn,
-                    yColumn: scatterYColumn,
-                });
-                setScatterData([]);
-                notify.error(err, 'Saçılım grafiği verisi yüklenemedi');
-            });
-    }, [scatterXColumn, scatterYColumn]);
+    const errorMessage = edaError && !api.isSessionRequiredError(edaError) 
+        ? getErrorMessage(edaError, 'EDA verisi yüklenirken hata oluştu') 
+        : null;
 
     return {
         edaData,
-        isLoading,
-        error,
-        selectedNumericColumn,
-        selectedCategoricalColumn,
+        isLoading: isEdaLoading,
+        error: errorMessage,
+        selectedNumericColumn: resolvedSelectedNumericColumn,
+        selectedCategoricalColumn: resolvedSelectedCategoricalColumn,
         setSelectedNumericColumn,
         setSelectedCategoricalColumn,
         loadEDAData,
@@ -287,9 +258,8 @@ export function useEDA(): UseEDAReturn {
         boxPlotData,
         categoryData,
         scatterData,
-        scatterXColumn,
-        scatterYColumn,
+        scatterXColumn: resolvedScatterXColumn,
+        scatterYColumn: resolvedScatterYColumn,
         setScatterColumns,
     };
 }
-

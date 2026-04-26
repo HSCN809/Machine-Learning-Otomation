@@ -32,7 +32,8 @@ export async function hasValidAuthSession(authCookie: string | undefined): Promi
             user?: unknown;
         };
 
-        return Boolean(status.authenticated && status.user);
+        const isValid = Boolean(status.authenticated && status.user);
+        return isValid;
     } catch (error) {
         logger.error('Server auth status request failed', error);
         return false;

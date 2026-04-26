@@ -1,10 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useSyncExternalStore } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as api from '@/lib/api';
 import type { TimelineEvent } from '@/types/timeline';
 import { logger } from '@/lib/logger';
 import { getErrorMessage, notify } from '@/lib/notify';
+import { clearDatasetQueries, datasetQueryKeys, invalidateDatasetQueries } from '@/lib/query-cache';
 
 interface UseDatasetTimelineReturn {
     events: TimelineEvent[];
@@ -24,44 +26,37 @@ interface UseDatasetTimelineOptions {
 export function useDatasetTimeline({
     enabled = true,
 }: UseDatasetTimelineOptions = {}): UseDatasetTimelineReturn {
-    const [events, setEvents] = useState<TimelineEvent[]>([]);
-    const [canUndoLast, setCanUndoLast] = useState(false);
-    const [lastEventId, setLastEventId] = useState<string | null>(null);
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const queryClient = useQueryClient();
+    const sessionId = useSyncExternalStore(api.subscribeToStoredSession, api.getStoredSessionId, () => null);
+
+    const {
+        data,
+        isLoading,
+        error: queryError,
+        refetch,
+    } = useQuery({
+        queryKey: datasetQueryKeys.timeline(sessionId),
+        queryFn: async () => {
+            if (!sessionId) {
+                return { events: [] as TimelineEvent[], canUndoLast: false, lastEventId: null as string | null };
+            }
+            return await api.getTimeline();
+        },
+        enabled: enabled && Boolean(sessionId),
+        staleTime: 2 * 60 * 1000, // 2 minutes
+        retry: false,
+    });
+
+    const events = data?.events ?? [];
+    const canUndoLast = data?.canUndoLast ?? false;
+    const lastEventId = data?.lastEventId ?? null;
 
     const refresh = useCallback(async () => {
-        if (!enabled || !api.hasStoredSession()) {
-            setEvents([]);
-            setCanUndoLast(false);
-            setLastEventId(null);
-            setError(null);
-            setIsLoading(false);
+        if (!sessionId) {
             return;
         }
-
-        try {
-            setIsLoading(true);
-            setError(null);
-            const response = await api.getTimeline();
-            setEvents(response.events);
-            setCanUndoLast(response.canUndoLast);
-            setLastEventId(response.lastEventId ?? null);
-        } catch (err) {
-            if (api.isSessionRequiredError(err)) {
-                setEvents([]);
-                setCanUndoLast(false);
-                setLastEventId(null);
-                setError(null);
-                return;
-            }
-
-            logger.error('Dataset timeline load failed', err);
-            setError(getErrorMessage(err, 'Islem zaman akisi yuklenemedi'));
-        } finally {
-            setIsLoading(false);
-        }
-    }, [enabled]);
+        await refetch();
+    }, [refetch, sessionId]);
 
     const undoLast = useCallback(async () => {
         if (!canUndoLast) {
@@ -69,30 +64,30 @@ export function useDatasetTimeline({
         }
 
         try {
-            setIsLoading(true);
-            setError(null);
             await api.undoLastTimelineEvent();
-            await refresh();
+            await invalidateDatasetQueries(queryClient);
             notify.success('Son islem geri alindi');
             return true;
         } catch (err) {
-            const message = getErrorMessage(err, 'Son islem geri alinamadi');
             logger.error('Dataset timeline undo failed', err);
-            setError(message);
             notify.error(err, 'Son islem geri alinamadi');
             return false;
-        } finally {
-            setIsLoading(false);
         }
-    }, [canUndoLast, refresh]);
+    }, [canUndoLast, queryClient]);
 
     useEffect(() => {
-        void refresh();
-    }, [refresh]);
+        return api.subscribeToStoredSession(() => {
+            if (api.getStoredSessionId()) {
+                void invalidateDatasetQueries(queryClient);
+                return;
+            }
+            clearDatasetQueries(queryClient);
+        });
+    }, [queryClient]);
 
-    useEffect(() => api.subscribeToStoredSession(() => {
-        void refresh();
-    }), [refresh]);
+    const errorMessage = queryError && !api.isSessionRequiredError(queryError)
+        ? getErrorMessage(queryError, 'Islem zaman akisi yuklenemedi')
+        : null;
 
     return {
         events,
@@ -100,7 +95,7 @@ export function useDatasetTimeline({
         canUndoLast,
         lastEventId,
         isLoading,
-        error,
+        error: errorMessage,
         refresh,
         undoLast,
     };
