@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
     ProblemType,
     ModelInfo,
@@ -113,6 +114,7 @@ function mapTrainingResults(
 }
 
 export function useModelSelection(): UseModelSelectionReturn {
+    const queryClient = useQueryClient();
     const [currentStep, setCurrentStep] = useState(0);
     const [completedSteps, setCompletedSteps] = useState<number[]>([]);
     const [skippedSteps, setSkippedSteps] = useState<number[]>([]);
@@ -132,6 +134,7 @@ export function useModelSelection(): UseModelSelectionReturn {
     const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
     const [trainingJobId, setTrainingJobId] = useState<string | null>(null);
     const eventSourceRef = useRef<EventSource | null>(null);
+    const timelineRefreshTimeoutRef = useRef<number | null>(null);
     const trainingStatusRef = useRef<'idle' | 'queued' | 'running' | 'stopping' | 'completed' | 'failed' | 'stopped'>('idle');
     const loggedStepPayloadsRef = useRef<Record<string, string>>({});
 
@@ -145,6 +148,23 @@ export function useModelSelection(): UseModelSelectionReturn {
             eventSourceRef.current = null;
         }
     }, []);
+
+    const refreshTimeline = useCallback(async () => {
+        await queryClient.invalidateQueries({
+            queryKey: ['dataset-timeline'],
+        });
+    }, [queryClient]);
+
+    const scheduleTimelineRefresh = useCallback((delayMs: number = 0) => {
+        if (timelineRefreshTimeoutRef.current !== null) {
+            window.clearTimeout(timelineRefreshTimeoutRef.current);
+        }
+
+        timelineRefreshTimeoutRef.current = window.setTimeout(() => {
+            timelineRefreshTimeoutRef.current = null;
+            void refreshTimeline();
+        }, delayMs);
+    }, [refreshTimeline]);
 
     const loadAvailableModels = useCallback(async (nextProblemType: ProblemType | null) => {
         if (!nextProblemType) {
@@ -188,6 +208,7 @@ export function useModelSelection(): UseModelSelectionReturn {
             setCurrentStep(4);
             setCompletedSteps((prev) => (prev.includes(3) ? prev : [...prev, 3]));
             closeTrainingStream();
+            scheduleTimelineRefresh(150);
             notify.success('Model eğitimi tamamlandı');
             return;
         }
@@ -196,6 +217,7 @@ export function useModelSelection(): UseModelSelectionReturn {
             setError(snapshot.error ?? 'Egitim sirasinda hata olustu');
             setCurrentStep(3);
             closeTrainingStream();
+            scheduleTimelineRefresh(150);
             notify.error(snapshot.error ?? new Error('Eğitim sırasında hata oluştu'), 'Eğitim sırasında hata oluştu');
             return;
         }
@@ -204,13 +226,14 @@ export function useModelSelection(): UseModelSelectionReturn {
             setError('Eğitim durduruldu');
             setCurrentStep(3);
             closeTrainingStream();
+            scheduleTimelineRefresh(150);
             notify.info('Eğitim durduruldu');
             return;
         }
 
         setError(null);
         setCurrentStep(3);
-    }, [closeTrainingStream, loadAvailableModels]);
+    }, [closeTrainingStream, loadAvailableModels, scheduleTimelineRefresh]);
 
     const connectToTrainingStream = useCallback((jobId: string) => {
         closeTrainingStream();
@@ -331,10 +354,12 @@ export function useModelSelection(): UseModelSelectionReturn {
             metadata: request.metadata,
             payload: request.payload,
             step: request.step,
-        }).catch((err) => {
-            logger.error('Model selection timeline event append failed', err, { key });
-        });
-    }, []);
+        })
+            .then(() => refreshTimeline())
+            .catch((err) => {
+                logger.error('Model selection timeline event append failed', err, { key });
+            });
+    }, [refreshTimeline]);
 
     const nextStep = useCallback(() => {
         if (currentStep === 0 && targetColumn && problemType) {
@@ -505,6 +530,7 @@ export function useModelSelection(): UseModelSelectionReturn {
             const response = await api.startModelTraining(targetColumn, problemType, selectedModels, 0.2, modelParams);
             setTrainingJobId(response.job_id);
             connectToTrainingStream(response.job_id);
+            await refreshTimeline();
             notify.info('Model eğitimi başlatıldı');
         } catch (err) {
             const message = getErrorMessage(err, 'Eğitim sırasında hata oluştu');
@@ -514,7 +540,7 @@ export function useModelSelection(): UseModelSelectionReturn {
             setTrainingStatus('failed');
             notify.error(err, 'Eğitim sırasında hata oluştu');
         }
-    }, [connectToTrainingStream, modelParams, problemType, selectedModels, targetColumn]);
+    }, [connectToTrainingStream, modelParams, problemType, refreshTimeline, selectedModels, targetColumn]);
 
     const stopTraining = useCallback(async () => {
         if (!trainingJobId) {
@@ -557,6 +583,9 @@ export function useModelSelection(): UseModelSelectionReturn {
 
     useEffect(() => {
         return () => {
+            if (timelineRefreshTimeoutRef.current !== null) {
+                window.clearTimeout(timelineRefreshTimeoutRef.current);
+            }
             closeTrainingStream();
         };
     }, [closeTrainingStream]);
