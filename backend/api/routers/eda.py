@@ -65,6 +65,33 @@ def _is_datetime_series(series: pd.Series) -> bool:
     return bool(is_datetime64_any_dtype(series.dtype))
 
 
+def _get_semantic_categorical_columns(session_id: str, df: pd.DataFrame) -> set[str]:
+    """Return columns that should still be treated as categorical after encoding."""
+    semantic_columns: set[str] = set()
+    timeline_events = session_manager.get_timeline_events(session_id)
+
+    for event in timeline_events:
+        if event.get("category") != "preprocessing":
+            continue
+
+        event_step = event.get("step")
+        payload = event.get("payload") or {}
+        payload_step = payload.get("step")
+        if event_step != "encoding" and payload_step != "encoding":
+            continue
+
+        for key in ("columns", "new_columns"):
+            column_names = payload.get(key)
+            if not isinstance(column_names, list):
+                continue
+
+            for column_name in column_names:
+                if isinstance(column_name, str) and column_name in df.columns:
+                    semantic_columns.add(column_name)
+
+    return semantic_columns
+
+
 @router.get("/summary")
 async def get_eda_summary(session_id: str = Depends(require_session)):
     """Get EDA summary statistics"""
@@ -95,13 +122,16 @@ async def get_eda_summary(session_id: str = Depends(require_session)):
 async def get_column_types(session_id: str = Depends(require_session)):
     """Get detailed column type information"""
     df = _get_dataframe(session_id)
+    semantic_categorical_columns = _get_semantic_categorical_columns(session_id, df)
     
     columns: list[dict[str, Any]] = []
     for col in df.columns:
         series = _get_series(df, col)
         dtype = str(series.dtype)
         
-        if _is_numeric_series(series):
+        if col in semantic_categorical_columns:
+            col_type = "categorical"
+        elif _is_numeric_series(series):
             col_type = "numeric"
         elif _is_categorical_series(series):
             col_type = "categorical"
