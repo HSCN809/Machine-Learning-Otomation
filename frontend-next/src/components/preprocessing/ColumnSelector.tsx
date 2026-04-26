@@ -154,7 +154,7 @@ export function ColumnSelector({
                                         )}>
                                             {column.name}
                                         </p>
-                                        <div className="flex items-center gap-2 mt-0.5">
+                                        <div className="mt-0.5 flex flex-wrap items-center gap-2">
                                             {showType && (
                                                 <span
                                                     className="text-xs px-1.5 py-0.5 rounded"
@@ -181,12 +181,12 @@ export function ColumnSelector({
                                                     {(column.outlierPercentage ?? 0).toFixed(1)}% aykırı
                                                 </span>
                                             )}
+                                            {showSummary && column.distributionSummary && (
+                                                <span className="text-xs text-gray-400">
+                                                    {column.distributionSummary}
+                                                </span>
+                                            )}
                                         </div>
-                                        {showSummary && column.distributionSummary && (
-                                            <p className="mt-1 text-xs text-gray-400">
-                                                {column.distributionSummary}
-                                            </p>
-                                        )}
                                     </div>
                                 </button>
                             );

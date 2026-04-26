@@ -166,6 +166,13 @@ export function useModelSelection(): UseModelSelectionReturn {
         }, delayMs);
     }, [refreshTimeline]);
 
+    const notifyDatasetMutation = useCallback(() => {
+        const currentSessionId = api.getStoredSessionId();
+        if (currentSessionId) {
+            api.setStoredSessionId(currentSessionId);
+        }
+    }, []);
+
     const loadAvailableModels = useCallback(async (nextProblemType: ProblemType | null) => {
         if (!nextProblemType) {
             setAvailableModels([]);
@@ -208,6 +215,7 @@ export function useModelSelection(): UseModelSelectionReturn {
             setCurrentStep(4);
             setCompletedSteps((prev) => (prev.includes(3) ? prev : [...prev, 3]));
             closeTrainingStream();
+            notifyDatasetMutation();
             scheduleTimelineRefresh(150);
             notify.success('Model eğitimi tamamlandı');
             return;
@@ -217,6 +225,7 @@ export function useModelSelection(): UseModelSelectionReturn {
             setError(snapshot.error ?? 'Egitim sirasinda hata olustu');
             setCurrentStep(3);
             closeTrainingStream();
+            notifyDatasetMutation();
             scheduleTimelineRefresh(150);
             notify.error(snapshot.error ?? new Error('Eğitim sırasında hata oluştu'), 'Eğitim sırasında hata oluştu');
             return;
@@ -226,6 +235,7 @@ export function useModelSelection(): UseModelSelectionReturn {
             setError('Eğitim durduruldu');
             setCurrentStep(3);
             closeTrainingStream();
+            notifyDatasetMutation();
             scheduleTimelineRefresh(150);
             notify.info('Eğitim durduruldu');
             return;
@@ -233,7 +243,7 @@ export function useModelSelection(): UseModelSelectionReturn {
 
         setError(null);
         setCurrentStep(3);
-    }, [closeTrainingStream, loadAvailableModels, scheduleTimelineRefresh]);
+    }, [closeTrainingStream, loadAvailableModels, notifyDatasetMutation, scheduleTimelineRefresh]);
 
     const connectToTrainingStream = useCallback((jobId: string) => {
         closeTrainingStream();
@@ -355,11 +365,14 @@ export function useModelSelection(): UseModelSelectionReturn {
             payload: request.payload,
             step: request.step,
         })
-            .then(() => refreshTimeline())
+            .then(() => {
+                notifyDatasetMutation();
+                return refreshTimeline();
+            })
             .catch((err) => {
                 logger.error('Model selection timeline event append failed', err, { key });
             });
-    }, [refreshTimeline]);
+    }, [notifyDatasetMutation, refreshTimeline]);
 
     const nextStep = useCallback(() => {
         if (currentStep === 0 && targetColumn && problemType) {
@@ -530,6 +543,7 @@ export function useModelSelection(): UseModelSelectionReturn {
             const response = await api.startModelTraining(targetColumn, problemType, selectedModels, 0.2, modelParams);
             setTrainingJobId(response.job_id);
             connectToTrainingStream(response.job_id);
+            notifyDatasetMutation();
             await refreshTimeline();
             notify.info('Model eğitimi başlatıldı');
         } catch (err) {
@@ -540,7 +554,7 @@ export function useModelSelection(): UseModelSelectionReturn {
             setTrainingStatus('failed');
             notify.error(err, 'Eğitim sırasında hata oluştu');
         }
-    }, [connectToTrainingStream, modelParams, problemType, refreshTimeline, selectedModels, targetColumn]);
+    }, [connectToTrainingStream, modelParams, notifyDatasetMutation, problemType, refreshTimeline, selectedModels, targetColumn]);
 
     const stopTraining = useCallback(async () => {
         if (!trainingJobId) {
