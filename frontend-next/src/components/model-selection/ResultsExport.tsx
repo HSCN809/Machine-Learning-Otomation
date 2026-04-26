@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import { Download, FileJson, FileSpreadsheet, Package } from 'lucide-react';
@@ -15,6 +15,9 @@ interface ResultsExportProps {
 export function ResultsExport({ results }: ResultsExportProps) {
     const [downloadError, setDownloadError] = useState<string | null>(null);
     const [downloadingModelId, setDownloadingModelId] = useState<string | null>(null);
+
+    const escapeCsvValue = (value: string | number | null | undefined) =>
+        `"${String(value ?? '').replace(/"/g, '""')}"`;
 
     const exportJSON = () => {
         const data = JSON.stringify(results, null, 2);
@@ -44,8 +47,11 @@ export function ResultsExport({ results }: ResultsExportProps) {
             result.trainingTime,
         ]);
 
-        const csv = [headers.join(','), ...rows.map((row) => row.join(','))].join('\n');
-        const blob = new Blob([csv], { type: 'text/csv' });
+        const csv = [
+            headers.map(escapeCsvValue).join(','),
+            ...rows.map((row) => row.map(escapeCsvValue).join(',')),
+        ].join('\r\n');
+        const blob = new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const anchor = document.createElement('a');
         anchor.href = url;

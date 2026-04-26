@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import dynamic from 'next/dynamic';
 import { useState } from 'react';
@@ -368,3 +368,4 @@ export default function ModelSelectionPage() {
         </ProtectedRouteBoundary>
     );
 }
+

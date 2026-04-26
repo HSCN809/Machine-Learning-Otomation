@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
@@ -33,12 +33,11 @@ export function ChartCard({
                 background: 'linear-gradient(135deg, rgba(17, 24, 39, 0.6) 0%, rgba(31, 41, 55, 0.4) 100%)',
             }}
         >
-            {/* Header */}
-            <div className="flex flex-col gap-3 px-4 py-3 border-b border-white/10 md:flex-row md:items-start md:justify-between">
+            <div className="flex flex-col gap-3 border-b border-white/10 px-4 py-3 md:flex-row md:items-start md:justify-between">
                 <div>
                     <h3 className="font-semibold text-white">{title}</h3>
                     {description && (
-                        <p className="text-sm text-gray-400 mt-0.5">{description}</p>
+                        <p className="mt-0.5 text-sm text-gray-400">{description}</p>
                     )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2 md:justify-end">
@@ -46,28 +45,25 @@ export function ChartCard({
                     {onExport && (
                         <button
                             onClick={onExport}
-                            className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+                            className="rounded-lg p-2 transition-colors hover:bg-white/10"
                             title="Dışa Aktar"
                         >
-                            <Download className="w-4 h-4 text-gray-400" />
+                            <Download className="h-4 w-4 text-gray-400" />
                         </button>
                     )}
                     {onFullscreen && (
                         <button
                             onClick={onFullscreen}
-                            className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+                            className="rounded-lg p-2 transition-colors hover:bg-white/10"
                             title="Tam Ekran"
                         >
-                            <Maximize2 className="w-4 h-4 text-gray-400" />
+                            <Maximize2 className="h-4 w-4 text-gray-400" />
                         </button>
                     )}
                 </div>
             </div>
 
-            {/* Content */}
-            <div className="p-4 flex-1">
-                {children}
-            </div>
+            <div className="flex-1 p-4">{children}</div>
         </div>
     );
 }
