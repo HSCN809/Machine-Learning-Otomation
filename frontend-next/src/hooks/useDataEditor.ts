@@ -448,6 +448,10 @@ export function useDataEditor({ onSaved }: UseDataEditorOptions = {}): UseDataEd
             setError(null);
             await api.commitDataEditorChanges(draft);
             await onSaved?.();
+            const currentSessionId = api.getStoredSessionId();
+            if (currentSessionId) {
+                api.setStoredSessionId(currentSessionId);
+            }
             await loadPage(1);
 
             setDraft(cloneDraft(EMPTY_DRAFT));

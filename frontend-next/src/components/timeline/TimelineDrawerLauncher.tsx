@@ -3,7 +3,6 @@
 import { useRef, useState } from 'react';
 import { Grip, History, X } from 'lucide-react';
 import { PixelTrail } from '@/components/common';
-import { hasStoredSession } from '@/lib/api';
 import { theme } from '@/styles/theme';
 import { useDatasetTimeline } from '@/hooks/useDatasetTimeline';
 import { TimelineLog } from './TimelineLog';
@@ -35,7 +34,7 @@ export function TimelineDrawerLauncher({
     const didDragRef = useRef(false);
     const { events, count, canUndoLast, isLoading, undoLast } = useDatasetTimeline();
 
-    if (!visible || !hasStoredSession()) {
+    if (!visible) {
         return null;
     }
 

@@ -24,6 +24,7 @@ export default function DataUploadPage() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [isBootstrapping, setIsBootstrapping] = useState(true);
     const [showDropzone, setShowDropzone] = useState(true);
+    const [editorRefreshToken, setEditorRefreshToken] = useState(0);
     const fileDropzoneSectionRef = useRef<HTMLElement | null>(null);
     const nextPath = useMemo(
         () =>
@@ -130,6 +131,15 @@ export default function DataUploadPage() {
     const isLoading = status === 'uploading' || status === 'validating';
     const showEditor = status === 'success' && dataSummary;
     const showSessionSkeleton = isBootstrapping;
+
+    const handleEditorSaved = async () => {
+        await hydrateSession();
+    };
+
+    const handleTimelineUndo = async () => {
+        await hydrateSession();
+        setEditorRefreshToken((currentValue) => currentValue + 1);
+    };
 
     return (
         <ProtectedRouteBoundary>
@@ -247,14 +257,18 @@ export default function DataUploadPage() {
                                         'linear-gradient(135deg, rgba(17, 24, 39, 0.6) 0%, rgba(31, 41, 55, 0.4) 100%)',
                                 }}
                             >
-                                <DataEditor key={activeDatasetId} onSaved={hydrateSession} onDelete={reset} />
+                                <DataEditor
+                                    key={`${activeDatasetId ?? 'no-session'}:${editorRefreshToken}`}
+                                    onSaved={handleEditorSaved}
+                                    onDelete={reset}
+                                />
                             </section>
                         )}
                     </main>
                 </div>
                 <TimelineDrawerLauncher
-                    visible={Boolean(activeDatasetId)}
-                    onAfterUndo={hydrateSession}
+                    visible={!showSessionSkeleton}
+                    onAfterUndo={handleTimelineUndo}
                 />
             </div>
         </ProtectedRouteBoundary>

@@ -25,6 +25,15 @@ export function useDatasetTimeline(): UseDatasetTimelineReturn {
     const [error, setError] = useState<string | null>(null);
 
     const refresh = useCallback(async () => {
+        if (!api.hasStoredSession()) {
+            setEvents([]);
+            setCanUndoLast(false);
+            setLastEventId(null);
+            setError(null);
+            setIsLoading(false);
+            return;
+        }
+
         try {
             setIsLoading(true);
             setError(null);
