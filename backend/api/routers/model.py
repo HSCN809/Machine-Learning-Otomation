@@ -652,8 +652,8 @@ def _run_training_job(job_id: str):
                 _append_model_timeline_event(
                     session_id,
                     action="training_stopped",
-                    title="Model egitimi durduruldu",
-                    description="Calisan model egitimi istegi kullanici talebiyle durduruldu.",
+                    title="Model eğitimi durduruldu",
+                    description="Çalışan model eğitimi isteği kullanıcı talebiyle durduruldu.",
                     db=db,
                     metadata={
                         "job_id": job_id,
@@ -720,8 +720,8 @@ def _run_training_job(job_id: str):
         _append_model_timeline_event(
             session_id,
             action="training_completed",
-            title="Model egitimi tamamlandi",
-            description=f"{len(final_results)} model egitimi tamamlandi ve sonuclar kaydedildi.",
+            title="Model eğitimi tamamlandı",
+            description=f"{len(final_results)} model eğitimi tamamlandı ve sonuçlar kaydedildi.",
             db=db,
             metadata={
                 "job_id": job_id,
@@ -749,8 +749,8 @@ def _run_training_job(job_id: str):
         _append_model_timeline_event(
             session_id,
             action="training_failed",
-            title="Model egitimi basarisiz oldu",
-            description="Model egitimi sirasinda hata olustu.",
+            title="Model eğitimi başarısız oldu",
+            description="Model eğitimi sırasında hata oluştu.",
             db=db,
             metadata={
                 "job_id": job_id,
@@ -771,8 +771,8 @@ def _run_training_job(job_id: str):
         _append_model_timeline_event(
             session_id,
             action="training_failed",
-            title="Model egitimi basarisiz oldu",
-            description="Model egitimi sirasinda beklenmeyen hata olustu.",
+            title="Model eğitimi başarısız oldu",
+            description="Model eğitimi sırasında beklenmeyen hata oluştu.",
             db=db,
             metadata={
                 "job_id": job_id,
@@ -860,8 +860,8 @@ async def start_training(
     _append_model_timeline_event(
         session_id,
         action="training_started",
-        title="Model egitimi baslatildi",
-        description=f"{len(request.models)} model icin egitim kuyruga alindi.",
+        title="Model eğitimi başlatıldı",
+        description=f"{len(request.models)} model için eğitim kuyruğa alındı.",
         db=db,
         metadata={
             "job_id": job_id,

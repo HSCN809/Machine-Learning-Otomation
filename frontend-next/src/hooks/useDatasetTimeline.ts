@@ -17,7 +17,13 @@ interface UseDatasetTimelineReturn {
     undoLast: () => Promise<boolean>;
 }
 
-export function useDatasetTimeline(): UseDatasetTimelineReturn {
+interface UseDatasetTimelineOptions {
+    enabled?: boolean;
+}
+
+export function useDatasetTimeline({
+    enabled = true,
+}: UseDatasetTimelineOptions = {}): UseDatasetTimelineReturn {
     const [events, setEvents] = useState<TimelineEvent[]>([]);
     const [canUndoLast, setCanUndoLast] = useState(false);
     const [lastEventId, setLastEventId] = useState<string | null>(null);
@@ -25,7 +31,7 @@ export function useDatasetTimeline(): UseDatasetTimelineReturn {
     const [error, setError] = useState<string | null>(null);
 
     const refresh = useCallback(async () => {
-        if (!api.hasStoredSession()) {
+        if (!enabled || !api.hasStoredSession()) {
             setEvents([]);
             setCanUndoLast(false);
             setLastEventId(null);
@@ -55,7 +61,7 @@ export function useDatasetTimeline(): UseDatasetTimelineReturn {
         } finally {
             setIsLoading(false);
         }
-    }, []);
+    }, [enabled]);
 
     const undoLast = useCallback(async () => {
         if (!canUndoLast) {

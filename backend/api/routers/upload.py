@@ -324,7 +324,7 @@ async def load_saved_dataset(
         dataset_session_id,
         category="upload",
         action="saved_dataset_loaded",
-        title="Kayitli veri seti yüklendi",
+        title="Kayıtlı veri seti yüklendi",
         description=f"{record.filename or 'Veri seti'} aktif oturuma geri yüklendi.",
         undoable=False,
         metadata={

@@ -360,7 +360,8 @@ export default function ModelSelectionPage() {
                 </div>
 
                 <TimelineDrawerLauncher
-                    visible={hasData}
+                    visible={!datasetBootstrap.isChecking}
+                    enabled={hasData}
                     onAfterUndo={loadColumns}
                 />
             </div>

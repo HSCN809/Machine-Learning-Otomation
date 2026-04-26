@@ -331,8 +331,8 @@ async def handle_missing_values(
             action=request.method,
             payload=history_payload,
             previous_df=previous_df,
-            title="Eksik deger islemi uygulandi",
-            description=f"{len(valid_columns)} sutunda {request.method} islemi uygulandi.",
+            title="Eksik değer işlemi uygulandı",
+            description=f"{len(valid_columns)} sütunda {request.method} işlemi uygulandı.",
         )
         persist_session(session_id, db)
         
@@ -418,8 +418,8 @@ async def handle_outliers(
             action=request.method,
             payload=history_payload,
             previous_df=previous_df,
-            title="Aykiri deger islemi uygulandi",
-            description=f"{len(detected_columns)} sutunda aykiri deger islemi uygulandi.",
+            title="Aykırı değer işlemi uygulandı",
+            description=f"{len(detected_columns)} sütunda aykırı değer işlemi uygulandı.",
         )
         persist_session(session_id, db)
         
@@ -545,8 +545,8 @@ async def handle_encoding(
             action=request.method,
             payload=history_payload,
             previous_df=previous_df,
-            title="Kodlama islemi uygulandi",
-            description=f"{len(valid_columns)} sutunda {request.method} kodlama islemi uygulandi.",
+            title="Kodlama işlemi uygulandı",
+            description=f"{len(valid_columns)} sütunda {request.method} kodlama işlemi uygulandı.",
         )
         persist_session(session_id, db)
         
@@ -620,8 +620,8 @@ async def handle_scaling(
             action=request.method,
             payload=history_payload,
             previous_df=previous_df,
-            title="Olceklendirme islemi uygulandi",
-            description=f"{len(valid_columns)} sayisal sutunda {request.method} olceklendirme uygulandi.",
+            title="Ölçeklendirme işlemi uygulandı",
+            description=f"{len(valid_columns)} sayısal sütunda {request.method} ölçeklendirme uygulandı.",
         )
         persist_session(session_id, db)
         
@@ -739,8 +739,8 @@ async def handle_feature_engineering(
             action=request.operation,
             payload=history_payload,
             previous_df=previous_df,
-            title="Ozellik muhendisligi islemi uygulandi",
-            description=f"{request.operation} islemi ile {len(new_columns)} yeni sutun olusturuldu.",
+            title="Özellik mühendisliği işlemi uygulandı",
+            description=f"{request.operation} işlemi ile {len(new_columns)} yeni sütun oluşturuldu.",
         )
         persist_session(session_id, db)
 
@@ -803,8 +803,8 @@ async def handle_drop_columns(
             action="drop_columns",
             payload=history_payload,
             previous_df=previous_df,
-            title="Sutunlar silindi",
-            description=f"{len(existing_columns)} sutun veri setinden kaldirildi.",
+            title="Sütunlar silindi",
+            description=f"{len(existing_columns)} sütun veri setinden kaldırıldı.",
         )
         persist_session(session_id, db)
         

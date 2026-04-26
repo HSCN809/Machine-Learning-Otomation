@@ -9,11 +9,13 @@ import { TimelineLog } from './TimelineLog';
 
 interface TimelineDrawerLauncherProps {
     visible?: boolean;
+    enabled?: boolean;
     onAfterUndo?: () => Promise<void> | void;
 }
 
 export function TimelineDrawerLauncher({
     visible = true,
+    enabled = true,
     onAfterUndo,
 }: TimelineDrawerLauncherProps) {
     const [isOpen, setIsOpen] = useState(false);
@@ -32,7 +34,7 @@ export function TimelineDrawerLauncher({
     const dragOffsetRef = useRef({ x: 0, y: 0 });
     const dragStartRef = useRef({ x: 0, y: 0 });
     const didDragRef = useRef(false);
-    const { events, count, canUndoLast, isLoading, undoLast } = useDatasetTimeline();
+    const { events, count, canUndoLast, isLoading, undoLast } = useDatasetTimeline({ enabled });
 
     if (!visible) {
         return null;
@@ -112,7 +114,7 @@ export function TimelineDrawerLauncher({
             />
             <button
                 type="button"
-                aria-label="Islem zaman akisini ac"
+                aria-label="İşlem zaman akışını aç"
                 onPointerDown={handlePointerDown}
                 onClick={handleButtonClick}
                 className="fixed z-40 flex h-14 w-14 cursor-grab items-center justify-center rounded-full border border-cyan-400/30 bg-slate-900/90 text-cyan-300 shadow-lg backdrop-blur transition-transform hover:scale-105 active:cursor-grabbing"
@@ -143,18 +145,18 @@ export function TimelineDrawerLauncher({
                     <div className="flex items-start justify-between border-b border-white/10 px-5 py-5">
                         <div>
                             <p className="text-sm font-medium uppercase tracking-[0.2em] text-cyan-400/80">
-                                History
+                                Geçmiş
                             </p>
-                            <h3 className="mt-1 text-xl font-semibold text-white">Islem Timeline</h3>
+                            <h3 className="mt-1 text-xl font-semibold text-white">İşlem Timeline</h3>
                             <p className="mt-1 text-sm text-gray-400">
-                                Veri yukleme, editor, preprocessing ve model secimi islemlerini kronolojik goruntuleyin.
+                                Veri yükleme, düzenleme, ön işleme ve model seçimi işlemlerini kronolojik görüntüleyin.
                             </p>
                         </div>
                         <button
                             type="button"
                             onClick={() => setIsOpen(false)}
                             className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-white/5 text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
-                            aria-label="Islem zaman akisni kapat"
+                            aria-label="İşlem zaman akışını kapat"
                         >
                             <X className="h-5 w-5" />
                         </button>

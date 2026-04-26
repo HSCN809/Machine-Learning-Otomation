@@ -291,7 +291,8 @@ export default function PreprocessingPage() {
                 </div>
 
                 <TimelineDrawerLauncher
-                    visible={hasData}
+                    visible={!datasetBootstrap.isChecking}
+                    enabled={hasData}
                     onAfterUndo={async () => {
                         await loadInitialData();
                     }}

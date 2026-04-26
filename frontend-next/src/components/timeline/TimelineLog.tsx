@@ -13,47 +13,47 @@ interface TimelineLogProps {
 }
 
 const stepLabels: Record<string, string> = {
-    missing_values: 'Missing Values',
-    outliers: 'Outliers',
-    feature_engineering: 'Feature Engineering',
-    encoding: 'Encoding',
-    scaling: 'Scaling',
+    missing_values: 'Eksik Değerler',
+    outliers: 'Aykırı Değerler',
+    feature_engineering: 'Özellik Mühendisliği',
+    encoding: 'Kodlama',
+    scaling: 'Ölçeklendirme',
 };
 
 const eventCategoryLabels: Record<string, string> = {
-    upload: 'Upload',
-    editor: 'Editor',
-    preprocessing: 'Preprocessing',
+    upload: 'Yükleme',
+    editor: 'Düzenleyici',
+    preprocessing: 'Ön İşleme',
     model: 'Model',
 };
 
 const preprocessingActionLabels: Record<string, string> = {
-    fill_mean: 'Eksik deger doldurma',
-    fill_median: 'Eksik deger doldurma',
-    fill_mode: 'Eksik deger doldurma',
-    fill_knn: 'Eksik deger doldurma',
-    fill_interpolation: 'Eksik deger doldurma',
-    fill_regression: 'Eksik deger doldurma',
-    fill_ffill: 'Eksik deger doldurma',
-    fill_bfill: 'Eksik deger doldurma',
-    drop_columns: 'Sutun silme',
-    iqr_cap: 'Aykiri deger islemi',
-    iqr_winsorize: 'Aykiri deger islemi',
+    fill_mean: 'Eksik değer doldurma',
+    fill_median: 'Eksik değer doldurma',
+    fill_mode: 'Eksik değer doldurma',
+    fill_knn: 'Eksik değer doldurma',
+    fill_interpolation: 'Eksik değer doldurma',
+    fill_regression: 'Eksik değer doldurma',
+    fill_ffill: 'Eksik değer doldurma',
+    fill_bfill: 'Eksik değer doldurma',
+    drop_columns: 'Sütun silme',
+    iqr_cap: 'Aykırı değer işlemi',
+    iqr_winsorize: 'Aykırı değer işlemi',
     label: 'Kodlama',
     onehot: 'Kodlama',
     ordinal: 'Kodlama',
     binary: 'Kodlama',
     frequency: 'Kodlama',
-    standard: 'Olceklendirme',
-    minmax: 'Olceklendirme',
-    robust: 'Olceklendirme',
-    maxabs: 'Olceklendirme',
-    normalizer: 'Olceklendirme',
-    polynomial: 'Ozellik muhendisligi',
-    create_numeric: 'Ozellik muhendisligi',
-    create_datetime: 'Ozellik muhendisligi',
-    create_categorical: 'Ozellik muhendisligi',
-    binning: 'Ozellik muhendisligi',
+    standard: 'Ölçeklendirme',
+    minmax: 'Ölçeklendirme',
+    robust: 'Ölçeklendirme',
+    maxabs: 'Ölçeklendirme',
+    normalizer: 'Ölçeklendirme',
+    polynomial: 'Özellik mühendisliği',
+    create_numeric: 'Özellik mühendisliği',
+    create_datetime: 'Özellik mühendisliği',
+    create_categorical: 'Özellik mühendisliği',
+    binning: 'Özellik mühendisliği',
 };
 
 function getTitle(event: TimelineEvent): string {
@@ -65,7 +65,7 @@ function getTitle(event: TimelineEvent): string {
         return preprocessingActionLabels[event.action] || event.action;
     }
 
-    return 'Islem';
+    return 'İşlem';
 }
 
 function getDescription(event: TimelineEvent): string {
@@ -73,7 +73,7 @@ function getDescription(event: TimelineEvent): string {
         return event.description;
     }
 
-    return 'Islem ayrintisi kaydedildi.';
+    return 'İşlem ayrıntısı kaydedildi.';
 }
 
 function getDetailLines(event: TimelineEvent): string[] {
@@ -81,18 +81,22 @@ function getDetailLines(event: TimelineEvent): string[] {
     const metadata = event.metadata;
 
     if (event.category === 'preprocessing') {
-        const columns = Array.isArray(payload.columns) ? payload.columns : Array.isArray(payload.source_columns) ? payload.source_columns : [];
+        const columns = Array.isArray(payload.columns)
+            ? payload.columns
+            : Array.isArray(payload.source_columns)
+              ? payload.source_columns
+              : [];
         const newColumns = Array.isArray(payload.new_columns) ? payload.new_columns : [];
         const lines: string[] = [];
 
         if (columns.length > 0) {
-            lines.push(`Sutunlar: ${columns.join(', ')}`);
+            lines.push(`Sütunlar: ${columns.join(', ')}`);
         }
         if (newColumns.length > 0) {
-            lines.push(`Yeni sutunlar: ${newColumns.join(', ')}`);
+            lines.push(`Yeni sütunlar: ${newColumns.join(', ')}`);
         }
         if (typeof payload.affected_rows === 'number' && payload.affected_rows > 0) {
-            lines.push(`${payload.affected_rows} satir etkilendi`);
+            lines.push(`${payload.affected_rows} satır etkilendi`);
         }
         return lines;
     }
@@ -100,28 +104,32 @@ function getDetailLines(event: TimelineEvent): string[] {
     if (event.category === 'upload') {
         const rows = typeof metadata.rows === 'number' ? metadata.rows : null;
         const columns = typeof metadata.columns === 'number' ? metadata.columns : null;
-        return rows !== null && columns !== null ? [`${rows} satir, ${columns} sutun`] : [];
+        return rows !== null && columns !== null ? [`${rows} satır, ${columns} sütun`] : [];
     }
 
     if (event.category === 'editor') {
         const lines: string[] = [];
         if (typeof metadata.updated_cells === 'number' && metadata.updated_cells > 0) {
-            lines.push(`${metadata.updated_cells} hucre guncellendi`);
+            lines.push(`${metadata.updated_cells} hücre güncellendi`);
         }
         if (typeof metadata.cleared_cells === 'number' && metadata.cleared_cells > 0) {
-            lines.push(`${metadata.cleared_cells} hucre temizlendi`);
+            lines.push(`${metadata.cleared_cells} hücre temizlendi`);
         }
         if (typeof metadata.deleted_rows === 'number' && metadata.deleted_rows > 0) {
-            lines.push(`${metadata.deleted_rows} satir silindi`);
+            lines.push(`${metadata.deleted_rows} satır silindi`);
         }
         if (typeof metadata.renamed_columns === 'number' && metadata.renamed_columns > 0) {
-            lines.push(`${metadata.renamed_columns} sutun yeniden adlandirildi`);
+            lines.push(`${metadata.renamed_columns} sütun yeniden adlandırıldı`);
         }
         return lines;
     }
 
     if (event.category === 'model') {
-        const models = Array.isArray(metadata.models) ? metadata.models : Array.isArray(metadata.model_ids) ? metadata.model_ids : [];
+        const models = Array.isArray(metadata.models)
+            ? metadata.models
+            : Array.isArray(metadata.model_ids)
+              ? metadata.model_ids
+              : [];
         return models.length > 0 ? [`Modeller: ${models.join(', ')}`] : [];
     }
 
@@ -175,9 +183,9 @@ export function TimelineLog({
         return (
             <div className="rounded-2xl border border-white/10 bg-white/5 p-5 text-left">
                 <Clock className="mb-3 h-8 w-8 text-cyan-400" />
-                <p className="text-sm text-gray-300">Henüz zaman akisi kaydi yok.</p>
+                <p className="text-sm text-gray-300">Henüz işlem geçmişi kaydı yok.</p>
                 <p className="mt-1 text-xs text-gray-500">
-                    Veri yukleme, editor, preprocessing ve model secimi islemleri burada listelenecek.
+                    Veri yükleme, düzenleme, ön işleme ve model seçimi işlemleri burada listelenecek.
                 </p>
             </div>
         );
@@ -188,7 +196,7 @@ export function TimelineLog({
             <div className="flex items-center justify-between border-b border-white/10 bg-white/5 px-4 py-3">
                 <div className="flex items-center gap-2">
                     <Clock className="h-4 w-4 text-cyan-400" />
-                    <span className="font-medium text-white">Islem Timeline</span>
+                    <span className="font-medium text-white">İşlem Timeline</span>
                     <span className="rounded-full bg-cyan-500/20 px-2 py-0.5 text-xs text-cyan-400">
                         {events.length}
                     </span>
@@ -205,7 +213,7 @@ export function TimelineLog({
                         }`}
                     >
                         <Undo2 className="h-3 w-3" />
-                        Son Islemi Geri Al
+                        Son İşlemi Geri Al
                     </button>
                 )}
             </div>
@@ -217,7 +225,7 @@ export function TimelineLog({
                         type="text"
                         value={searchTerm}
                         onChange={(event) => setSearchTerm(event.target.value)}
-                        placeholder="Tarih, saat, islem adi veya aciklama ara"
+                        placeholder="Tarih, saat, işlem adı veya açıklama ara"
                         className="w-full rounded-xl border border-white/10 bg-slate-950/50 py-2 pl-9 pr-3 text-sm text-white outline-none transition-colors placeholder:text-gray-500 focus:border-cyan-400/50"
                     />
                 </label>
@@ -226,7 +234,7 @@ export function TimelineLog({
             <div className="max-h-[70vh] overflow-y-auto px-5 py-4">
                 {filteredEvents.length === 0 && (
                     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-gray-400">
-                        Aramanizla eslesen timeline kaydi bulunamadi.
+                        Aramanızla eşleşen timeline kaydı bulunamadı.
                     </div>
                 )}
 

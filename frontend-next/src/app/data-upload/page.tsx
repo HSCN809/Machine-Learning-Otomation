@@ -129,7 +129,7 @@ export default function DataUploadPage() {
     };
 
     const isLoading = status === 'uploading' || status === 'validating';
-    const showEditor = status === 'success' && dataSummary;
+    const showEditor = status === 'success' && Boolean(dataSummary);
     const showSessionSkeleton = isBootstrapping;
 
     const handleEditorSaved = async () => {
@@ -268,6 +268,7 @@ export default function DataUploadPage() {
                 </div>
                 <TimelineDrawerLauncher
                     visible={!showSessionSkeleton}
+                    enabled={!showDropzone && showEditor && Boolean(activeDatasetId)}
                     onAfterUndo={handleTimelineUndo}
                 />
             </div>
