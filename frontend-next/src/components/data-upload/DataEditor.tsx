@@ -284,6 +284,7 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
         updateCell,
         updateCells,
         renameColumn,
+        renameColumns,
         getColumnDisplayName,
         clearCells,
         deleteSelectedRows,
@@ -370,6 +371,14 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
     const cutCellSet = useMemo(
         () => (editorClipboard?.mode === 'cut' ? editorClipboard.sourceCellKeys : new Set<string>()),
         [editorClipboard]
+    );
+    const copyColumnSet = useMemo(
+        () => (columnClipboard?.mode === 'copy' ? new Set(columnClipboard.sourceColumns) : new Set<string>()),
+        [columnClipboard]
+    );
+    const cutColumnSet = useMemo(
+        () => (columnClipboard?.mode === 'cut' ? new Set(columnClipboard.sourceColumns) : new Set<string>()),
+        [columnClipboard]
     );
     const allRowsSelected = rows.length > 0 && rows.every((row) => selectedRowSet.has(row.rowId));
 
@@ -647,17 +656,23 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
             return;
         }
 
-        destinationColumns.forEach((destinationColumn, index) => {
-            renameColumn(destinationColumn, clipboard.values[index] ?? destinationColumn);
-        });
+        const renameOperations = destinationColumns.map((destinationColumn, index) => ({
+            column: destinationColumn,
+            newName: clipboard.values[index] ?? destinationColumn,
+        }));
 
         if (clipboard.mode === 'cut') {
             const destinationColumnSet = new Set(destinationColumns);
-            clipboard.sourceColumns
-                .filter((column) => !destinationColumnSet.has(column))
-                .forEach((column) => {
-                    renameColumn(column, '');
-                });
+            renameOperations.push(
+                ...clipboard.sourceColumns
+                    .filter((column) => !destinationColumnSet.has(column))
+                    .map((column) => ({ column, newName: '' }))
+            );
+        }
+
+        renameColumns(renameOperations);
+
+        if (clipboard.mode === 'cut') {
             setColumnClipboard(null);
         } else if (clipboard.preferInternalPaste) {
             setColumnClipboard((previousClipboard) =>
@@ -676,7 +691,7 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
         setSelectedColumns(destinationColumns);
         setColumnSelectionAnchor(destinationColumns[0] ?? targetColumn);
         setRowSelectionAnchor(null);
-    }, [columnIndexMap, columns, getColumnPasteTarget, renameColumn, setActiveCell]);
+    }, [columnIndexMap, columns, getColumnPasteTarget, renameColumns, setActiveCell]);
 
     const syncColumnClipboard = useCallback(async (mode: 'copy' | 'cut') => {
         if (isSaving || isDeleting || selectedColumns.length === 0) {
@@ -928,9 +943,7 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                 event.preventDefault();
 
                 if (selectedColumns.length > 0) {
-                    selectedColumns.forEach((column) => {
-                        renameColumn(column, '');
-                    });
+                    renameColumns(selectedColumns.map((column) => ({ column, newName: '' })));
                     return;
                 }
 
@@ -968,7 +981,7 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
         isDeleting,
         isDirty,
         isSaving,
-        renameColumn,
+        renameColumns,
         rowSelectionAnchor,
         saveChanges,
         selectedCells,
@@ -1576,54 +1589,72 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                                                 key={column}
                                                 className="px-4 py-3 text-left font-medium text-gray-400 flex-1 min-w-[200px]"
                                             >
-                                                {editingColumn === column ? (
-                                                    <input
-                                                        autoFocus
-                                                        value={editingColumnValue}
-                                                        onChange={(event) =>
-                                                            setEditingColumnValue(event.target.value)
-                                                        }
-                                                        onBlur={handleColumnEditorBlur}
-                                                        onKeyDown={handleColumnEditorKeyDown}
-                                                        disabled={isSaving}
-                                                        className={[
-                                                            'block min-w-[160px] w-full rounded-lg border px-3 py-2 text-sm outline-none transition-all',
-                                                            isSaving
-                                                                ? 'cursor-not-allowed border-white/5 bg-white/5 text-gray-500'
-                                                                : 'border-cyan-400 bg-cyan-500/10 text-white focus:border-cyan-400 focus:bg-cyan-500/10',
-                                                        ].join(' ')}
-                                                    />
-                                                ) : (
-                                                    <button
-                                                        type="button"
-                                                        data-editor-column="true"
-                                                        data-column={column}
-                                                        onMouseDown={(event) =>
-                                                            handleColumnMouseDown(column, event)
-                                                        }
-                                                        onMouseEnter={() => handleColumnMouseEnter(column)}
-                                                        onDoubleClick={() => handleColumnDoubleClick(column)}
-                                                        disabled={isSaving}
-                                                        className={[
-                                                            'block min-w-[160px] w-full rounded-lg border px-3 py-2 text-left text-sm outline-none transition-all',
-                                                            isSaving
-                                                                ? 'cursor-not-allowed border-white/5 bg-white/5 text-gray-500'
-                                                                : 'cursor-pointer border-transparent bg-transparent text-gray-200',
-                                                            draft.renamedColumns.some(
-                                                                (item) => item.column === column
-                                                            )
-                                                                ? 'bg-cyan-500/5'
-                                                                : '',
-                                                            selectedColumnSet.has(column)
-                                                                ? 'border-cyan-400 bg-cyan-500/10 text-white shadow-[0_0_0_1px_rgba(34,211,238,0.18)]'
-                                                                : '',
-                                                        ].join(' ')}
-                                                    >
-                                                        <span className="block truncate">
-                                                            {getColumnDisplayName(column)}
-                                                        </span>
-                                                    </button>
-                                                )}
+                                                {(() => {
+                                                    const isCopiedColumn = copyColumnSet.has(column);
+                                                    const isCutColumn = cutColumnSet.has(column);
+
+                                                    if (editingColumn === column) {
+                                                        return (
+                                                            <input
+                                                                autoFocus
+                                                                value={editingColumnValue}
+                                                                onChange={(event) =>
+                                                                    setEditingColumnValue(event.target.value)
+                                                                }
+                                                                onBlur={handleColumnEditorBlur}
+                                                                onKeyDown={handleColumnEditorKeyDown}
+                                                                disabled={isSaving}
+                                                                className={[
+                                                                    'block min-w-[160px] w-full rounded-lg border px-3 py-2 text-sm outline-none transition-all',
+                                                                    isSaving
+                                                                        ? 'cursor-not-allowed border-white/5 bg-white/5 text-gray-500'
+                                                                        : 'border-cyan-400 bg-cyan-500/10 text-white focus:border-cyan-400 focus:bg-cyan-500/10',
+                                                                ].join(' ')}
+                                                            />
+                                                        );
+                                                    }
+
+                                                    return (
+                                                        <button
+                                                            type="button"
+                                                            data-editor-column="true"
+                                                            data-column={column}
+                                                            onMouseDown={(event) =>
+                                                                handleColumnMouseDown(column, event)
+                                                            }
+                                                            onMouseEnter={() => handleColumnMouseEnter(column)}
+                                                            onDoubleClick={() => handleColumnDoubleClick(column)}
+                                                            disabled={isSaving}
+                                                            className={[
+                                                                'relative block min-w-[160px] w-full rounded-lg border px-3 py-2 text-left text-sm outline-none transition-all',
+                                                                isSaving
+                                                                    ? 'cursor-not-allowed border-white/5 bg-white/5 text-gray-500'
+                                                                    : 'cursor-pointer border-transparent bg-transparent text-gray-200',
+                                                                draft.renamedColumns.some(
+                                                                    (item) => item.column === column
+                                                                )
+                                                                    ? 'bg-cyan-500/5'
+                                                                    : '',
+                                                                isCutColumn
+                                                                    ? 'border-amber-400/60 border-dashed bg-amber-500/10'
+                                                                    : '',
+                                                                selectedColumnSet.has(column)
+                                                                    ? 'border-cyan-400 bg-cyan-500/10 text-white shadow-[0_0_0_1px_rgba(34,211,238,0.18)]'
+                                                                    : '',
+                                                            ].join(' ')}
+                                                        >
+                                                            <span className="block min-h-[1.5rem] truncate">
+                                                                {getColumnDisplayName(column) || '\u00A0'}
+                                                            </span>
+                                                            {isCopiedColumn && (
+                                                                <span
+                                                                    aria-hidden="true"
+                                                                    className="data-editor-copy-ants"
+                                                                />
+                                                            )}
+                                                        </button>
+                                                    );
+                                                })()}
                                             </th>
                                         ))}
                                     </tr>

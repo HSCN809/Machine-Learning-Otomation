@@ -84,6 +84,7 @@ interface UseDataEditorReturn {
     updateCell: (rowId: number, column: string, value: string) => void;
     updateCells: (cells: DataEditorCellUpdate[]) => void;
     renameColumn: (column: string, newName: string) => void;
+    renameColumns: (renames: { column: string; newName: string }[]) => void;
     getColumnDisplayName: (column: string) => string;
     clearCells: (cells: DataEditorCellRef[]) => void;
     clearActiveCell: () => void;
@@ -290,6 +291,30 @@ export function useDataEditor({ onSaved }: UseDataEditorOptions = {}): UseDataEd
                 if (newName !== column) {
                     currentDraft.renamedColumns.push({ column, newName });
                 }
+
+                return currentDraft;
+            });
+        },
+        [applyDraftChange]
+    );
+
+    const renameColumns = useCallback(
+        (renames: { column: string; newName: string }[]) => {
+            if (renames.length === 0) {
+                return;
+            }
+
+            applyDraftChange((currentDraft) => {
+                const renameMap = new Map(renames.map((item) => [item.column, item.newName]));
+                currentDraft.renamedColumns = currentDraft.renamedColumns.filter(
+                    (item) => !renameMap.has(item.column)
+                );
+
+                renames.forEach(({ column, newName }) => {
+                    if (newName !== column) {
+                        currentDraft.renamedColumns.push({ column, newName });
+                    }
+                });
 
                 return currentDraft;
             });
@@ -508,6 +533,7 @@ export function useDataEditor({ onSaved }: UseDataEditorOptions = {}): UseDataEd
         updateCell,
         updateCells,
         renameColumn,
+        renameColumns,
         getColumnDisplayName,
         clearCells,
         clearActiveCell,
