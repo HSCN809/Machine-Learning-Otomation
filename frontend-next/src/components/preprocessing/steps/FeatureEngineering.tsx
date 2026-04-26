@@ -154,7 +154,7 @@ export const FeatureEngineeringLegacy = React.memo(function FeatureEngineeringLe
             </div>
 
             {/* Operation selector */}
-            <div className="space-y-4">
+            <div className="space-y-6">
                 <label className="text-sm font-medium text-gray-300">İşlem Türü</label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {OPERATIONS.map((op) => (
@@ -185,7 +185,7 @@ export const FeatureEngineeringLegacy = React.memo(function FeatureEngineeringLe
             />
 
             {/* New column name */}
-            <div className="space-y-4">
+            <div className="space-y-6">
                 <label className="text-sm font-medium text-gray-300">Yeni Sütun Adı</label>
                 <input
                     type="text"
@@ -199,7 +199,7 @@ export const FeatureEngineeringLegacy = React.memo(function FeatureEngineeringLe
 
             {/* Expression for numeric operations */}
             {operation === 'create_numeric' && (
-                <div className="space-y-4">
+                <div className="space-y-6">
                     <label className="text-sm font-medium text-gray-300">
                         İfade (opsiyonel)
                     </label>
@@ -397,7 +397,7 @@ export const FeatureEngineering = React.memo(function FeatureEngineering({ colum
     return (
         <div className="space-y-6">
 
-            <div className="space-y-4">
+            <div className="space-y-6">
                 <label className="block text-lg font-semibold text-white">Özellik Yöntemi</label>
                 <div className="flex w-full items-center gap-6 overflow-x-auto border-b border-white/10 pb-0">
                     {FEATURE_TABS.map((tab) => {
@@ -430,7 +430,7 @@ export const FeatureEngineering = React.memo(function FeatureEngineering({ colum
 
             {activeTab === 'numeric' && (
                 <div className="space-y-6">
-                    <div className="space-y-4">
+                    <div className="space-y-6">
                         <label className="text-sm font-medium text-gray-300">İşlem Preseti</label>
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
                             {NUMERIC_OPTIONS.map((option) => {
@@ -502,7 +502,7 @@ export const FeatureEngineering = React.memo(function FeatureEngineering({ colum
                         disabled={isLoading}
                     />
 
-                    <div className="space-y-4">
+                    <div className="space-y-6">
                         <label className="text-sm font-medium text-gray-300">Yeni Sütun Adı</label>
                         <input
                             type="text"
@@ -515,7 +515,7 @@ export const FeatureEngineering = React.memo(function FeatureEngineering({ colum
                     </div>
 
                     {numericOperation === 'custom' && (
-                        <div className="space-y-4">
+                        <div className="space-y-6">
                             <label className="text-sm font-medium text-gray-300">Özel İfade</label>
                             <input
                                 type="text"
@@ -543,7 +543,7 @@ export const FeatureEngineering = React.memo(function FeatureEngineering({ colum
                         disabled={isLoading}
                     />
 
-                    <div className="space-y-4">
+                    <div className="space-y-6">
                         <label className="text-sm font-medium text-gray-300">Oluşacak Sütunlar</label>
                         <div className="flex flex-wrap gap-2 rounded-xl border border-white/10 bg-white/5 p-4">
                             {polynomialPreview.length > 0 ? (
@@ -562,7 +562,7 @@ export const FeatureEngineering = React.memo(function FeatureEngineering({ colum
 
             {activeTab === 'binning' && (
                 <div className="space-y-6">
-                    <div className="space-y-4">
+                    <div className="space-y-6">
                         <label className="text-sm font-medium text-gray-300">Binning Stratejisi</label>
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             {BINNING_OPTIONS.map((option) => {
@@ -636,7 +636,7 @@ export const FeatureEngineering = React.memo(function FeatureEngineering({ colum
                     />
 
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                        <div className="space-y-4">
+                        <div className="space-y-6">
                             <label className="text-sm font-medium text-gray-300">Yeni Sütun Adı</label>
                             <input
                                 type="text"
@@ -647,7 +647,7 @@ export const FeatureEngineering = React.memo(function FeatureEngineering({ colum
                                 className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-white outline-none focus:border-cyan-500/50"
                             />
                         </div>
-                        <div className="space-y-4">
+                        <div className="space-y-6">
                             <label className="text-sm font-medium text-gray-300">Aralık Sayısı</label>
                             <input
                                 type="number"
@@ -674,7 +674,7 @@ export const FeatureEngineering = React.memo(function FeatureEngineering({ colum
                         disabled={isLoading || datetimeCandidateColumns.length === 0}
                     />
 
-                    <div className="space-y-4">
+                    <div className="space-y-6">
                         <label className="text-sm font-medium text-gray-300">Çıkarılacak Parça</label>
                         <select
                             value={datetimePart}
@@ -690,7 +690,7 @@ export const FeatureEngineering = React.memo(function FeatureEngineering({ colum
                         </select>
                     </div>
 
-                    <div className="space-y-4">
+                    <div className="space-y-6">
                         <label className="text-sm font-medium text-gray-300">Yeni Sütun Adı</label>
                         <input
                             type="text"
@@ -718,7 +718,7 @@ export const FeatureEngineering = React.memo(function FeatureEngineering({ colum
                     />
 
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                        <div className="space-y-4">
+                        <div className="space-y-6">
                             <label className="text-sm font-medium text-gray-300">Yeni Sütun Adı</label>
                             <input
                                 type="text"
@@ -729,7 +729,7 @@ export const FeatureEngineering = React.memo(function FeatureEngineering({ colum
                                 className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-white outline-none focus:border-cyan-500/50"
                             />
                         </div>
-                        <div className="space-y-4">
+                        <div className="space-y-6">
                             <label className="text-sm font-medium text-gray-300">Ayırıcı</label>
                             <input
                                 type="text"

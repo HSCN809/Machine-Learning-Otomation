@@ -99,7 +99,7 @@ export function StepProgress({
 
                             <span
                                 className={cn(
-                                    'mt-2 text-sm font-medium text-center',
+                                    'mt-6 text-sm font-medium text-center',
                                     status === 'current' && 'text-cyan-400',
                                     status === 'completed' && 'text-green-400',
                                     status === 'skipped' && 'text-amber-400',
