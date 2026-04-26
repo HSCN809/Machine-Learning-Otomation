@@ -21,6 +21,31 @@ interface ColumnInfo {
     uniqueValues: number;
 }
 
+function resolveModelSelectionColumnType(column: Awaited<ReturnType<typeof api.getColumnTypes>>['columns'][number]): ColumnInfo['type'] {
+    if (column.type === 'categorical' || column.type === 'text') {
+        return 'categorical';
+    }
+
+    if (column.type !== 'numeric') {
+        return 'categorical';
+    }
+
+    const normalizedDtype = column.dtype.trim().toLowerCase();
+    const isIntegerLike =
+        normalizedDtype.startsWith('int')
+        || normalizedDtype.startsWith('uint')
+        || normalizedDtype.startsWith('int64')
+        || normalizedDtype.startsWith('int32')
+        || normalizedDtype.startsWith('int16')
+        || normalizedDtype.startsWith('int8');
+
+    if (isIntegerLike && column.unique_count <= 20) {
+        return 'categorical';
+    }
+
+    return 'numeric';
+}
+
 interface UseModelSelectionReturn {
     currentStep: number;
     completedSteps: number[];
@@ -285,7 +310,7 @@ export function useModelSelection(): UseModelSelectionReturn {
 
             const cols: ColumnInfo[] = columnTypes.columns.map((col) => ({
                 name: col.name,
-                type: col.type === 'numeric' ? 'numeric' : 'categorical',
+                type: resolveModelSelectionColumnType(col),
                 uniqueValues: col.unique_count,
             }));
 
