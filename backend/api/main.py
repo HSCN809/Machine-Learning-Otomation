@@ -10,7 +10,7 @@ from time import perf_counter
 
 # Routers
 from .dependencies import require_authenticated_user
-from .routers import auth, upload, eda, preprocessing, model
+from .routers import auth, upload, eda, preprocessing, model, timeline
 from backend.modules.data_upload import models as data_upload_models  # noqa: F401
 from backend.modules.model_selection import models as model_selection_models  # noqa: F401
 from backend.modules.utils.app_logging import configure_logging, get_logger
@@ -105,6 +105,12 @@ app.include_router(
     model.router,
     prefix="/api/model",
     tags=["Model"],
+    dependencies=[Depends(require_authenticated_user)],
+)
+app.include_router(
+    timeline.router,
+    prefix="/api/timeline",
+    tags=["Timeline"],
     dependencies=[Depends(require_authenticated_user)],
 )
 

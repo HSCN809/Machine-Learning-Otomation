@@ -11,7 +11,12 @@ from fastapi.encoders import jsonable_encoder
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from backend.modules.data_upload.models import DatasetSession, PreprocessingEvent, utc_now
+from backend.modules.data_upload.models import (
+    DatasetSession,
+    PreprocessingEvent,
+    TimelineSnapshot,
+    utc_now,
+)
 
 
 def dataframe_to_json(df: pd.DataFrame) -> str:
@@ -108,7 +113,7 @@ class DataSessionRepository:
         record.metadata_json = metadata_payload
         return record
 
-    def list_preprocessing_history(self, session_id: str, user_id: str) -> list[dict[str, Any]]:
+    def list_timeline_events(self, session_id: str, user_id: str) -> list[dict[str, Any]]:
         events = self.db.scalars(
             select(PreprocessingEvent)
             .where(
@@ -117,14 +122,42 @@ class DataSessionRepository:
             )
             .order_by(PreprocessingEvent.event_index)
         ).all()
-        return [event.payload_json for event in events]
+        timeline_events: list[dict[str, Any]] = []
 
-    def sync_preprocessing_history(
+        for event in events:
+            payload = dict(event.payload_json or {})
+            metadata_payload = dict(event.metadata_json or {})
+
+            timeline_events.append(
+                {
+                    "id": event.id,
+                    "category": event.category or "preprocessing",
+                    "action": event.action,
+                    "title": event.title,
+                    "description": event.description,
+                    "created_at": event.created_at.isoformat(),
+                    "undoable": bool(event.undoable),
+                    "metadata": metadata_payload,
+                    "payload": payload,
+                    "step": event.step,
+                }
+            )
+
+        return timeline_events
+
+    def list_preprocessing_history(self, session_id: str, user_id: str) -> list[dict[str, Any]]:
+        return [
+            dict(event.get("payload") or {})
+            for event in self.list_timeline_events(session_id, user_id)
+            if event.get("category") == "preprocessing"
+        ]
+
+    def sync_timeline_events(
         self,
         *,
         session_id: str,
         user_id: str,
-        history: list[dict[str, Any]],
+        events: list[dict[str, Any]],
     ) -> None:
         self.db.execute(
             delete(PreprocessingEvent).where(
@@ -133,14 +166,98 @@ class DataSessionRepository:
             )
         )
 
-        for event_index, entry in enumerate(history):
-            payload = jsonable_encoder(entry or {})
-            event = PreprocessingEvent(
-                dataset_session_id=session_id,
-                user_id=user_id,
-                event_index=event_index,
-                step=str(payload.get("step")) if payload.get("step") is not None else None,
-                action=str(payload.get("action")) if payload.get("action") is not None else None,
-                payload_json=payload,
-            )
+        for event_index, entry in enumerate(events):
+            event_payload = dict(entry or {})
+            payload = jsonable_encoder(event_payload.get("payload") or {})
+            metadata_payload = jsonable_encoder(event_payload.get("metadata") or {})
+            event_kwargs: dict[str, Any] = {
+                "dataset_session_id": session_id,
+                "user_id": user_id,
+                "event_index": event_index,
+                "category": str(event_payload.get("category") or "preprocessing"),
+                "step": str(event_payload.get("step") or payload.get("step")) if (event_payload.get("step") or payload.get("step")) is not None else None,
+                "action": str(event_payload.get("action") or payload.get("action")) if (event_payload.get("action") or payload.get("action")) is not None else None,
+                "title": str(event_payload.get("title")) if event_payload.get("title") is not None else None,
+                "description": str(event_payload.get("description")) if event_payload.get("description") is not None else None,
+                "undoable": bool(event_payload.get("undoable")),
+                "metadata_json": metadata_payload,
+                "payload_json": payload,
+                "created_at": utc_now() if not event_payload.get("created_at") else datetime.fromisoformat(str(event_payload["created_at"])),
+            }
+            if event_payload.get("id"):
+                event_kwargs["id"] = str(event_payload["id"])
+
+            event = PreprocessingEvent(**event_kwargs)
             self.db.add(event)
+
+    def sync_preprocessing_history(
+        self,
+        *,
+        session_id: str,
+        user_id: str,
+        history: list[dict[str, Any]],
+    ) -> None:
+        events = [
+            {
+                "category": "preprocessing",
+                "action": entry.get("action"),
+                "title": None,
+                "description": None,
+                "undoable": True,
+                "metadata": {},
+                "payload": entry,
+                "step": entry.get("step"),
+            }
+            for entry in history
+        ]
+        self.sync_timeline_events(session_id=session_id, user_id=user_id, events=events)
+
+    def list_timeline_snapshots(self, session_id: str, user_id: str) -> list[dict[str, Any]]:
+        snapshots = self.db.scalars(
+            select(TimelineSnapshot)
+            .where(
+                TimelineSnapshot.dataset_session_id == session_id,
+                TimelineSnapshot.user_id == user_id,
+            )
+            .order_by(TimelineSnapshot.event_index)
+        ).all()
+
+        return [
+            {
+                "event_id": snapshot.event_id,
+                "event_index": snapshot.event_index,
+                "data": dataframe_from_json(snapshot.data_json),
+                "created_at": snapshot.created_at.isoformat(),
+            }
+            for snapshot in snapshots
+        ]
+
+    def sync_timeline_snapshots(
+        self,
+        *,
+        session_id: str,
+        user_id: str,
+        snapshots: list[dict[str, Any]],
+    ) -> None:
+        self.db.execute(
+            delete(TimelineSnapshot).where(
+                TimelineSnapshot.dataset_session_id == session_id,
+                TimelineSnapshot.user_id == user_id,
+            )
+        )
+
+        for index, snapshot in enumerate(snapshots):
+            dataframe = snapshot.get("data")
+            if dataframe is None:
+                continue
+
+            self.db.add(
+                TimelineSnapshot(
+                    dataset_session_id=session_id,
+                    user_id=user_id,
+                    event_id=str(snapshot["event_id"]),
+                    event_index=int(snapshot.get("event_index", index)),
+                    data_json=dataframe_to_json(dataframe),
+                    created_at=utc_now() if not snapshot.get("created_at") else datetime.fromisoformat(str(snapshot["created_at"])),
+                )
+            )

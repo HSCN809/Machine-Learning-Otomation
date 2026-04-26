@@ -9,6 +9,7 @@ import type {
     PersistedDatasetSummary,
 } from '@/types/data-upload';
 import type { FeatureConfig } from '@/types/preprocessing';
+import type { TimelineResponse } from '@/types/timeline';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api/backend';
 const SESSION_REQUIRED_MESSAGE = 'Valid session ID required. Upload data first.';
@@ -722,6 +723,87 @@ export async function undoPreprocessingTo(historyIndex: number): Promise<{ succe
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ history_index: historyIndex }),
+    });
+}
+
+type TimelineEventApiResponse = {
+    id: string;
+    category: string;
+    action: string | null;
+    title: string | null;
+    description: string | null;
+    created_at: string;
+    undoable: boolean;
+    metadata?: Record<string, unknown>;
+    payload?: Record<string, unknown>;
+    step?: string | null;
+};
+
+function mapTimelineEvent(event: TimelineEventApiResponse) {
+    const parsedDate = new Date(event.created_at);
+
+    return {
+        id: event.id,
+        category: event.category,
+        action: event.action,
+        title: event.title,
+        description: event.description,
+        createdAt: Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate,
+        undoable: event.undoable,
+        metadata: event.metadata ?? {},
+        payload: event.payload ?? {},
+        step: event.step ?? null,
+    };
+}
+
+export async function getTimeline(): Promise<TimelineResponse> {
+    const response = await apiFetch<{
+        events: TimelineEventApiResponse[];
+        canUndoLast: boolean;
+        lastEventId?: string | null;
+    }>('/api/timeline');
+
+    return {
+        events: response.events.map(mapTimelineEvent),
+        canUndoLast: response.canUndoLast,
+        lastEventId: response.lastEventId,
+    };
+}
+
+export async function appendTimelineEvent(request: {
+    category: string;
+    action: string;
+    title: string;
+    description: string;
+    undoable?: boolean;
+    metadata?: Record<string, unknown>;
+    payload?: Record<string, unknown>;
+    step?: string;
+}): Promise<{ success: boolean }> {
+    return apiFetch('/api/timeline/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            category: request.category,
+            action: request.action,
+            title: request.title,
+            description: request.description,
+            undoable: request.undoable ?? false,
+            metadata: request.metadata ?? {},
+            payload: request.payload ?? {},
+            step: request.step,
+        }),
+    });
+}
+
+export async function undoLastTimelineEvent(): Promise<{
+    success: boolean;
+    removedEventId: string;
+    rows: number;
+    columns: number;
+}> {
+    return apiFetch('/api/timeline/undo-last', {
+        method: 'POST',
     });
 }
 

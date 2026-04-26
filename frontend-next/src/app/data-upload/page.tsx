@@ -7,6 +7,7 @@ import { Sidebar, Header } from '@/components/layout';
 import { ProtectedRouteBoundary } from '@/components/auth/ProtectedRouteBoundary';
 import { FileDropzone, SavedDatasets, SampleDatasets, UploadProgress } from '@/components/data-upload';
 import { SessionPageSkeleton } from '@/components/common';
+import { TimelineDrawerLauncher } from '@/components/timeline';
 import { useDataUpload } from '@/hooks/useDataUpload';
 import { normalizeNextPath } from '@/lib/routing';
 import * as api from '@/lib/api';
@@ -251,6 +252,10 @@ export default function DataUploadPage() {
                         )}
                     </main>
                 </div>
+                <TimelineDrawerLauncher
+                    visible={Boolean(activeDatasetId)}
+                    onAfterUndo={hydrateSession}
+                />
             </div>
         </ProtectedRouteBoundary>
     );

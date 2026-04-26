@@ -26,6 +26,14 @@ class SessionManager:
     def __init__(self, timeout_minutes: int = 60):
         self._sessions: Dict[str, Dict[str, Any]] = {}
         self.timeout = timedelta(minutes=timeout_minutes)
+
+    @staticmethod
+    def _build_legacy_history(timeline_events: list[Dict[str, Any]]) -> list[Dict[str, Any]]:
+        return [
+            dict(event.get("payload") or {})
+            for event in timeline_events
+            if event.get("category") == "preprocessing"
+        ]
     
     def create_session(self, owner_user_id: Optional[str] = None) -> str:
         """Create a new session and return session ID"""
@@ -36,6 +44,8 @@ class SessionManager:
             "last_accessed": datetime.now(),
             "data": None,
             "original_data": None,
+            "timeline_events": [],
+            "timeline_snapshots": [],
             "history": [],
             "history_snapshots": [],
             "metadata": {},
@@ -57,17 +67,21 @@ class SessionManager:
         original_df: pd.DataFrame,
         metadata: Dict[str, Any],
         owner_user_id: str,
-        history: Optional[list[Dict[str, Any]]] = None,
+        timeline_events: Optional[list[Dict[str, Any]]] = None,
+        timeline_snapshots: Optional[list[Dict[str, Any]]] = None,
         created_at: Optional[datetime] = None,
     ):
         """Restore a persisted session into memory."""
+        restored_timeline = timeline_events or []
         self._sessions[session_id] = {
             "owner_user_id": owner_user_id,
             "created_at": created_at or datetime.now(),
             "last_accessed": datetime.now(),
             "data": df,
             "original_data": original_df,
-            "history": history or [],
+            "timeline_events": restored_timeline,
+            "timeline_snapshots": timeline_snapshots or [],
+            "history": self._build_legacy_history(restored_timeline),
             "history_snapshots": [],
             "metadata": metadata,
         }
@@ -90,6 +104,8 @@ class SessionManager:
         session["data"] = df
         if is_original:
             session["original_data"] = df.copy()
+            session["timeline_events"] = []
+            session["timeline_snapshots"] = []
             session["history"] = []
             session["history_snapshots"] = []
         
@@ -125,7 +141,107 @@ class SessionManager:
     def get_history(self, session_id: str) -> list:
         """Get session history"""
         session = self.get_session(session_id)
-        return session.get("history", []) if session else []
+        if not session:
+            return []
+        session["history"] = self._build_legacy_history(session.get("timeline_events", []))
+        return session.get("history", [])
+
+    def add_timeline_event(self, session_id: str, event: Dict[str, Any]) -> Dict[str, Any]:
+        """Append a generic timeline event to the session."""
+        session = self.get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        normalized_event = {
+            "id": str(event.get("id") or uuid.uuid4()),
+            "category": str(event.get("category") or "general"),
+            "action": event.get("action"),
+            "title": event.get("title"),
+            "description": event.get("description"),
+            "created_at": str(event.get("created_at") or datetime.now().isoformat()),
+            "undoable": bool(event.get("undoable")),
+            "metadata": dict(event.get("metadata") or {}),
+            "payload": dict(event.get("payload") or {}),
+            "step": event.get("step"),
+        }
+        session["timeline_events"].append(normalized_event)
+        session["history"] = self._build_legacy_history(session["timeline_events"])
+        return normalized_event
+
+    def add_timeline_snapshot(self, session_id: str, event_id: str, df: pd.DataFrame):
+        """Store a reversible dataframe snapshot linked to a timeline event."""
+        session = self.get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        session["timeline_snapshots"].append(
+            {
+                "event_id": event_id,
+                "event_index": len(session.get("timeline_events", [])),
+                "data": df.copy(deep=True),
+                "created_at": datetime.now().isoformat(),
+            }
+        )
+
+    def get_timeline_events(self, session_id: str) -> list[Dict[str, Any]]:
+        session = self.get_session(session_id)
+        return session.get("timeline_events", []) if session else []
+
+    def get_timeline_snapshots(self, session_id: str) -> list[Dict[str, Any]]:
+        session = self.get_session(session_id)
+        return session.get("timeline_snapshots", []) if session else []
+
+    def can_undo_last_timeline_event(self, session_id: str) -> bool:
+        session = self.get_session(session_id)
+        if not session:
+            return False
+
+        timeline_events = session.get("timeline_events", [])
+        if not timeline_events:
+            return False
+
+        last_event = timeline_events[-1]
+        if not last_event.get("undoable"):
+            return False
+
+        snapshots = session.get("timeline_snapshots", [])
+        return bool(snapshots and snapshots[-1].get("event_id") == last_event.get("id"))
+
+    def undo_last_timeline_event(self, session_id: str) -> Dict[str, Any]:
+        """Undo the last reversible timeline event."""
+        session = self.get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        timeline_events = session.get("timeline_events", [])
+        if not timeline_events:
+            raise HTTPException(status_code=400, detail="No timeline event to undo")
+
+        last_event = timeline_events[-1]
+        if not last_event.get("undoable"):
+            raise HTTPException(status_code=409, detail="Last timeline event is not undoable")
+
+        snapshots = session.get("timeline_snapshots", [])
+        if not snapshots or snapshots[-1].get("event_id") != last_event.get("id"):
+            raise HTTPException(status_code=409, detail="Timeline snapshot mismatch for undo")
+
+        restored_snapshot = snapshots.pop()
+        session["data"] = restored_snapshot["data"].copy(deep=True)
+        removed_event = timeline_events.pop()
+
+        if removed_event.get("category") == "preprocessing":
+            history = session.get("history", [])
+            if history:
+                history.pop()
+            history_snapshots = session.get("history_snapshots", [])
+            if history_snapshots:
+                history_snapshots.pop()
+
+        session["history"] = self._build_legacy_history(timeline_events)
+        return {
+            "removed_event": removed_event,
+            "remaining_count": len(timeline_events),
+        }
 
     def undo_last_history_action(self, session_id: str) -> Dict[str, Any]:
         """Restore the dataframe snapshot before the last preprocessing action"""
@@ -262,7 +378,8 @@ def restore_persisted_session(session_id: str, user_id: str, db: Session) -> boo
         original_df=dataframe_from_json(record.original_data_json),
         metadata=record.metadata_json or {},
         owner_user_id=user_id,
-        history=repository.list_preprocessing_history(session_id, user_id),
+        timeline_events=repository.list_timeline_events(session_id, user_id),
+        timeline_snapshots=repository.list_timeline_snapshots(session_id, user_id),
         created_at=record.created_at,
     )
     return True
@@ -291,10 +408,15 @@ def persist_session(session_id: str, db: Session):
         metadata=session.get("metadata", {}),
         created_at=session.get("created_at"),
     )
-    repository.sync_preprocessing_history(
+    repository.sync_timeline_events(
         session_id=session_id,
         user_id=user_id,
-        history=session.get("history", []),
+        events=session.get("timeline_events", []),
+    )
+    repository.sync_timeline_snapshots(
+        session_id=session_id,
+        user_id=user_id,
+        snapshots=session.get("timeline_snapshots", []),
     )
     db.commit()
 

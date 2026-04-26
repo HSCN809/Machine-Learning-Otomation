@@ -297,6 +297,30 @@ def _store_training_metadata(
         persist_session(session_id, db)
 
 
+def _append_model_timeline_event(
+    session_id: str,
+    *,
+    action: str,
+    title: str,
+    description: str,
+    db: Session,
+    metadata: Optional[Dict[str, Any]] = None,
+):
+    session_manager.add_timeline_event(
+        session_id,
+        {
+            "category": "model",
+            "action": action,
+            "title": title,
+            "description": description,
+            "undoable": False,
+            "metadata": metadata or {},
+            "payload": metadata or {},
+        },
+    )
+    persist_session(session_id, db)
+
+
 def _build_result_payload(
     *,
     model_id: str,
@@ -625,6 +649,19 @@ def _run_training_job(job_id: str):
                     active_job_id=None,
                     db=db,
                 )
+                _append_model_timeline_event(
+                    session_id,
+                    action="training_stopped",
+                    title="Model egitimi durduruldu",
+                    description="Calisan model egitimi istegi kullanici talebiyle durduruldu.",
+                    db=db,
+                    metadata={
+                        "job_id": job_id,
+                        "target_column": snapshot["target_column"],
+                        "problem_type": problem_type,
+                        "completed_models": len(results),
+                    },
+                )
                 return
 
             model = _build_model(model_id, raw_params.get(model_id))
@@ -680,6 +717,20 @@ def _run_training_job(job_id: str):
             active_job_id=None,
             db=db,
         )
+        _append_model_timeline_event(
+            session_id,
+            action="training_completed",
+            title="Model egitimi tamamlandi",
+            description=f"{len(final_results)} model egitimi tamamlandi ve sonuclar kaydedildi.",
+            db=db,
+            metadata={
+                "job_id": job_id,
+                "target_column": snapshot["target_column"],
+                "problem_type": problem_type,
+                "completed_models": len(final_results),
+                "model_ids": [result["model_id"] for result in final_results],
+            },
+        )
     except HTTPException as exc:
         logger.warning(
             "Training job failed for job %s session %s: %s",
@@ -695,6 +746,18 @@ def _run_training_job(job_id: str):
             finished_at=datetime.now().isoformat(),
         )
         _store_training_metadata(session_id, active_job_id=None, db=db)
+        _append_model_timeline_event(
+            session_id,
+            action="training_failed",
+            title="Model egitimi basarisiz oldu",
+            description="Model egitimi sirasinda hata olustu.",
+            db=db,
+            metadata={
+                "job_id": job_id,
+                "target_column": snapshot["target_column"],
+                "error": exc.detail,
+            },
+        )
     except Exception as exc:
         logger.exception("Training job crashed for job %s session %s", job_id, session_id)
         _update_job(
@@ -705,6 +768,18 @@ def _run_training_job(job_id: str):
             finished_at=datetime.now().isoformat(),
         )
         _store_training_metadata(session_id, active_job_id=None, db=db)
+        _append_model_timeline_event(
+            session_id,
+            action="training_failed",
+            title="Model egitimi basarisiz oldu",
+            description="Model egitimi sirasinda beklenmeyen hata olustu.",
+            db=db,
+            metadata={
+                "job_id": job_id,
+                "target_column": snapshot["target_column"],
+                "error": str(exc),
+            },
+        )
     finally:
         db.close()
 
@@ -767,7 +842,8 @@ async def get_available_models(
 @router.post("/train/start")
 async def start_training(
     request: TrainRequest,
-    session_id: str = Depends(require_session)
+    session_id: str = Depends(require_session),
+    db: Session = Depends(get_db),
 ):
     """Start model training in background and return a job id."""
     df = session_manager.get_dataframe(session_id)
@@ -781,6 +857,19 @@ async def start_training(
         raise HTTPException(status_code=409, detail="A training job is already running for this session")
 
     job_id = _create_job(session_id, request)
+    _append_model_timeline_event(
+        session_id,
+        action="training_started",
+        title="Model egitimi baslatildi",
+        description=f"{len(request.models)} model icin egitim kuyruga alindi.",
+        db=db,
+        metadata={
+            "job_id": job_id,
+            "target_column": request.target_column,
+            "problem_type": request.problem_type,
+            "models": request.models,
+        },
+    )
     worker = threading.Thread(target=_run_training_job, args=(job_id,), daemon=True)
     worker.start()
 

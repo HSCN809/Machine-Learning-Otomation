@@ -9,11 +9,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from backend.api.database import Base
-from backend.api.dependencies import restore_persisted_session, session_manager
+from backend.api.dependencies import persist_session, restore_persisted_session, session_manager
 from backend.api.routers.preprocessing import MissingValuesRequest, handle_missing_values
 from backend.api.routers.upload import upload_file
 from backend.modules.auth.models import User
-from backend.modules.data_upload.models import DatasetSession, PreprocessingEvent
+from backend.modules.data_upload.models import DatasetSession, PreprocessingEvent, TimelineSnapshot
 from backend.modules.data_upload.persistence import (
     DataSessionRepository,
     dataframe_from_json,
@@ -35,6 +35,7 @@ class DataUploadPersistenceTests(unittest.TestCase):
                 User.__table__,
                 DatasetSession.__table__,
                 PreprocessingEvent.__table__,
+                TimelineSnapshot.__table__,
             ],
         )
         self.Session = sessionmaker(bind=self.engine, future=True)
@@ -370,6 +371,69 @@ class DataUploadPersistenceTests(unittest.TestCase):
                 repository.list_preprocessing_history("history-session-1", self.other_user_id),
                 [],
             )
+
+    def test_generic_timeline_events_and_snapshots_are_persisted_and_restored(self):
+        df = pd.DataFrame({"city": ["Ankara"], "value": [10]})
+        session_id = "timeline-session-1"
+        session_manager.delete_session(session_id)
+        self.addCleanup(session_manager.delete_session, session_id)
+
+        with self.Session() as db:
+            self.create_default_users(db)
+            session_manager.restore_session(
+                session_id=session_id,
+                df=df.copy(deep=True),
+                original_df=df.copy(deep=True),
+                metadata={"filename": "cities.csv"},
+                owner_user_id=self.user_id,
+                timeline_events=[],
+                timeline_snapshots=[],
+            )
+            event = session_manager.add_timeline_event(
+                session_id,
+                {
+                    "category": "editor",
+                    "action": "manual_edit_commit",
+                    "title": "Edit kaydedildi",
+                    "description": "Editor degisikligi kaydedildi.",
+                    "undoable": True,
+                    "metadata": {"updated_cells": 1},
+                    "payload": {"updated_cells": 1},
+                },
+            )
+            session_manager.add_timeline_snapshot(session_id, event["id"], df.copy(deep=True))
+            persist_session(session_id, db)
+
+            session_manager.delete_session(session_id)
+            self.assertTrue(restore_persisted_session(session_id, self.user_id, db))
+            restored = session_manager.get_session(session_id)
+
+            self.assertIsNotNone(restored)
+            self.assertEqual(len(restored["timeline_events"]), 1)
+            self.assertEqual(restored["timeline_events"][0]["category"], "editor")
+            self.assertEqual(len(restored["timeline_snapshots"]), 1)
+            pd.testing.assert_frame_equal(restored["timeline_snapshots"][0]["data"], df)
+
+    def test_last_informational_timeline_event_cannot_be_undone(self):
+        df = pd.DataFrame({"city": ["Ankara"], "value": [10]})
+        session_id = session_manager.create_session(owner_user_id=self.user_id)
+        self.addCleanup(session_manager.delete_session, session_id)
+        session_manager.set_dataframe(session_id, df.copy(deep=True), is_original=True)
+        session_manager.add_timeline_event(
+            session_id,
+            {
+                "category": "upload",
+                "action": "file_uploaded",
+                "title": "Upload",
+                "description": "Dosya yuklendi",
+                "undoable": False,
+            },
+        )
+
+        with self.assertRaises(HTTPException) as exc:
+            session_manager.undo_last_timeline_event(session_id)
+
+        self.assertEqual(exc.exception.status_code, 409)
 
 
 if __name__ == "__main__":

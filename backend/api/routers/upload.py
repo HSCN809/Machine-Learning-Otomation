@@ -103,6 +103,27 @@ def _clear_downstream_metadata(session_id: str):
         session["metadata"].pop(key, None)
 
 
+def _clear_downstream_timeline(session_id: str):
+    session = session_manager.get_session(session_id)
+    if not session:
+        return
+
+    preserved_events = [
+        event
+        for event in session.get("timeline_events", [])
+        if event.get("category") not in {"preprocessing", "model"}
+    ]
+    preserved_event_ids = {event.get("id") for event in preserved_events}
+    session["timeline_events"] = preserved_events
+    session["timeline_snapshots"] = [
+        snapshot
+        for snapshot in session.get("timeline_snapshots", [])
+        if snapshot.get("event_id") in preserved_event_ids
+    ]
+    session["history"] = []
+    session["history_snapshots"] = []
+
+
 def _serialize_saved_dataset(record) -> dict[str, Any]:
     metadata = record.metadata_json or {}
     name = metadata.get("filename") or record.filename or "Adsiz veri seti"
@@ -114,6 +135,37 @@ def _serialize_saved_dataset(record) -> dict[str, Any]:
         "created_at": record.created_at.isoformat(),
         "updated_at": record.updated_at.isoformat(),
     }
+
+
+def _append_timeline_event(
+    session_id: str,
+    *,
+    category: str,
+    action: str,
+    title: str,
+    description: str,
+    undoable: bool,
+    metadata: Optional[dict[str, Any]] = None,
+    payload: Optional[dict[str, Any]] = None,
+    snapshot_df: Optional[pd.DataFrame] = None,
+) -> dict[str, Any]:
+    event = session_manager.add_timeline_event(
+        session_id,
+        {
+            "category": category,
+            "action": action,
+            "title": title,
+            "description": description,
+            "undoable": undoable,
+            "metadata": metadata or {},
+            "payload": payload or {},
+        },
+    )
+
+    if undoable and snapshot_df is not None:
+        session_manager.add_timeline_snapshot(session_id, event["id"], snapshot_df)
+
+    return event
 
 
 def _read_excel_content(content: bytes, filename: str) -> pd.DataFrame:
@@ -151,6 +203,19 @@ async def upload_file(
         # Store in session
         session_manager.set_dataframe(session_id, df, is_original=True)
         session_manager.set_metadata(session_id, "filename", file.filename)
+        _append_timeline_event(
+            session_id,
+            category="upload",
+            action="file_uploaded",
+            title="Dosya yüklendi",
+            description=f"{file.filename} veri seti oturuma yüklendi.",
+            undoable=False,
+            metadata={
+                "filename": file.filename,
+                "rows": len(df),
+                "columns": len(df.columns),
+            },
+        )
         persist_session(session_id, db)
         
         # Return summary
@@ -190,6 +255,19 @@ async def load_sample_dataset(
         # Store in session
         session_manager.set_dataframe(session_id, df, is_original=True)
         session_manager.set_metadata(session_id, "filename", dataset_name)
+        _append_timeline_event(
+            session_id,
+            category="upload",
+            action="sample_loaded",
+            title="Örnek veri seti yüklendi",
+            description=f"{dataset_name} örnek veri seti oturuma yüklendi.",
+            undoable=False,
+            metadata={
+                "dataset": dataset_name,
+                "rows": len(df),
+                "columns": len(df.columns),
+            },
+        )
         persist_session(session_id, db)
         
         return {
@@ -241,6 +319,22 @@ async def load_saved_dataset(
     df = session_manager.get_dataframe(dataset_session_id)
     if df is None:
         raise HTTPException(status_code=400, detail="Kayitli veri seti yuklenemedi")
+
+    _append_timeline_event(
+        dataset_session_id,
+        category="upload",
+        action="saved_dataset_loaded",
+        title="Kayitli veri seti yüklendi",
+        description=f"{record.filename or 'Veri seti'} aktif oturuma geri yüklendi.",
+        undoable=False,
+        metadata={
+            "dataset_session_id": record.id,
+            "filename": record.filename,
+            "rows": record.row_count,
+            "columns": record.column_count,
+        },
+    )
+    persist_session(dataset_session_id, db)
 
     return {
         "success": True,
@@ -456,6 +550,7 @@ async def commit_editor_changes(
 ):
     """Apply manual editor changes to the session dataframe."""
     df = _get_editor_dataframe(session_id)
+    previous_df = df.copy(deep=True)
 
     valid_columns = set(df.columns)
     max_row_id = len(df) - 1
@@ -510,7 +605,33 @@ async def commit_editor_changes(
     if rename_map:
         df = df.rename(columns=rename_map)
 
-    session_manager.set_dataframe(session_id, df, is_original=True)
+    session_manager.set_dataframe(session_id, df)
+    session = session_manager.get_session(session_id)
+    if session:
+        session["original_data"] = df.copy(deep=True)
+
+    _clear_downstream_timeline(session_id)
+    _append_timeline_event(
+        session_id,
+        category="editor",
+        action="manual_edit_commit",
+        title="Veri düzenleme kaydedildi",
+        description="Manuel veri düzenleme değişiklikleri veri setine uygulandı.",
+        undoable=True,
+        metadata={
+            "updated_cells": len(request.updated_cells),
+            "cleared_cells": len(request.cleared_cells),
+            "deleted_rows": len(deleted_row_ids),
+            "trimmed_columns": len(request.trim_columns),
+            "renamed_columns": len(request.renamed_columns),
+            "trim_columns": request.trim_columns,
+            "renamed_column_names": [
+                {"column": item.column, "new_name": item.new_name}
+                for item in request.renamed_columns
+            ],
+        },
+        snapshot_df=previous_df,
+    )
     _clear_downstream_metadata(session_id)
 
     editor_commits = session_manager.get_metadata(session_id, "editor_commits") or []

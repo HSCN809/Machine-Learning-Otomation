@@ -133,6 +133,7 @@ export function useModelSelection(): UseModelSelectionReturn {
     const [trainingJobId, setTrainingJobId] = useState<string | null>(null);
     const eventSourceRef = useRef<EventSource | null>(null);
     const trainingStatusRef = useRef<'idle' | 'queued' | 'running' | 'stopping' | 'completed' | 'failed' | 'stopped'>('idle');
+    const loggedStepPayloadsRef = useRef<Record<string, string>>({});
 
     useEffect(() => {
         trainingStatusRef.current = trainingStatus;
@@ -307,7 +308,87 @@ export function useModelSelection(): UseModelSelectionReturn {
         }
     }, []);
 
+    const logStepEvent = useCallback((key: string, request: {
+        category: string;
+        action: string;
+        title: string;
+        description: string;
+        metadata: Record<string, unknown>;
+        payload: Record<string, unknown>;
+        step?: string;
+    }) => {
+        const payloadSignature = JSON.stringify(request.payload);
+        if (loggedStepPayloadsRef.current[key] === payloadSignature) {
+            return;
+        }
+
+        loggedStepPayloadsRef.current[key] = payloadSignature;
+        void api.appendTimelineEvent({
+            category: request.category,
+            action: request.action,
+            title: request.title,
+            description: request.description,
+            metadata: request.metadata,
+            payload: request.payload,
+            step: request.step,
+        }).catch((err) => {
+            logger.error('Model selection timeline event append failed', err, { key });
+        });
+    }, []);
+
     const nextStep = useCallback(() => {
+        if (currentStep === 0 && targetColumn && problemType) {
+            logStepEvent('step-0', {
+                category: 'model',
+                action: 'selection_target_confirmed',
+                title: 'Model hedefi secildi',
+                description: 'Target kolon ve problem tipi secimi tamamlandi.',
+                metadata: {
+                    targetColumn,
+                    problemType,
+                },
+                payload: {
+                    targetColumn,
+                    problemType,
+                },
+                step: 'target_selection',
+            });
+        }
+
+        if (currentStep === 1 && selectedModels.length > 0) {
+            logStepEvent('step-1', {
+                category: 'model',
+                action: 'selection_models_confirmed',
+                title: 'Modeller secildi',
+                description: `${selectedModels.length} model egitim icin secildi.`,
+                metadata: {
+                    models: selectedModels,
+                },
+                payload: {
+                    models: selectedModels,
+                },
+                step: 'model_selection',
+            });
+        }
+
+        if (currentStep === 2 && selectedModels.length > 0) {
+            logStepEvent('step-2', {
+                category: 'model',
+                action: 'selection_params_confirmed',
+                title: 'Hiperparametreler kaydedildi',
+                description: 'Model hiperparametre secimleri egitim oncesi kaydedildi.',
+                metadata: {
+                    selectedModels,
+                    modelParams,
+                },
+                payload: {
+                    selectedModels,
+                    modelParams,
+                },
+                step: 'hyperparameters',
+            });
+        }
+
         if (currentStep < 4) {
             setSkippedSteps((prev) => prev.filter((step) => step !== currentStep));
             if (!completedSteps.includes(currentStep)) {
@@ -315,7 +396,7 @@ export function useModelSelection(): UseModelSelectionReturn {
             }
             setCurrentStep((prev) => prev + 1);
         }
-    }, [completedSteps, currentStep]);
+    }, [completedSteps, currentStep, logStepEvent, modelParams, problemType, selectedModels, targetColumn]);
 
     const skipStep = useCallback(() => {
         if (currentStep < 4) {
@@ -354,6 +435,7 @@ export function useModelSelection(): UseModelSelectionReturn {
         (column: string) => {
             setTargetColumnState(column);
             setError(null);
+            loggedStepPayloadsRef.current = {};
 
             closeTrainingStream();
             setTrainingJobId(null);
@@ -375,6 +457,7 @@ export function useModelSelection(): UseModelSelectionReturn {
         (nextProblemType: ProblemType) => {
             setProblemTypeState(nextProblemType);
             setError(null);
+            loggedStepPayloadsRef.current = {};
             void loadAvailableModels(nextProblemType);
             setSelectedModels([]);
             setModelParams({});
@@ -453,6 +536,7 @@ export function useModelSelection(): UseModelSelectionReturn {
 
     const resetAll = useCallback(() => {
         closeTrainingStream();
+        loggedStepPayloadsRef.current = {};
         setCurrentStep(0);
         setCompletedSteps([]);
         setSkippedSteps([]);

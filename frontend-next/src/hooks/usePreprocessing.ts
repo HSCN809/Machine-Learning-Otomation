@@ -16,17 +16,6 @@ import * as api from '@/lib/api';
 import { logger } from '@/lib/logger';
 import { getErrorMessage, notify } from '@/lib/notify';
 
-type ApiHistoryEntry = {
-    step?: string;
-    action?: string;
-    columns?: string[];
-    source_columns?: string[];
-    new_columns?: string[];
-    params?: Record<string, unknown>;
-    affected_rows?: number;
-    timestamp?: string;
-};
-
 const HISTORY_ACTION_BY_STEP: Record<string, string> = {
     missing_values: 'fill_missing',
     outliers: 'handle_outliers',
@@ -46,33 +35,43 @@ function mapColumns(columnTypes: Awaited<ReturnType<typeof api.getColumnTypes>>[
     }));
 }
 
-function mapHistoryEntry(entry: unknown, index: number): ProcessingHistory | null {
-    if (!entry || typeof entry !== 'object') {
-        return null;
-    }
-
-    const rawEntry = entry as ApiHistoryEntry;
-    const stepKey = rawEntry.step;
-    const method = rawEntry.action;
+function mapHistoryEntry(
+    entry: Awaited<ReturnType<typeof api.getTimeline>>['events'][number],
+    index: number
+): ProcessingHistory | null {
+    const payload = entry.payload;
+    const stepKey = typeof payload.step === 'string' ? payload.step : entry.step ?? undefined;
+    const method = typeof payload.action === 'string' ? payload.action : entry.action ?? undefined;
 
     if (!stepKey || !method) {
         return null;
     }
 
-    const parsedTimestamp = rawEntry.timestamp ? new Date(rawEntry.timestamp) : new Date();
-    const timestamp = Number.isNaN(parsedTimestamp.getTime()) ? new Date() : parsedTimestamp;
+    const columns = Array.isArray(payload.columns)
+        ? payload.columns.filter((value): value is string => typeof value === 'string')
+        : Array.isArray(payload.source_columns)
+            ? payload.source_columns.filter((value): value is string => typeof value === 'string')
+            : [];
+    const newColumns = Array.isArray(payload.new_columns)
+        ? payload.new_columns.filter((value): value is string => typeof value === 'string')
+        : [];
+    const params =
+        payload.params && typeof payload.params === 'object'
+            ? payload.params as Record<string, unknown>
+            : undefined;
+    const affectedRows = typeof payload.affected_rows === 'number' ? payload.affected_rows : undefined;
 
     return {
-        id: `${stepKey}-${rawEntry.timestamp ?? index}-${index}`,
+        id: entry.id || `${stepKey}-${index}`,
         historyIndex: index,
         stepKey,
         action: method === 'drop_columns' ? 'drop_columns' : HISTORY_ACTION_BY_STEP[stepKey] || method,
-        columns: rawEntry.columns ?? rawEntry.source_columns ?? [],
-        newColumns: rawEntry.new_columns,
+        columns,
+        newColumns,
         method,
-        params: rawEntry.params,
-        timestamp,
-        affectedRows: rawEntry.affected_rows,
+        params,
+        timestamp: entry.createdAt,
+        affectedRows,
     };
 }
 
@@ -105,13 +104,14 @@ interface UsePreprocessingReturn {
             setIsLoading(true);
             setError(null);
 
-            const [columnTypes, historyResponse] = await Promise.all([
+            const [columnTypes, timelineResponse] = await Promise.all([
                 api.getColumnTypes(),
-                api.getPreprocessingHistory(),
+                api.getTimeline(),
             ]);
 
             setColumns(mapColumns(columnTypes.columns));
-            const nextHistory = historyResponse.history
+            const nextHistory = timelineResponse.events
+                .filter((event) => event.category === 'preprocessing')
                 .map((entry, index) => mapHistoryEntry(entry, index))
                 .filter((entry): entry is ProcessingHistory => entry !== null);
             setHistory(nextHistory);
@@ -202,8 +202,9 @@ export function usePreprocessing(): UsePreprocessingReturn {
     const loadHistory = useCallback(async (): Promise<unknown> => {
         try {
             setIsLoading(true);
-            const historyResponse = await api.getPreprocessingHistory();
-            const nextHistory = historyResponse.history
+            const timelineResponse = await api.getTimeline();
+            const nextHistory = timelineResponse.events
+                .filter((event) => event.category === 'preprocessing')
                 .map((entry, index) => mapHistoryEntry(entry, index))
                 .filter((entry): entry is ProcessingHistory => entry !== null);
             setHistory(nextHistory);
@@ -226,13 +227,14 @@ export function usePreprocessing(): UsePreprocessingReturn {
             setIsLoading(true);
             setError(null);
 
-            const [columnTypes, historyResponse] = await Promise.all([
+            const [columnTypes, timelineResponse] = await Promise.all([
                 api.getColumnTypes(),
-                api.getPreprocessingHistory(),
+                api.getTimeline(),
             ]);
 
             setColumns(mapColumns(columnTypes.columns));
-            const nextHistory = historyResponse.history
+            const nextHistory = timelineResponse.events
+                .filter((event) => event.category === 'preprocessing')
                 .map((entry, index) => mapHistoryEntry(entry, index))
                 .filter((entry): entry is ProcessingHistory => entry !== null);
             setHistory(nextHistory);
@@ -287,13 +289,14 @@ export function usePreprocessing(): UsePreprocessingReturn {
     const canGoPrev = currentStep > 0;
 
     const refreshColumnsAndHistory = useCallback(async () => {
-        const [columnTypes, historyResponse] = await Promise.all([
+        const [columnTypes, timelineResponse] = await Promise.all([
             api.getColumnTypes(),
-            api.getPreprocessingHistory(),
+            api.getTimeline(),
         ]);
 
         setColumns(mapColumns(columnTypes.columns));
-        const nextHistory = historyResponse.history
+        const nextHistory = timelineResponse.events
+            .filter((event) => event.category === 'preprocessing')
             .map((entry, index) => mapHistoryEntry(entry, index))
             .filter((entry): entry is ProcessingHistory => entry !== null);
         setHistory(nextHistory);
@@ -430,7 +433,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
         try {
             setIsLoading(true);
             setError(null);
-            await api.undoPreprocessing();
+            await api.undoLastTimelineEvent();
             await refreshColumnsAndHistory();
             notify.success('Son işlem geri alındı');
         } catch (err) {

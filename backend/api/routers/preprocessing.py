@@ -46,6 +46,31 @@ def _raise_internal_error(log_message: str, user_message: str, exc: Exception, s
     raise HTTPException(status_code=500, detail=user_message) from exc
 
 
+def _record_preprocessing_timeline_event(
+    session_id: str,
+    *,
+    action: str,
+    payload: dict[str, Any],
+    previous_df: pd.DataFrame,
+    title: str,
+    description: str,
+) -> None:
+    event = session_manager.add_timeline_event(
+        session_id,
+        {
+            "category": "preprocessing",
+            "action": action,
+            "title": title,
+            "description": description,
+            "undoable": True,
+            "metadata": dict(payload),
+            "payload": dict(payload),
+            "step": payload.get("step"),
+        },
+    )
+    session_manager.add_timeline_snapshot(session_id, event["id"], previous_df)
+
+
 # Request schemas
 class MissingValuesRequest(BaseModel):
     method: str  # fill_mean, fill_median, fill_mode, fill_knn, fill_interpolation, fill_regression, fill_ffill, fill_bfill, drop_columns
@@ -289,9 +314,7 @@ async def handle_missing_values(
             
             affected_rows += int(initial_nulls)
         
-        session_manager.set_dataframe(session_id, df)
-        session_manager.add_history_snapshot(session_id, previous_df)
-        session_manager.add_history(session_id, {
+        history_payload = {
             "step": "missing_values",
             "action": request.method,
             "columns": valid_columns,
@@ -299,7 +322,18 @@ async def handle_missing_values(
                 "skipped_columns": skipped_columns,
             },
             "affected_rows": affected_rows,
-        })
+        }
+        session_manager.set_dataframe(session_id, df)
+        session_manager.add_history_snapshot(session_id, previous_df)
+        session_manager.add_history(session_id, dict(history_payload))
+        _record_preprocessing_timeline_event(
+            session_id,
+            action=request.method,
+            payload=history_payload,
+            previous_df=previous_df,
+            title="Eksik deger islemi uygulandi",
+            description=f"{len(valid_columns)} sutunda {request.method} islemi uygulandi.",
+        )
         persist_session(session_id, db)
         
         return {
@@ -367,9 +401,7 @@ async def handle_outliers(
 
         affected_rows = int(analysis.get("total_outliers", 0))
 
-        session_manager.set_dataframe(session_id, processed_df)
-        session_manager.add_history_snapshot(session_id, previous_df)
-        session_manager.add_history(session_id, {
+        history_payload = {
             "step": "outliers",
             "action": request.method,
             "columns": detected_columns,
@@ -377,7 +409,18 @@ async def handle_outliers(
             "threshold": resolved_threshold,
             "winsorize_percent": request.winsorize_percent if outlier_method == "iqr_winsorize" else None,
             "affected_rows": affected_rows,
-        })
+        }
+        session_manager.set_dataframe(session_id, processed_df)
+        session_manager.add_history_snapshot(session_id, previous_df)
+        session_manager.add_history(session_id, dict(history_payload))
+        _record_preprocessing_timeline_event(
+            session_id,
+            action=request.method,
+            payload=history_payload,
+            previous_df=previous_df,
+            title="Aykiri deger islemi uygulandi",
+            description=f"{len(detected_columns)} sutunda aykiri deger islemi uygulandi.",
+        )
         persist_session(session_id, db)
         
         return {
@@ -483,9 +526,7 @@ async def handle_encoding(
             else:
                 raise HTTPException(status_code=400, detail=f"Unsupported encoding method: {request.method}")
         
-        session_manager.set_dataframe(session_id, df)
-        session_manager.add_history_snapshot(session_id, previous_df)
-        session_manager.add_history(session_id, {
+        history_payload = {
             "step": "encoding",
             "action": request.method,
             "columns": valid_columns,
@@ -495,7 +536,18 @@ async def handle_encoding(
                 "ordinal_mapping": request.ordinal_mapping if request.method == "ordinal" else None,
                 "skipped_columns": skipped_columns,
             },
-        })
+        }
+        session_manager.set_dataframe(session_id, df)
+        session_manager.add_history_snapshot(session_id, previous_df)
+        session_manager.add_history(session_id, dict(history_payload))
+        _record_preprocessing_timeline_event(
+            session_id,
+            action=request.method,
+            payload=history_payload,
+            previous_df=previous_df,
+            title="Kodlama islemi uygulandi",
+            description=f"{len(valid_columns)} sutunda {request.method} kodlama islemi uygulandi.",
+        )
         persist_session(session_id, db)
         
         return {
@@ -551,9 +603,7 @@ async def handle_scaling(
         else:
             raise HTTPException(status_code=400, detail=f"Unsupported scaling method: {request.method}")
         
-        session_manager.set_dataframe(session_id, df)
-        session_manager.add_history_snapshot(session_id, previous_df)
-        session_manager.add_history(session_id, {
+        history_payload = {
             "step": "scaling",
             "action": request.method,
             "columns": valid_columns,
@@ -561,7 +611,18 @@ async def handle_scaling(
                 "feature_range": list(request.feature_range) if request.feature_range is not None else None,
                 "skipped_columns": skipped_columns,
             },
-        })
+        }
+        session_manager.set_dataframe(session_id, df)
+        session_manager.add_history_snapshot(session_id, previous_df)
+        session_manager.add_history(session_id, dict(history_payload))
+        _record_preprocessing_timeline_event(
+            session_id,
+            action=request.method,
+            payload=history_payload,
+            previous_df=previous_df,
+            title="Olceklendirme islemi uygulandi",
+            description=f"{len(valid_columns)} sayisal sutunda {request.method} olceklendirme uygulandi.",
+        )
         persist_session(session_id, db)
         
         return {
@@ -672,7 +733,15 @@ async def handle_feature_engineering(
         session_manager.set_dataframe(session_id, df)
         session_manager.add_history_snapshot(session_id, previous_df)
         history_payload["new_columns"] = new_columns
-        session_manager.add_history(session_id, history_payload)
+        session_manager.add_history(session_id, dict(history_payload))
+        _record_preprocessing_timeline_event(
+            session_id,
+            action=request.operation,
+            payload=history_payload,
+            previous_df=previous_df,
+            title="Ozellik muhendisligi islemi uygulandi",
+            description=f"{request.operation} islemi ile {len(new_columns)} yeni sutun olusturuldu.",
+        )
         persist_session(session_id, db)
 
         return {
@@ -720,14 +789,23 @@ async def handle_drop_columns(
         
         df = drop_columns(df, existing_columns)
         
-        session_manager.set_dataframe(session_id, df)
-        session_manager.add_history_snapshot(session_id, previous_df)
-        session_manager.add_history(session_id, {
+        history_payload = {
             "step": "feature_engineering",
             "action": "drop_columns",
             "columns": existing_columns,
             "reason": request.reason,
-        })
+        }
+        session_manager.set_dataframe(session_id, df)
+        session_manager.add_history_snapshot(session_id, previous_df)
+        session_manager.add_history(session_id, dict(history_payload))
+        _record_preprocessing_timeline_event(
+            session_id,
+            action="drop_columns",
+            payload=history_payload,
+            previous_df=previous_df,
+            title="Sutunlar silindi",
+            description=f"{len(existing_columns)} sutun veri setinden kaldirildi.",
+        )
         persist_session(session_id, db)
         
         return {
@@ -868,6 +946,18 @@ async def reset_data(
     session_manager.set_dataframe(session_id, original_df.copy())
     session = session_manager.get_session(session_id)
     if session:
+        remaining_events = [
+            event
+            for event in session.get("timeline_events", [])
+            if event.get("category") != "preprocessing"
+        ]
+        remaining_event_ids = {event.get("id") for event in remaining_events}
+        session["timeline_events"] = remaining_events
+        session["timeline_snapshots"] = [
+            snapshot
+            for snapshot in session.get("timeline_snapshots", [])
+            if snapshot.get("event_id") in remaining_event_ids
+        ]
         session["history"] = []
         session["history_snapshots"] = []
     persist_session(session_id, db)

@@ -7,6 +7,7 @@ import { Target, BrainCircuit, SlidersHorizontal, Rocket, BarChart3, ChevronLeft
 import { Sidebar, Header } from '@/components/layout';
 import { ProtectedRouteBoundary } from '@/components/auth/ProtectedRouteBoundary';
 import { NoDataWarning, SessionPageSkeleton, StepProgress } from '@/components/common';
+import { TimelineDrawerLauncher } from '@/components/timeline';
 import { HyperparameterForm } from '@/components/model-selection/HyperparameterForm';
 import { MetricsDisplay } from '@/components/model-selection/MetricsDisplay';
 import { ModelGrid } from '@/components/model-selection/ModelGrid';
@@ -357,6 +358,11 @@ export default function ModelSelectionPage() {
                         )}
                     </main>
                 </div>
+
+                <TimelineDrawerLauncher
+                    visible={hasData}
+                    onAfterUndo={loadColumns}
+                />
             </div>
         </ProtectedRouteBoundary>
     );

@@ -17,6 +17,7 @@ import {
     Summary,
 } from '@/components/preprocessing';
 import { ClickSpark, NoDataWarning, PixelTrail, SessionPageSkeleton } from '@/components/common';
+import { TimelineDrawerLauncher } from '@/components/timeline';
 import { usePreprocessing, PREPROCESSING_STEPS } from '@/hooks/usePreprocessing';
 import { useDatasetBootstrap } from '@/hooks/useDatasetBootstrap';
 import { buildDataUploadHref } from '@/lib/routing';
@@ -289,7 +290,14 @@ export default function PreprocessingPage() {
                     </ClickSpark>
                 </div>
 
-                {hasData && (
+                <TimelineDrawerLauncher
+                    visible={hasData}
+                    onAfterUndo={async () => {
+                        await loadInitialData();
+                    }}
+                />
+
+                {false && hasData && (
                     <>
                         <PixelTrail
                             active={isHistoryButtonDragging}
