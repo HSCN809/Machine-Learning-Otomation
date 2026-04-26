@@ -857,7 +857,7 @@ async def analyze_droppable_columns(
             if missing_pct > 50:
                 recommendation["reasons"].append(f"Yüksek eksik değer ({missing_pct}%)")
             
-            if np.issubdtype(df[col].dtype, np.number):
+            if pd.api.types.is_numeric_dtype(df[col]):
                 variance = df[col].var()
                 if variance == 0:
                     recommendation["reasons"].append("Düşük varyans")
