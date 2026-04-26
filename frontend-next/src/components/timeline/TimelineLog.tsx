@@ -1,6 +1,7 @@
 'use client';
 
-import { Clock, Undo2 } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Clock, Search, Undo2 } from 'lucide-react';
 import { theme } from '@/styles/theme';
 import type { TimelineEvent } from '@/types/timeline';
 
@@ -127,12 +128,49 @@ function getDetailLines(event: TimelineEvent): string[] {
     return [];
 }
 
+function formatTimestamp(date: Date): string {
+    return date.toLocaleString('tr-TR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
+}
+
 export function TimelineLog({
     events,
     canUndoLast,
     isLoading = false,
     onUndoLast,
 }: TimelineLogProps) {
+    const [searchTerm, setSearchTerm] = useState('');
+    const normalizedSearchTerm = searchTerm.trim().toLocaleLowerCase('tr-TR');
+    const filteredEvents = useMemo(() => {
+        if (!normalizedSearchTerm) {
+            return events;
+        }
+
+        return events.filter((event) => {
+            const details = getDetailLines(event).join(' ');
+            const searchableText = [
+                getTitle(event),
+                getDescription(event),
+                event.action || '',
+                event.category,
+                eventCategoryLabels[event.category] || '',
+                event.step || '',
+                event.step ? stepLabels[event.step] || '' : '',
+                details,
+                formatTimestamp(event.createdAt),
+            ]
+                .join(' ')
+                .toLocaleLowerCase('tr-TR');
+
+            return searchableText.includes(normalizedSearchTerm);
+        });
+    }, [events, normalizedSearchTerm]);
+
     if (events.length === 0) {
         return (
             <div className="rounded-2xl border border-white/10 bg-white/5 p-5 text-left">
@@ -172,13 +210,32 @@ export function TimelineLog({
                 )}
             </div>
 
+            <div className="border-b border-white/10 px-4 py-3">
+                <label className="relative block">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+                    <input
+                        type="text"
+                        value={searchTerm}
+                        onChange={(event) => setSearchTerm(event.target.value)}
+                        placeholder="Tarih, saat, islem adi veya aciklama ara"
+                        className="w-full rounded-xl border border-white/10 bg-slate-950/50 py-2 pl-9 pr-3 text-sm text-white outline-none transition-colors placeholder:text-gray-500 focus:border-cyan-400/50"
+                    />
+                </label>
+            </div>
+
             <div className="max-h-[70vh] overflow-y-auto px-5 py-4">
-                {events.map((event, index) => {
+                {filteredEvents.length === 0 && (
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-gray-400">
+                        Aramanizla eslesen timeline kaydi bulunamadi.
+                    </div>
+                )}
+
+                {filteredEvents.map((event, index) => {
                     const details = getDetailLines(event);
 
                     return (
                         <div key={event.id} className="relative pl-8 pb-6 last:pb-0">
-                            {index < events.length - 1 && (
+                            {index < filteredEvents.length - 1 && (
                                 <div className="absolute bottom-0 left-[0.4375rem] top-3 w-px bg-white/10" />
                             )}
                             <div
@@ -211,10 +268,7 @@ export function TimelineLog({
                                         ))}
                                     </div>
                                     <span className="shrink-0 text-xs text-gray-500">
-                                        {event.createdAt.toLocaleTimeString('tr-TR', {
-                                            hour: '2-digit',
-                                            minute: '2-digit',
-                                        })}
+                                        {formatTimestamp(event.createdAt)}
                                     </span>
                                 </div>
                             </div>
