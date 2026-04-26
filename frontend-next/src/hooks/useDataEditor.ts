@@ -431,8 +431,14 @@ export function useDataEditor({ onSaved }: UseDataEditorOptions = {}): UseDataEd
         const hasEmptyRenamedColumns = renamedColumnNames.some((name) => name.length === 0);
 
         if (hasEmptyRenamedColumns) {
-            setError('Sütun adları boş bırakılamaz');
-            notify.warning('Sütun adları boş bırakılamaz');
+            setDraft((previousDraft) => ({
+                ...previousDraft,
+                renamedColumns: previousDraft.renamedColumns.filter(
+                    (item) => item.newName.trim().length > 0
+                ),
+            }));
+            setError('Sütun ismi boş bırakılamaz');
+            notify.warning('Sütun ismi boş bırakılamaz');
             return false;
         }
 

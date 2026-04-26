@@ -34,6 +34,13 @@ interface EditorClipboard {
     preferInternalPaste: boolean;
 }
 
+interface ColumnClipboard {
+    mode: 'copy' | 'cut';
+    values: string[];
+    sourceColumns: string[];
+    preferInternalPaste: boolean;
+}
+
 function getButtonClassName(disabled: boolean, tone: 'default' | 'danger' | 'primary' = 'default') {
     const toneClassName =
         tone === 'primary'
@@ -240,6 +247,7 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
     const [editingColumn, setEditingColumn] = useState<string | null>(null);
     const [editingColumnValue, setEditingColumnValue] = useState('');
     const [editorClipboard, setEditorClipboard] = useState<EditorClipboard | null>(null);
+    const [columnClipboard, setColumnClipboard] = useState<ColumnClipboard | null>(null);
     const editorRootRef = useRef<HTMLDivElement | null>(null);
     const scrollContainerRef = useRef<HTMLDivElement | null>(null);
     const loadMoreRef = useRef<HTMLDivElement | null>(null);
@@ -582,6 +590,115 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
         }
     }, [buildClipboardState, isDeleting, isSaving, selectedCells]);
 
+    const buildColumnClipboardState = useCallback((
+        columnsToCopy: string[],
+        mode: 'copy' | 'cut',
+        preferInternalPaste: boolean
+    ): ColumnClipboard | null => {
+        if (columnsToCopy.length === 0) {
+            return null;
+        }
+
+        const orderedColumns = [...columnsToCopy].sort(
+            (left, right) =>
+                (columnIndexMap.get(left) ?? Number.MAX_SAFE_INTEGER) -
+                (columnIndexMap.get(right) ?? Number.MAX_SAFE_INTEGER)
+        );
+
+        return {
+            mode,
+            values: orderedColumns.map((column) => getColumnDisplayName(column)),
+            sourceColumns: orderedColumns,
+            preferInternalPaste,
+        };
+    }, [columnIndexMap, getColumnDisplayName]);
+
+    const getColumnPasteTarget = useCallback((): string | null => {
+        if (columnSelectionAnchor && columnIndexMap.has(columnSelectionAnchor)) {
+            return columnSelectionAnchor;
+        }
+
+        if (selectedColumns.length === 0) {
+            return null;
+        }
+
+        return (
+            [...selectedColumns].sort(
+                (left, right) =>
+                    (columnIndexMap.get(left) ?? Number.MAX_SAFE_INTEGER) -
+                    (columnIndexMap.get(right) ?? Number.MAX_SAFE_INTEGER)
+            )[0] ?? null
+        );
+    }, [columnIndexMap, columnSelectionAnchor, selectedColumns]);
+
+    const applyClipboardToColumns = useCallback((clipboard: ColumnClipboard) => {
+        const targetColumn = getColumnPasteTarget();
+        const targetColumnIndex = targetColumn ? columnIndexMap.get(targetColumn) : undefined;
+
+        if (!targetColumn || targetColumnIndex === undefined || clipboard.values.length === 0) {
+            return;
+        }
+
+        const destinationColumns = clipboard.values
+            .map((_, columnOffset) => columns[targetColumnIndex + columnOffset])
+            .filter((column): column is string => typeof column === 'string');
+
+        if (destinationColumns.length === 0) {
+            return;
+        }
+
+        destinationColumns.forEach((destinationColumn, index) => {
+            renameColumn(destinationColumn, clipboard.values[index] ?? destinationColumn);
+        });
+
+        if (clipboard.mode === 'cut') {
+            const destinationColumnSet = new Set(destinationColumns);
+            clipboard.sourceColumns
+                .filter((column) => !destinationColumnSet.has(column))
+                .forEach((column) => {
+                    renameColumn(column, '');
+                });
+            setColumnClipboard(null);
+        } else if (clipboard.preferInternalPaste) {
+            setColumnClipboard((previousClipboard) =>
+                previousClipboard
+                    ? {
+                          ...previousClipboard,
+                          preferInternalPaste: false,
+                      }
+                    : previousClipboard
+            );
+        }
+
+        setSelectedCells([]);
+        setSelectionAnchor(null);
+        setActiveCell(null);
+        setSelectedColumns(destinationColumns);
+        setColumnSelectionAnchor(destinationColumns[0] ?? targetColumn);
+        setRowSelectionAnchor(null);
+    }, [columnIndexMap, columns, getColumnPasteTarget, renameColumn, setActiveCell]);
+
+    const syncColumnClipboard = useCallback(async (mode: 'copy' | 'cut') => {
+        if (isSaving || isDeleting || selectedColumns.length === 0) {
+            return;
+        }
+
+        const nextClipboard = buildColumnClipboardState(selectedColumns, mode, false);
+        if (!nextClipboard) {
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(serializeClipboardMatrix([nextClipboard.values]));
+            setColumnClipboard(nextClipboard);
+        } catch {
+            setColumnClipboard({
+                ...nextClipboard,
+                preferInternalPaste: true,
+            });
+        }
+    }, [buildColumnClipboardState, isDeleting, isSaving, selectedColumns]);
+
     const clearCellAndColumnSelection = useCallback(() => {
         setSelectedCells([]);
         setSelectionAnchor(null);
@@ -589,6 +706,7 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
         setColumnSelectionAnchor(null);
         setActiveCell(null);
         setEditorClipboard(null);
+        setColumnClipboard(null);
     }, [setActiveCell]);
 
     const stopAutoScroll = useCallback(() => {
@@ -771,27 +889,50 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
             }
 
             if ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === 'c') {
-                if (selectedCells.length === 0 || editingCell || editingColumn || isSaving || isDeleting) {
+                if (editingCell || editingColumn || isSaving || isDeleting) {
+                    return;
+                }
+
+                if (selectedCells.length === 0 && selectedColumns.length === 0) {
                     return;
                 }
 
                 event.preventDefault();
-                void syncClipboard('copy');
+                if (selectedCells.length > 0) {
+                    void syncClipboard('copy');
+                } else {
+                    void syncColumnClipboard('copy');
+                }
                 return;
             }
 
             if ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === 'x') {
-                if (selectedCells.length === 0 || editingCell || editingColumn || isSaving || isDeleting) {
+                if (editingCell || editingColumn || isSaving || isDeleting) {
+                    return;
+                }
+
+                if (selectedCells.length === 0 && selectedColumns.length === 0) {
                     return;
                 }
 
                 event.preventDefault();
-                void syncClipboard('cut');
+                if (selectedCells.length > 0) {
+                    void syncClipboard('cut');
+                } else {
+                    void syncColumnClipboard('cut');
+                }
                 return;
             }
 
             if (event.key === 'Delete' && !isSaving && !editingCell && !editingColumn) {
                 event.preventDefault();
+
+                if (selectedColumns.length > 0) {
+                    selectedColumns.forEach((column) => {
+                        renameColumn(column, '');
+                    });
+                    return;
+                }
 
                 if (selectedRows.length > 0) {
                     const deletedSelection = new Set(selectedRows);
@@ -827,13 +968,16 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
         isDeleting,
         isDirty,
         isSaving,
+        renameColumn,
         rowSelectionAnchor,
         saveChanges,
         selectedCells,
+        selectedColumns,
         selectedRows,
         selectionAnchor,
         isEditorShortcutTarget,
         stopAutoScroll,
+        syncColumnClipboard,
         syncClipboard,
         undoLastChange,
     ]);
@@ -908,14 +1052,46 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
 
             const clipboardText = event.clipboardData?.getData('text/plain') ?? '';
             const externalMatrix = parseClipboardText(clipboardText);
+            const externalColumnValues = externalMatrix[0] ?? [];
             const serializedInternalClipboard = editorClipboard
                 ? normalizeClipboardText(serializeClipboardMatrix(editorClipboard.matrix))
+                : null;
+            const serializedInternalColumnClipboard = columnClipboard
+                ? normalizeClipboardText(serializeClipboardMatrix([columnClipboard.values]))
                 : null;
             const shouldUseInternalClipboard =
                 !!editorClipboard &&
                 (editorClipboard.mode === 'cut' ||
                     editorClipboard.preferInternalPaste ||
                     normalizeClipboardText(clipboardText) === serializedInternalClipboard);
+            const shouldUseInternalColumnClipboard =
+                !!columnClipboard &&
+                (columnClipboard.mode === 'cut' ||
+                    columnClipboard.preferInternalPaste ||
+                    normalizeClipboardText(clipboardText) === serializedInternalColumnClipboard);
+
+            if (selectedColumns.length > 0 && selectedCells.length === 0) {
+                const nextColumnClipboard =
+                    shouldUseInternalColumnClipboard
+                        ? columnClipboard
+                        : externalColumnValues.length > 0
+                          ? {
+                                mode: 'copy' as const,
+                                values: externalColumnValues,
+                                sourceColumns: [],
+                                preferInternalPaste: false,
+                            }
+                          : columnClipboard;
+
+                if (!nextColumnClipboard || nextColumnClipboard.values.length === 0) {
+                    return;
+                }
+
+                event.preventDefault();
+                applyClipboardToColumns(nextColumnClipboard);
+                return;
+            }
+
             const nextClipboard =
                 shouldUseInternalClipboard
                     ? editorClipboard
@@ -940,13 +1116,17 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
         window.addEventListener('paste', handlePaste);
         return () => window.removeEventListener('paste', handlePaste);
     }, [
+        applyClipboardToColumns,
         applyClipboardToGrid,
+        columnClipboard,
         editingCell,
         editingColumn,
         editorClipboard,
         isEditorShortcutTarget,
         isDeleting,
         isSaving,
+        selectedCells.length,
+        selectedColumns.length,
     ]);
 
     useEffect(() => {
@@ -968,6 +1148,22 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
             return isClipboardStillValid ? previousClipboard : null;
         });
     }, [columns, deletedRowSet, rows]);
+
+    useEffect(() => {
+        const validColumns = new Set(columns);
+
+        setColumnClipboard((previousClipboard) => {
+            if (!previousClipboard) {
+                return previousClipboard;
+            }
+
+            const isClipboardStillValid = previousClipboard.sourceColumns.every((column) =>
+                validColumns.has(column)
+            );
+
+            return isClipboardStillValid ? previousClipboard : null;
+        });
+    }, [columns]);
 
     useEffect(() => {
         const validRowIds = new Set(rows.map((row) => row.rowId));
