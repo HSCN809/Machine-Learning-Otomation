@@ -10,6 +10,7 @@ import pickle
 import sys
 import threading
 import uuid
+from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime
 from io import BytesIO
 from typing import Any, Dict, List, Optional
@@ -40,8 +41,14 @@ except ImportError:
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+TRAINING_MAX_WORKERS = int(os.getenv("TRAINING_MAX_WORKERS", "2"))
 TRAINING_JOBS: Dict[str, Dict[str, Any]] = {}
+TRAINING_JOB_FUTURES: Dict[str, Future[Any]] = {}
 TRAINING_JOBS_LOCK = threading.Lock()
+TRAINING_EXECUTOR = ThreadPoolExecutor(
+    max_workers=TRAINING_MAX_WORKERS,
+    thread_name_prefix="model-training",
+)
 
 
 # Request schemas
@@ -359,6 +366,14 @@ def _load_persisted_training_results(
     return _sort_training_results(results, problem_type), problem_type, target_column
 
 
+def _active_training_job_count() -> int:
+    return sum(
+        1
+        for job in TRAINING_JOBS.values()
+        if job.get("status") in {"queued", "running", "stopping"}
+    )
+
+
 def _create_job(session_id: str, request: TrainRequest) -> str:
     job_id = str(uuid.uuid4())
     job = {
@@ -381,6 +396,11 @@ def _create_job(session_id: str, request: TrainRequest) -> str:
         "finished_at": None,
     }
     with TRAINING_JOBS_LOCK:
+        if _active_training_job_count() >= TRAINING_MAX_WORKERS:
+            raise HTTPException(
+                status_code=409,
+                detail="Training capacity is full. Try again after a running job finishes.",
+            )
         TRAINING_JOBS[job_id] = job
 
     _store_training_metadata(
@@ -391,6 +411,18 @@ def _create_job(session_id: str, request: TrainRequest) -> str:
     )
     # trained_model_artifacts artik DB'de tutuluyor
     return job_id
+
+
+def _discard_training_future(job_id: str):
+    with TRAINING_JOBS_LOCK:
+        TRAINING_JOB_FUTURES.pop(job_id, None)
+
+
+def _submit_training_job(job_id: str):
+    future = TRAINING_EXECUTOR.submit(_run_training_job, job_id)
+    with TRAINING_JOBS_LOCK:
+        TRAINING_JOB_FUTURES[job_id] = future
+    future.add_done_callback(lambda _: _discard_training_future(job_id))
 
 
 def _get_job_snapshot(job_id: str) -> Optional[Dict[str, Any]]:
@@ -859,8 +891,7 @@ async def start_training(
             "models": request.models,
         },
     )
-    worker = threading.Thread(target=_run_training_job, args=(job_id,), daemon=True)
-    worker.start()
+    _submit_training_job(job_id)
 
     return {"success": True, "job_id": job_id}
 
