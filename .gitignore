@@ -26,6 +26,7 @@ __pycache__/
 dist/
 build/
 *.log
+graphify-out/
 
 # Pycache Temizleme Scripti
 cleanup.py
