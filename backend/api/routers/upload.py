@@ -3,7 +3,7 @@ Upload Router - File upload and data loading endpoints
 """
 
 from datetime import date, datetime
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Query
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from typing import Any, Optional
@@ -14,6 +14,7 @@ import io
 import os
 import sys
 import math
+import zipfile
 
 # Add parent paths for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
@@ -29,10 +30,152 @@ from ..dependencies import (
     session_manager,
 )
 from backend.modules.auth.models import User
+from backend.modules.config import settings
 from backend.modules.data_upload.persistence import DataSessionRepository
+
+try:
+    import magic
+except ImportError:  # pragma: no cover - local fallback if libmagic is missing.
+    magic = None
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+UPLOAD_CHUNK_SIZE = 1024 * 1024
+ALLOWED_UPLOAD_EXTENSIONS = {".csv", ".xls", ".xlsx", ".json"}
+EXCEL_OLE_SIGNATURE = b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1"
+XLSX_REQUIRED_MEMBERS = {"[Content_Types].xml", "xl/workbook.xml"}
+
+
+def _max_upload_bytes() -> int:
+    return int(settings.MAX_FILE_SIZE_MB * 1024 * 1024)
+
+
+def _format_upload_limit() -> str:
+    return f"{settings.MAX_FILE_SIZE_MB:g} MB"
+
+
+def _get_upload_extension(filename: str) -> str:
+    extension = os.path.splitext(filename)[1].lower()
+    if extension not in ALLOWED_UPLOAD_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported file format. Use CSV, Excel, or JSON.",
+        )
+    return extension
+
+
+def _reject_oversized_content_length(request: Request) -> None:
+    content_length = request.headers.get("content-length")
+    if not content_length:
+        return
+
+    try:
+        size_bytes = int(content_length)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid Content-Length header.")
+
+    if size_bytes > _max_upload_bytes():
+        raise HTTPException(
+            status_code=413,
+            detail=f"File size exceeds the {_format_upload_limit()} limit.",
+        )
+
+
+async def _read_upload_content(file: UploadFile) -> bytes:
+    max_bytes = _max_upload_bytes()
+    content = bytearray()
+
+    while True:
+        chunk = await file.read(UPLOAD_CHUNK_SIZE)
+        if not chunk:
+            break
+        content.extend(chunk)
+        if len(content) > max_bytes:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File size exceeds the {_format_upload_limit()} limit.",
+            )
+
+    if not content:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+    return bytes(content)
+
+
+def _detect_mime_type(content: bytes) -> Optional[str]:
+    if magic is None:
+        return None
+    try:
+        return magic.from_buffer(content[:8192], mime=True)
+    except Exception:
+        logger.warning("python-magic MIME detection failed", exc_info=True)
+        return None
+
+
+def _validate_xlsx_content(content: bytes) -> None:
+    if not zipfile.is_zipfile(io.BytesIO(content)):
+        raise HTTPException(status_code=400, detail="Invalid XLSX file content.")
+
+    try:
+        with zipfile.ZipFile(io.BytesIO(content)) as archive:
+            names = set(archive.namelist())
+    except zipfile.BadZipFile as exc:
+        raise HTTPException(status_code=400, detail="Invalid XLSX file content.") from exc
+
+    if not XLSX_REQUIRED_MEMBERS.issubset(names):
+        raise HTTPException(status_code=400, detail="Invalid XLSX file content.")
+
+
+def _validate_csv_content(content: bytes) -> None:
+    sample = content[:8192]
+    if b"\x00" in sample:
+        raise HTTPException(status_code=400, detail="Invalid CSV file content.")
+
+    for encoding in ("utf-8-sig", "utf-8", "latin-1"):
+        try:
+            sample.decode(encoding)
+            return
+        except UnicodeDecodeError:
+            continue
+
+    raise HTTPException(status_code=400, detail="Invalid CSV file content.")
+
+
+def _validate_json_content(content: bytes) -> None:
+    sample = content.lstrip()[:1]
+    if sample not in {b"{", b"["}:
+        raise HTTPException(status_code=400, detail="Invalid JSON file content.")
+
+
+def _validate_upload_content(content: bytes, extension: str) -> None:
+    mime_type = _detect_mime_type(content)
+
+    if extension == ".xlsx":
+        if mime_type and mime_type not in {
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/zip",
+        }:
+            raise HTTPException(status_code=400, detail="Invalid XLSX file content.")
+        _validate_xlsx_content(content)
+        return
+
+    if extension == ".xls":
+        if not content.startswith(EXCEL_OLE_SIGNATURE):
+            raise HTTPException(status_code=400, detail="Invalid XLS file content.")
+        return
+
+    if extension == ".csv":
+        allowed_csv_mimes = {"application/csv", "application/vnd.ms-excel"}
+        if mime_type and not (mime_type.startswith("text/") or mime_type in allowed_csv_mimes):
+            raise HTTPException(status_code=400, detail="Invalid CSV file content.")
+        _validate_csv_content(content)
+        return
+
+    if extension == ".json":
+        if mime_type and mime_type not in {"application/json", "text/plain"}:
+            raise HTTPException(status_code=400, detail="Invalid JSON file content.")
+        _validate_json_content(content)
 
 
 class EditorCellUpdate(BaseModel):
@@ -176,29 +319,40 @@ def _read_excel_content(content: bytes, filename: str) -> pd.DataFrame:
 
 @router.post("/file")
 async def upload_file(
+    request: Request,
     file: UploadFile = File(...),
     session_id: str = Depends(get_session_id),
     db: Session = Depends(get_db),
 ):
     """Upload a file (CSV, Excel, JSON)"""
     try:
-        # Read file content
-        content = await file.read()
-        
-        # Determine file type and load
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="Uploaded file name is required.")
+
+        _reject_oversized_content_length(request)
+
         filename = file.filename.lower()
-        
-        if filename.endswith('.csv'):
-            df = pd.read_csv(io.BytesIO(content))
-        elif filename.endswith(('.xls', '.xlsx')):
-            df = _read_excel_content(content, filename)
-        elif filename.endswith('.json'):
-            df = pd.read_json(io.BytesIO(content))
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail="Unsupported file format. Use CSV, Excel, or JSON."
-            )
+        extension = _get_upload_extension(filename)
+        content = await _read_upload_content(file)
+        _validate_upload_content(content, extension)
+
+        try:
+            if extension == '.csv':
+                df = pd.read_csv(io.BytesIO(content))
+            elif extension in {'.xls', '.xlsx'}:
+                df = _read_excel_content(content, filename)
+            elif extension == '.json':
+                df = pd.read_json(io.BytesIO(content))
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Unsupported file format. Use CSV, Excel, or JSON."
+                )
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.warning("Uploaded file parsing failed for %s", file.filename, exc_info=True)
+            raise HTTPException(status_code=400, detail="Uploaded file could not be parsed.") from exc
         
         # Store in session
         session_manager.set_dataframe(session_id, df, is_original=True)

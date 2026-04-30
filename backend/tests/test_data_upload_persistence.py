@@ -28,6 +28,11 @@ class RenameMetadata(BaseModel):
     new_name: str
 
 
+class DummyRequest:
+    def __init__(self, headers=None):
+        self.headers = headers or {}
+
+
 class DataUploadPersistenceTests(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
@@ -300,13 +305,71 @@ class DataUploadPersistenceTests(unittest.TestCase):
             file = UploadFile(file=BytesIO(b"plain text"), filename="notes.txt")
 
             with self.assertRaises(HTTPException) as exc:
-                asyncio.run(upload_file(file=file, session_id=session_id, db=db))
+                asyncio.run(upload_file(request=DummyRequest(), file=file, session_id=session_id, db=db))
 
             self.assertEqual(exc.exception.status_code, 400)
             self.assertEqual(
                 exc.exception.detail,
                 "Unsupported file format. Use CSV, Excel, or JSON.",
             )
+
+    def test_upload_rejects_content_length_over_limit(self):
+        with self.Session() as db:
+            self.create_default_users(db)
+            db.commit()
+            session_id = session_manager.create_session(owner_user_id=self.user_id)
+            self.addCleanup(session_manager.delete_session, session_id)
+            file = UploadFile(file=BytesIO(b"city,value\nAnkara,10\n"), filename="cities.csv")
+
+            request = DummyRequest(headers={"content-length": str(201 * 1024 * 1024)})
+
+            with self.assertRaises(HTTPException) as exc:
+                asyncio.run(upload_file(request=request, file=file, session_id=session_id, db=db))
+
+            self.assertEqual(exc.exception.status_code, 413)
+
+    def test_upload_rejects_fake_xlsx_content(self):
+        with self.Session() as db:
+            self.create_default_users(db)
+            db.commit()
+            session_id = session_manager.create_session(owner_user_id=self.user_id)
+            self.addCleanup(session_manager.delete_session, session_id)
+            file = UploadFile(file=BytesIO(b"not a real xlsx"), filename="fake.xlsx")
+
+            with self.assertRaises(HTTPException) as exc:
+                asyncio.run(upload_file(request=DummyRequest(), file=file, session_id=session_id, db=db))
+
+            self.assertEqual(exc.exception.status_code, 400)
+            self.assertEqual(exc.exception.detail, "Invalid XLSX file content.")
+
+    def test_upload_rejects_binary_csv_content(self):
+        with self.Session() as db:
+            self.create_default_users(db)
+            db.commit()
+            session_id = session_manager.create_session(owner_user_id=self.user_id)
+            self.addCleanup(session_manager.delete_session, session_id)
+            file = UploadFile(file=BytesIO(b"col\x00value\n1\x002\n"), filename="binary.csv")
+
+            with self.assertRaises(HTTPException) as exc:
+                asyncio.run(upload_file(request=DummyRequest(), file=file, session_id=session_id, db=db))
+
+            self.assertEqual(exc.exception.status_code, 400)
+            self.assertEqual(exc.exception.detail, "Invalid CSV file content.")
+
+    def test_upload_accepts_valid_csv_content(self):
+        with self.Session() as db:
+            self.create_default_users(db)
+            db.commit()
+            session_id = session_manager.create_session(owner_user_id=self.user_id)
+            self.addCleanup(session_manager.delete_session, session_id)
+            file = UploadFile(file=BytesIO(b"city,value\nAnkara,10\nIzmir,20\n"), filename="cities.csv")
+
+            response = asyncio.run(upload_file(request=DummyRequest(), file=file, session_id=session_id, db=db))
+
+            self.assertTrue(response["success"])
+            self.assertEqual(response["rows"], 2)
+            self.assertEqual(response["columns"], 2)
+            self.assertEqual(response["column_names"], ["city", "value"])
 
     def test_missing_values_preprocessing_persists_processed_data(self):
         df = pd.DataFrame({"city": ["Ankara", "Izmir"], "value": [10.0, None]})
