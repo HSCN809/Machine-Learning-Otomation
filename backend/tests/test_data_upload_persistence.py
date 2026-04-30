@@ -18,8 +18,9 @@ from backend.api.routers.preprocessing import (
     _sanitize_dataframe_for_excel_export,
     handle_missing_values,
 )
-from backend.api.routers.upload import _validate_xlsx_content, upload_file
+from backend.api.routers.upload import _validate_dataframe_limits, _validate_xlsx_content, upload_file
 from backend.modules.auth.models import User
+from backend.modules.config import settings
 from backend.modules.data_upload.models import DatasetSession, PreprocessingEvent, TimelineSnapshot
 from backend.modules.data_upload.persistence import (
     DataSessionRepository,
@@ -385,6 +386,36 @@ class DataUploadPersistenceTests(unittest.TestCase):
             self.assertEqual(response["rows"], 2)
             self.assertEqual(response["columns"], 2)
             self.assertEqual(response["column_names"], ["city", "value"])
+
+    def test_dataframe_limit_rejects_too_many_rows(self):
+        df = pd.DataFrame({"value": [1, 2]})
+
+        with patch.object(settings, "MAX_DATAFRAME_ROWS", 1):
+            with self.assertRaises(HTTPException) as exc:
+                _validate_dataframe_limits(df)
+
+        self.assertEqual(exc.exception.status_code, 413)
+        self.assertIn("Dataset row limit exceeded", exc.exception.detail)
+
+    def test_dataframe_limit_rejects_too_many_columns(self):
+        df = pd.DataFrame({"a": [1], "b": [2]})
+
+        with patch.object(settings, "MAX_DATAFRAME_COLUMNS", 1):
+            with self.assertRaises(HTTPException) as exc:
+                _validate_dataframe_limits(df)
+
+        self.assertEqual(exc.exception.status_code, 413)
+        self.assertIn("Dataset column limit exceeded", exc.exception.detail)
+
+    def test_dataframe_limit_rejects_too_much_memory(self):
+        df = pd.DataFrame({"text": ["A" * 1024]})
+
+        with patch.object(settings, "MAX_DATAFRAME_MEMORY_MB", 0.0001):
+            with self.assertRaises(HTTPException) as exc:
+                _validate_dataframe_limits(df)
+
+        self.assertEqual(exc.exception.status_code, 413)
+        self.assertIn("Dataset memory limit exceeded", exc.exception.detail)
 
     def test_xlsx_preflight_accepts_minimal_excel_package(self):
         _validate_xlsx_content(build_minimal_xlsx_zip())

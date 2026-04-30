@@ -81,7 +81,7 @@ MAX_XLSX_COMPRESSION_RATIO = _get_float_env(
     minimum=1,
 )
 
-# DataFrame and timeline limits. Enforcement will use these in the persistence hardening step.
+# DataFrame and timeline limits.
 MAX_DATAFRAME_ROWS = _get_int_env('MAX_DATAFRAME_ROWS', 1_000_000, minimum=1)
 MAX_DATAFRAME_COLUMNS = _get_int_env('MAX_DATAFRAME_COLUMNS', 500, minimum=1)
 MAX_DATAFRAME_MEMORY_MB = _get_int_env('MAX_DATAFRAME_MEMORY_MB', 512, minimum=1)

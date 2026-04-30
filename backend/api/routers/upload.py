@@ -361,6 +361,44 @@ def _read_excel_content(content: bytes, filename: str) -> pd.DataFrame:
     return pd.read_excel(io.BytesIO(content), engine=engine)
 
 
+def _dataframe_memory_mb(df: pd.DataFrame) -> float:
+    memory_bytes = int(df.memory_usage(index=True, deep=True).sum())
+    return memory_bytes / (1024 * 1024)
+
+
+def _validate_dataframe_limits(df: pd.DataFrame) -> None:
+    row_count = len(df)
+    column_count = len(df.columns)
+    memory_mb = _dataframe_memory_mb(df)
+
+    if row_count > settings.MAX_DATAFRAME_ROWS:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"Dataset row limit exceeded. Maximum rows: {settings.MAX_DATAFRAME_ROWS}, "
+                f"received: {row_count}."
+            ),
+        )
+
+    if column_count > settings.MAX_DATAFRAME_COLUMNS:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"Dataset column limit exceeded. Maximum columns: {settings.MAX_DATAFRAME_COLUMNS}, "
+                f"received: {column_count}."
+            ),
+        )
+
+    if memory_mb > settings.MAX_DATAFRAME_MEMORY_MB:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"Dataset memory limit exceeded. Maximum memory: "
+                f"{settings.MAX_DATAFRAME_MEMORY_MB:g} MB, received: {memory_mb:.2f} MB."
+            ),
+        )
+
+
 @router.post("/file")
 async def upload_file(
     request: Request,
@@ -397,6 +435,8 @@ async def upload_file(
         except Exception as exc:
             logger.warning("Uploaded file parsing failed for %s", file.filename, exc_info=True)
             raise HTTPException(status_code=400, detail="Uploaded file could not be parsed.") from exc
+
+        _validate_dataframe_limits(df)
         
         # Store in session
         session_manager.set_dataframe(session_id, df, is_original=True)
@@ -449,6 +489,8 @@ async def load_sample_dataset(
                 status_code=404,
                 detail=f"Dataset not found. Available: tips, iris, titanic"
             )
+
+        _validate_dataframe_limits(df)
         
         # Store in session
         session_manager.set_dataframe(session_id, df, is_original=True)
