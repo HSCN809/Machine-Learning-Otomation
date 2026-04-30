@@ -547,18 +547,9 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
             if (cellsToClear.length > 0) {
                 clearCells(cellsToClear);
             }
-
-            setEditorClipboard(null);
-        } else if (clipboard.preferInternalPaste) {
-            setEditorClipboard((previousClipboard) =>
-                previousClipboard
-                    ? {
-                          ...previousClipboard,
-                          preferInternalPaste: false,
-                      }
-                    : previousClipboard
-            );
         }
+
+        setEditorClipboard(null);
 
         setSelectionAnchor(destinationCells[0] ?? targetCell);
         setSelectedCells(destinationCells);
@@ -672,18 +663,7 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
 
         renameColumns(renameOperations);
 
-        if (clipboard.mode === 'cut') {
-            setColumnClipboard(null);
-        } else if (clipboard.preferInternalPaste) {
-            setColumnClipboard((previousClipboard) =>
-                previousClipboard
-                    ? {
-                          ...previousClipboard,
-                          preferInternalPaste: false,
-                      }
-                    : previousClipboard
-            );
-        }
+        setColumnClipboard(null);
 
         setSelectedCells([]);
         setSelectionAnchor(null);
