@@ -711,6 +711,8 @@ async def handle_feature_engineering(
             "step": "feature_engineering",
             "action": request.operation,
             "source_columns": request.source_columns,
+            "new_column_name": request.new_column_name,
+            "expression": request.expression,
             "params": params,
         }
 

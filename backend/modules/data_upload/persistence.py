@@ -17,6 +17,7 @@ from backend.modules.data_upload.models import (
     TimelineSnapshot,
     utc_now,
 )
+from backend.modules.data_upload.timeline_rollback import normalize_event_metadata
 
 
 def dataframe_to_json(df: pd.DataFrame) -> str:
@@ -129,7 +130,7 @@ class DataSessionRepository:
             metadata_payload = dict(event.metadata_json or {})
 
             timeline_events.append(
-                {
+                normalize_event_metadata({
                     "id": event.id,
                     "category": event.category or "preprocessing",
                     "action": event.action,
@@ -140,7 +141,7 @@ class DataSessionRepository:
                     "metadata": metadata_payload,
                     "payload": payload,
                     "step": event.step,
-                }
+                })
             )
 
         return timeline_events
@@ -150,6 +151,7 @@ class DataSessionRepository:
             dict(event.get("payload") or {})
             for event in self.list_timeline_events(session_id, user_id)
             if event.get("category") == "preprocessing"
+            and (event.get("metadata") or {}).get("rollback_status", event.get("rollback_status", "active")) == "active"
         ]
 
     def sync_timeline_events(
@@ -167,9 +169,19 @@ class DataSessionRepository:
         )
 
         for event_index, entry in enumerate(events):
-            event_payload = dict(entry or {})
+            event_payload = normalize_event_metadata(dict(entry or {}))
             payload = jsonable_encoder(event_payload.get("payload") or {})
-            metadata_payload = jsonable_encoder(event_payload.get("metadata") or {})
+            metadata = dict(event_payload.get("metadata") or {})
+            for key in (
+                "rollback_status",
+                "scope",
+                "replayable",
+                "reverted_by_event_id",
+                "rollback_reason",
+            ):
+                if event_payload.get(key) is not None:
+                    metadata[key] = event_payload.get(key)
+            metadata_payload = jsonable_encoder(metadata)
             event_kwargs: dict[str, Any] = {
                 "dataset_session_id": session_id,
                 "user_id": user_id,

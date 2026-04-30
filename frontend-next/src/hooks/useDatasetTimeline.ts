@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as api from '@/lib/api';
-import type { TimelineEvent } from '@/types/timeline';
+import type { TimelineEvent, TimelineRollbackPlan } from '@/types/timeline';
 import { logger } from '@/lib/logger';
 import { getErrorMessage, notify } from '@/lib/notify';
 import { clearDatasetQueries, datasetQueryKeys, invalidateDatasetQueries } from '@/lib/query-cache';
@@ -17,6 +17,8 @@ interface UseDatasetTimelineReturn {
     error: string | null;
     refresh: () => Promise<void>;
     undoLast: () => Promise<boolean>;
+    getRollbackPlan: (eventId: string) => Promise<TimelineRollbackPlan | null>;
+    rollbackEvent: (eventId: string) => Promise<boolean>;
 }
 
 interface UseDatasetTimelineOptions {
@@ -75,6 +77,29 @@ export function useDatasetTimeline({
         }
     }, [canUndoLast, queryClient]);
 
+    const getRollbackPlan = useCallback(async (eventId: string) => {
+        try {
+            return await api.getTimelineRollbackPlan(eventId);
+        } catch (err) {
+            logger.error('Dataset timeline rollback plan failed', err);
+            notify.error(err, 'Geri alma planı hazırlanamadı');
+            return null;
+        }
+    }, []);
+
+    const rollbackEvent = useCallback(async (eventId: string) => {
+        try {
+            await api.rollbackTimelineEvent(eventId);
+            await invalidateDatasetQueries(queryClient);
+            notify.success('Seçili işlem geri alındı');
+            return true;
+        } catch (err) {
+            logger.error('Dataset timeline selective rollback failed', err);
+            notify.error(err, 'Seçili işlem geri alınamadı');
+            return false;
+        }
+    }, [queryClient]);
+
     useEffect(() => {
         return api.subscribeToStoredSession(() => {
             if (api.getStoredSessionId()) {
@@ -98,5 +123,7 @@ export function useDatasetTimeline({
         error: errorMessage,
         refresh,
         undoLast,
+        getRollbackPlan,
+        rollbackEvent,
     };
 }

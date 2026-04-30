@@ -10,6 +10,7 @@ interface TimelineLogProps {
     canUndoLast: boolean;
     isLoading?: boolean;
     onUndoLast?: () => void | Promise<void>;
+    onRollbackEvent?: (event: TimelineEvent) => void | Promise<void>;
 }
 
 const stepLabels: Record<string, string> = {
@@ -151,6 +152,7 @@ export function TimelineLog({
     canUndoLast,
     isLoading = false,
     onUndoLast,
+    onRollbackEvent,
 }: TimelineLogProps) {
     const [searchTerm, setSearchTerm] = useState('');
     const normalizedSearchTerm = searchTerm.trim().toLocaleLowerCase('tr-TR');
@@ -240,6 +242,12 @@ export function TimelineLog({
 
                 {filteredEvents.map((event, index) => {
                     const details = getDetailLines(event);
+                    const canRollbackEvent = Boolean(
+                        onRollbackEvent
+                        && event.rollbackStatus === 'active'
+                        && event.replayable
+                        && (event.category === 'preprocessing' || event.category === 'editor')
+                    );
 
                     return (
                         <div key={event.id} className="relative pl-8 pb-6 last:pb-0">
@@ -267,6 +275,11 @@ export function TimelineLog({
                                                     {stepLabels[event.step] || event.step}
                                                 </span>
                                             )}
+                                            {event.rollbackStatus === 'reverted' && (
+                                                <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-xs text-amber-300">
+                                                    Geri alındı
+                                                </span>
+                                            )}
                                         </div>
                                         <p className="mt-1 text-sm text-gray-400">{getDescription(event)}</p>
                                         {details.map((detail) => (
@@ -274,10 +287,35 @@ export function TimelineLog({
                                                 {detail}
                                             </p>
                                         ))}
+                                        {event.rollbackStatus === 'reverted' && event.rollbackReason && (
+                                            <p className="mt-1 text-xs text-amber-300/80">
+                                                Neden: {event.rollbackReason}
+                                            </p>
+                                        )}
                                     </div>
-                                    <span className="shrink-0 text-xs text-gray-500">
-                                        {formatTimestamp(event.createdAt)}
-                                    </span>
+                                    <div className="flex shrink-0 flex-col items-end gap-2">
+                                        <span className="text-xs text-gray-500">
+                                            {formatTimestamp(event.createdAt)}
+                                        </span>
+                                        {onRollbackEvent && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (canRollbackEvent) {
+                                                        void onRollbackEvent(event);
+                                                    }
+                                                }}
+                                                disabled={!canRollbackEvent || isLoading}
+                                                className={`rounded px-2 py-1 text-xs transition-colors ${
+                                                    !canRollbackEvent || isLoading
+                                                        ? 'cursor-not-allowed text-gray-600'
+                                                        : 'cursor-pointer bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white'
+                                                }`}
+                                            >
+                                                Geri al
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </div>

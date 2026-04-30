@@ -846,9 +846,6 @@ async def commit_editor_changes(
         df = df.rename(columns=rename_map)
 
     session_manager.set_dataframe(session_id, df)
-    session = session_manager.get_session(session_id)
-    if session:
-        session["original_data"] = df.copy(deep=True)
 
     _clear_downstream_timeline(session_id)
     _append_timeline_event(
@@ -866,6 +863,26 @@ async def commit_editor_changes(
             "renamed_columns": len(request.renamed_columns),
             "trim_columns": request.trim_columns,
             "renamed_column_names": [
+                {"column": item.column, "new_name": item.new_name}
+                for item in request.renamed_columns
+            ],
+        },
+        payload={
+            "updated_cells": [
+                {
+                    "row_id": cell.row_id,
+                    "column": cell.column,
+                    "value": _serialize_editor_value(cell.value),
+                }
+                for cell in request.updated_cells
+            ],
+            "cleared_cells": [
+                {"row_id": cell.row_id, "column": cell.column}
+                for cell in request.cleared_cells
+            ],
+            "deleted_row_ids": deleted_row_ids,
+            "trim_columns": request.trim_columns,
+            "renamed_columns": [
                 {"column": item.column, "new_name": item.new_name}
                 for item in request.renamed_columns
             ],

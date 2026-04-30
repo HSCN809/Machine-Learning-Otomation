@@ -9,7 +9,7 @@ import type {
     PersistedDatasetSummary,
 } from '@/types/data-upload';
 import type { FeatureConfig } from '@/types/preprocessing';
-import type { TimelineResponse } from '@/types/timeline';
+import type { TimelineResponse, TimelineRollbackPlan, TimelineScope } from '@/types/timeline';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api/backend';
 const SESSION_REQUIRED_MESSAGE = 'Valid session ID required. Upload data first.';
@@ -738,10 +738,41 @@ type TimelineEventApiResponse = {
     metadata?: Record<string, unknown>;
     payload?: Record<string, unknown>;
     step?: string | null;
+    rollback_status?: string | null;
+    replayable?: boolean | null;
+    reverted_by_event_id?: string | null;
+    rollback_reason?: string | null;
+    scope?: TimelineScope | null;
 };
+
+type TimelineRollbackEventSummaryApiResponse = {
+    id: string;
+    category: string;
+    action: string | null;
+    title: string | null;
+    description: string | null;
+    step?: string | null;
+    scope?: TimelineScope | null;
+};
+
+function getStringMetadata(metadata: Record<string, unknown>, key: string): string | null {
+    const value = metadata[key];
+    return typeof value === 'string' ? value : null;
+}
+
+function getBooleanMetadata(metadata: Record<string, unknown>, key: string): boolean {
+    return metadata[key] === true;
+}
+
+function getScopeMetadata(metadata: Record<string, unknown>, key: string): TimelineScope {
+    const value = metadata[key];
+    return value && typeof value === 'object' && !Array.isArray(value) ? value as TimelineScope : {};
+}
 
 function mapTimelineEvent(event: TimelineEventApiResponse) {
     const parsedDate = new Date(event.created_at);
+    const metadata = event.metadata ?? {};
+    const rollbackStatus = event.rollback_status ?? getStringMetadata(metadata, 'rollback_status') ?? 'active';
 
     return {
         id: event.id,
@@ -751,9 +782,26 @@ function mapTimelineEvent(event: TimelineEventApiResponse) {
         description: event.description,
         createdAt: Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate,
         undoable: event.undoable,
-        metadata: event.metadata ?? {},
+        metadata,
         payload: event.payload ?? {},
         step: event.step ?? null,
+        rollbackStatus: rollbackStatus === 'reverted' ? 'reverted' as const : 'active' as const,
+        replayable: event.replayable ?? getBooleanMetadata(metadata, 'replayable'),
+        revertedByEventId: event.reverted_by_event_id ?? getStringMetadata(metadata, 'reverted_by_event_id'),
+        rollbackReason: event.rollback_reason ?? getStringMetadata(metadata, 'rollback_reason'),
+        scope: event.scope ?? getScopeMetadata(metadata, 'scope'),
+    };
+}
+
+function mapTimelineRollbackEventSummary(event: TimelineRollbackEventSummaryApiResponse) {
+    return {
+        id: event.id,
+        category: event.category,
+        action: event.action,
+        title: event.title,
+        description: event.description,
+        step: event.step ?? null,
+        scope: event.scope ?? {},
     };
 }
 
@@ -804,6 +852,42 @@ export async function undoLastTimelineEvent(): Promise<{
     columns: number;
 }> {
     return apiFetch('/api/timeline/undo-last', {
+        method: 'POST',
+    });
+}
+
+export async function getTimelineRollbackPlan(eventId: string): Promise<TimelineRollbackPlan> {
+    const response = await apiFetch<{
+        eventId: string;
+        canRollback: boolean;
+        targetEvent: TimelineRollbackEventSummaryApiResponse;
+        dependentEvents: TimelineRollbackEventSummaryApiResponse[];
+        preservedEvents: TimelineRollbackEventSummaryApiResponse[];
+        invalidatedModelEvents: TimelineRollbackEventSummaryApiResponse[];
+        unsupportedReplayEvents: TimelineRollbackEventSummaryApiResponse[];
+    }>(`/api/timeline/events/${encodeURIComponent(eventId)}/rollback-plan`);
+
+    return {
+        eventId: response.eventId,
+        canRollback: response.canRollback,
+        targetEvent: mapTimelineRollbackEventSummary(response.targetEvent),
+        dependentEvents: response.dependentEvents.map(mapTimelineRollbackEventSummary),
+        preservedEvents: response.preservedEvents.map(mapTimelineRollbackEventSummary),
+        invalidatedModelEvents: response.invalidatedModelEvents.map(mapTimelineRollbackEventSummary),
+        unsupportedReplayEvents: response.unsupportedReplayEvents.map(mapTimelineRollbackEventSummary),
+    };
+}
+
+export async function rollbackTimelineEvent(eventId: string): Promise<{
+    success: boolean;
+    rollbackEventId: string;
+    revertedEventIds: string[];
+    dependentCount: number;
+    invalidatedModelCount: number;
+    rows: number;
+    columns: number;
+}> {
+    return apiFetch(`/api/timeline/events/${encodeURIComponent(eventId)}/rollback`, {
         method: 'POST',
     });
 }

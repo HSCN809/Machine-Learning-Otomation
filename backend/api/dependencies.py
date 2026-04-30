@@ -17,6 +17,7 @@ from backend.modules.auth.models import AuthSession, User
 from backend.modules.auth.security import hash_session_token
 from backend.modules.config import settings
 from backend.modules.data_upload.persistence import DataSessionRepository, dataframe_from_json
+from backend.modules.data_upload.timeline_rollback import normalize_event_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,7 @@ class SessionManager:
             dict(event.get("payload") or {})
             for event in timeline_events
             if event.get("category") == "preprocessing"
+            and (event.get("metadata") or {}).get("rollback_status", event.get("rollback_status", "active")) == "active"
         ]
     
     def create_session(self, owner_user_id: Optional[str] = None) -> str:
@@ -73,7 +75,7 @@ class SessionManager:
         created_at: Optional[datetime] = None,
     ):
         """Restore a persisted session into memory."""
-        restored_timeline = timeline_events or []
+        restored_timeline = [normalize_event_metadata(dict(event)) for event in (timeline_events or [])]
         self._sessions[session_id] = {
             "owner_user_id": owner_user_id,
             "created_at": created_at or datetime.now(),
@@ -171,6 +173,7 @@ class SessionManager:
             "payload": dict(event.get("payload") or {}),
             "step": event.get("step"),
         }
+        normalized_event = normalize_event_metadata(normalized_event)
         session["timeline_events"].append(normalized_event)
         session["history"] = self._build_legacy_history(session["timeline_events"])
         return normalized_event

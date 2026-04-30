@@ -27,6 +27,7 @@ from backend.modules.data_upload.persistence import (
     dataframe_from_json,
     dataframe_to_json,
 )
+from backend.modules.data_upload.timeline_rollback import apply_selective_rollback, build_rollback_plan
 
 
 class RenameMetadata(BaseModel):
@@ -620,6 +621,90 @@ class DataUploadPersistenceTests(unittest.TestCase):
             session_manager.undo_last_timeline_event(session_id)
 
         invalidate_cache.assert_called_once_with(session_id)
+
+    def test_selective_rollback_preserves_independent_later_event(self):
+        original_df = pd.DataFrame(
+            {
+                "age": [None, 20.0, 30.0],
+                "salary": [100.0, 200.0, 300.0],
+            }
+        )
+        events = [
+            {
+                "id": "fill-age",
+                "category": "preprocessing",
+                "action": "fill_mean",
+                "step": "missing_values",
+                "undoable": True,
+                "metadata": {},
+                "payload": {
+                    "step": "missing_values",
+                    "action": "fill_mean",
+                    "columns": ["age"],
+                },
+            },
+            {
+                "id": "scale-salary",
+                "category": "preprocessing",
+                "action": "minmax",
+                "step": "scaling",
+                "undoable": True,
+                "metadata": {},
+                "payload": {
+                    "step": "scaling",
+                    "action": "minmax",
+                    "columns": ["salary"],
+                    "params": {"feature_range": None},
+                },
+            },
+        ]
+
+        result = apply_selective_rollback(
+            original_df=original_df,
+            events=events,
+            event_id="fill-age",
+            rollback_event_id="rollback-1",
+        )
+
+        restored_df = result["data"]
+        self.assertTrue(pd.isna(restored_df.loc[0, "age"]))
+        self.assertEqual(restored_df["salary"].tolist(), [0.0, 0.5, 1.0])
+        self.assertEqual(result["plan"]["rollback_event_ids"], ["fill-age"])
+
+    def test_selective_rollback_marks_dependent_later_event(self):
+        events = [
+            {
+                "id": "fill-age",
+                "category": "preprocessing",
+                "action": "fill_mean",
+                "step": "missing_values",
+                "undoable": True,
+                "metadata": {},
+                "payload": {
+                    "step": "missing_values",
+                    "action": "fill_mean",
+                    "columns": ["age"],
+                },
+            },
+            {
+                "id": "drop-age",
+                "category": "preprocessing",
+                "action": "drop_columns",
+                "step": "feature_engineering",
+                "undoable": True,
+                "metadata": {},
+                "payload": {
+                    "step": "feature_engineering",
+                    "action": "drop_columns",
+                    "columns": ["age"],
+                },
+            },
+        ]
+
+        plan = build_rollback_plan(events, "fill-age")
+
+        self.assertEqual(plan["rollback_event_ids"], ["drop-age", "fill-age"])
+        self.assertEqual(plan["dependent_events"][0]["id"], "drop-age")
 
     def test_undo_last_history_action_invalidates_session_cache(self):
         df = pd.DataFrame({"city": ["Ankara"], "value": [10]})
