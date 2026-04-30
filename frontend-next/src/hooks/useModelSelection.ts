@@ -22,28 +22,7 @@ interface ColumnInfo {
 }
 
 function resolveModelSelectionColumnType(column: Awaited<ReturnType<typeof api.getColumnTypes>>['columns'][number]): ColumnInfo['type'] {
-    if (column.type === 'categorical' || column.type === 'text') {
-        return 'categorical';
-    }
-
-    if (column.type !== 'numeric') {
-        return 'categorical';
-    }
-
-    const normalizedDtype = column.dtype.trim().toLowerCase();
-    const isIntegerLike =
-        normalizedDtype.startsWith('int')
-        || normalizedDtype.startsWith('uint')
-        || normalizedDtype.startsWith('int64')
-        || normalizedDtype.startsWith('int32')
-        || normalizedDtype.startsWith('int16')
-        || normalizedDtype.startsWith('int8');
-
-    if (isIntegerLike && column.unique_count <= 20) {
-        return 'categorical';
-    }
-
-    return 'numeric';
+    return column.type === 'numeric' ? 'numeric' : 'categorical';
 }
 
 interface UseModelSelectionReturn {
