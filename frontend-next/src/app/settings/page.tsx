@@ -35,23 +35,17 @@ export default function SettingsPage() {
 
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [pageState, setPageState] = useState<PageState>('bootstrap');
-    const [pageError, setPageError] = useState('');
     const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
 
     const [fullName, setFullName] = useState('');
     const [email, setEmail] = useState('');
-    const [profileMessage, setProfileMessage] = useState('');
-    const [profileError, setProfileError] = useState('');
     const [profilePending, setProfilePending] = useState(false);
 
     const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
-    const [passwordMessage, setPasswordMessage] = useState('');
-    const [passwordError, setPasswordError] = useState('');
     const [passwordPending, setPasswordPending] = useState(false);
 
     const [deletePassword, setDeletePassword] = useState('');
-    const [deleteError, setDeleteError] = useState('');
     const [deletePending, setDeletePending] = useState(false);
 
     useEffect(() => {
@@ -74,8 +68,7 @@ export default function SettingsPage() {
                 }
 
                 logger.error('Settings bootstrap failed', error);
-                setPageState('error');
-                setPageError(getErrorMessage(error));
+                notify.error(error, 'Sayfa yüklenirken hata oluştu');
             }
         }
 
@@ -88,11 +81,9 @@ export default function SettingsPage() {
 
     async function handleProfileSubmit(event: React.FormEvent<HTMLFormElement>) {
         event.preventDefault();
-        setProfileMessage('');
-        setProfileError('');
 
         if (!fullName.trim() || !email.trim()) {
-            setProfileError('Ad soyad ve e-posta alanları zorunlu.');
+            notify.warning('Ad soyad ve e-posta alanları zorunlu.');
             return;
         }
 
@@ -105,11 +96,9 @@ export default function SettingsPage() {
                 setEmail(response.user.email);
                 window.dispatchEvent(new CustomEvent('auth:user-updated', { detail: response.user }));
             }
-            setProfileMessage(response.message);
             notify.success(response.message || 'Profil bilgileri güncellendi');
         } catch (error) {
             logger.error('Profile update failed', error, { email: email.trim() });
-            setProfileError(getErrorMessage(error));
             notify.error(error, 'Profil bilgileri güncellenemedi');
         } finally {
             setProfilePending(false);
@@ -118,24 +107,20 @@ export default function SettingsPage() {
 
     async function handlePasswordSubmit(event: React.FormEvent<HTMLFormElement>) {
         event.preventDefault();
-        setPasswordMessage('');
-        setPasswordError('');
 
         if (!currentPassword.trim() || !newPassword.trim()) {
-            setPasswordError('Mevcut parola ve yeni parola zorunlu.');
+            notify.warning('Mevcut parola ve yeni parola zorunlu.');
             return;
         }
 
         setPasswordPending(true);
         try {
             const response = await changePassword(currentPassword, newPassword);
-            setPasswordMessage(response.message);
             setCurrentPassword('');
             setNewPassword('');
             notify.success(response.message || 'Parola güncellendi');
         } catch (error) {
             logger.error('Password change failed', error);
-            setPasswordError(getErrorMessage(error));
             notify.error(error, 'Parola güncellenemedi');
         } finally {
             setPasswordPending(false);
@@ -144,10 +129,9 @@ export default function SettingsPage() {
 
     async function handleDeleteAccount(event: React.FormEvent<HTMLFormElement>) {
         event.preventDefault();
-        setDeleteError('');
 
         if (!deletePassword.trim()) {
-            setDeleteError('Hesabı silmek için parolanızı girin.');
+            notify.warning('Hesabı silmek için parolanızı girin.');
             return;
         }
 
@@ -163,7 +147,6 @@ export default function SettingsPage() {
             router.refresh();
         } catch (error) {
             logger.error('Account delete failed', error);
-            setDeleteError(getErrorMessage(error));
             notify.error(error, 'Hesap silinemedi');
         } finally {
             setDeletePending(false);
@@ -217,12 +200,6 @@ export default function SettingsPage() {
                         </section>
                     )}
 
-                    {pageState === 'error' && (
-                        <section className="rounded-2xl border border-red-400/25 bg-red-500/10 p-5 text-sm text-red-100">
-                            {pageError}
-                        </section>
-                    )}
-
                     {pageState === 'ready' && (
                         <section className="grid gap-6 xl:grid-cols-2">
                             <form
@@ -238,18 +215,6 @@ export default function SettingsPage() {
                                         <p className="mt-1 text-sm text-slate-400">Adınızı ve e-posta adresinizi güncelleyin.</p>
                                     </div>
                                 </div>
-
-                                {profileError && (
-                                    <div className="mb-4 rounded-xl border border-red-400/25 bg-red-500/10 p-4 text-sm text-red-100">
-                                        {profileError}
-                                    </div>
-                                )}
-
-                                {profileMessage && (
-                                    <div className="mb-4 rounded-xl border border-emerald-400/25 bg-emerald-500/10 p-4 text-sm text-emerald-100">
-                                        {profileMessage}
-                                    </div>
-                                )}
 
                                 <div className="space-y-4">
                                     <label className="block">
@@ -298,18 +263,6 @@ export default function SettingsPage() {
                                     </div>
                                 </div>
 
-                                {passwordError && (
-                                    <div className="mb-4 rounded-xl border border-red-400/25 bg-red-500/10 p-4 text-sm text-red-100">
-                                        {passwordError}
-                                    </div>
-                                )}
-
-                                {passwordMessage && (
-                                    <div className="mb-4 rounded-xl border border-emerald-400/25 bg-emerald-500/10 p-4 text-sm text-emerald-100">
-                                        {passwordMessage}
-                                    </div>
-                                )}
-
                                 <div className="space-y-4">
                                     <label className="block">
                                         <span className="mb-2 block text-sm text-slate-300">Mevcut parola</span>
@@ -357,12 +310,6 @@ export default function SettingsPage() {
                                         <p className="mt-1 text-sm text-slate-400">Bu işlem hesabınızı ve oturumunuzu kalıcı olarak kaldırır.</p>
                                     </div>
                                 </div>
-
-                                {deleteError && (
-                                    <div className="mb-4 rounded-xl border border-red-400/25 bg-red-500/10 p-4 text-sm text-red-100">
-                                        {deleteError}
-                                    </div>
-                                )}
 
                                 <div className="grid gap-4 lg:grid-cols-[minmax(0,360px)_1fr] lg:items-end">
                                     <label className="grid w-full grid-cols-[auto_minmax(0,1fr)] items-center gap-3">

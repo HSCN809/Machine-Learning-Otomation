@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Grip, History, X } from 'lucide-react';
 import { PixelTrail } from '@/components/common';
 import { theme } from '@/styles/theme';
+import { notify } from '@/lib/notify';
 import { useDatasetTimeline } from '@/hooks/useDatasetTimeline';
 import type { TimelineEvent, TimelineRollbackPlan } from '@/types/timeline';
 import { TimelineLog } from './TimelineLog';
@@ -137,6 +138,9 @@ export function TimelineDrawerLauncher({
         if (!plan) {
             return;
         }
+        if (plan.unsupportedReplayEvents.length > 0) {
+            notify.warning('Bu işlem geri alınamaz. Timeline içinde yeniden oynatılamayan eski formatlı kayıt var.');
+        }
         setRollbackPlan(plan);
     };
 
@@ -269,11 +273,6 @@ export function TimelineDrawerLauncher({
                                     <p className="mt-1 text-lg font-semibold text-emerald-300">{rollbackPlan.preservedEvents.length}</p>
                                 </div>
                             </div>
-                            {rollbackPlan.unsupportedReplayEvents.length > 0 && (
-                                <div className="rounded-xl border border-red-400/20 bg-red-500/10 p-3 text-red-200">
-                                    Bu işlem geri alınamaz. Timeline içinde yeniden oynatılamayan eski formatlı kayıt var.
-                                </div>
-                            )}
                             {rollbackPlan.dependentEvents.length > 0 && (
                                 <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
                                     <p className="text-xs uppercase tracking-[0.16em] text-gray-500">Pasifleşecek bağlı işlemler</p>

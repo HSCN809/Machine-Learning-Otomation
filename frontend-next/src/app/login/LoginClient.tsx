@@ -7,7 +7,6 @@ import { JetBrains_Mono, Space_Grotesk } from 'next/font/google';
 import {
     ArrowRight,
     BrainCircuit,
-    CheckCircle2,
     ShieldCheck,
 } from 'lucide-react';
 
@@ -45,12 +44,9 @@ export default function LoginClient({ nextPath, registered = false }: LoginClien
     const [isPending, startTransition] = useTransition();
 
     const [pageState, setPageState] = useState<LoadState>('bootstrap');
-    const [authenticatedUser, setAuthenticatedUser] = useState<{ full_name: string; email: string } | null>(null);
 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [errorMessage, setErrorMessage] = useState('');
-    const [successMessage, setSuccessMessage] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
@@ -78,7 +74,7 @@ export default function LoginClient({ nextPath, registered = false }: LoginClien
                 }
 
                 if (registered) {
-                    setSuccessMessage('Hesabınız oluşturuldu. Şimdi giriş yapabilirsiniz.');
+                    notify.info('Hesabınız oluşturuldu. Şimdi giriş yapabilirsiniz.');
                 }
 
                 setPageState('ready');
@@ -88,8 +84,7 @@ export default function LoginClient({ nextPath, registered = false }: LoginClien
                 }
 
                 logger.warn('Login page bootstrap failed', { message: getErrorMessage(error) });
-                setPageState('error');
-                setErrorMessage(getErrorMessage(error));
+                notify.error(error, 'Sayfa yüklenirken hata oluştu');
             }
         }
 
@@ -108,11 +103,9 @@ export default function LoginClient({ nextPath, registered = false }: LoginClien
 
     async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
         event.preventDefault();
-        setErrorMessage('');
-        setSuccessMessage('');
 
         if (!email.trim() || !password.trim()) {
-            setErrorMessage('E-posta ve parola zorunlu.');
+            notify.warning('E-posta ve parola zorunlu.');
             return;
         }
 
@@ -126,9 +119,6 @@ export default function LoginClient({ nextPath, registered = false }: LoginClien
                 throw new Error('Oturum cookie dogrulanamadi. Lutfen tekrar deneyin.');
             }
 
-            setAuthenticatedUser(status.user ?? response.user);
-            setPageState('success');
-            setSuccessMessage('Giriş başarılı. Güvenli oturum oluşturuldu.');
             notify.success('Giriş başarılı');
 
             window.dispatchEvent(new CustomEvent('auth:user-updated', { detail: status.user }));
@@ -139,7 +129,6 @@ export default function LoginClient({ nextPath, registered = false }: LoginClien
         } catch (error) {
             logger.error('Login submit failed', error, { email: email.trim() });
             setPageState('ready');
-            setErrorMessage(getErrorMessage(error));
             notify.error(error, 'Giriş sırasında hata oluştu');
         } finally {
             setIsSubmitting(false);
@@ -229,70 +218,9 @@ export default function LoginClient({ nextPath, registered = false }: LoginClien
                             </div>
                         )}
 
-                        {pageState === 'error' && (
-                            <div className="mt-6 rounded-[1.5rem] border border-red-400/25 bg-red-500/10 p-5 text-sm leading-7 text-red-100">
-                                {errorMessage}
-                            </div>
-                        )}
-
-                        {(pageState === 'ready' || pageState === 'success') && (
+                        {pageState === 'ready' && (
                             <div className="mt-6">
-                                {errorMessage && (
-                                    <div className="mb-4 rounded-[1.25rem] border border-red-400/25 bg-red-500/10 p-4 text-sm text-red-100">
-                                        {errorMessage}
-                                    </div>
-                                )}
-
-                                {successMessage && (
-                                    <div className="mb-4 rounded-[1.25rem] border border-emerald-400/25 bg-emerald-500/10 p-4 text-sm text-emerald-100">
-                                        {successMessage}
-                                    </div>
-                                )}
-
-                                {pageState === 'success' && authenticatedUser ? (
-                                    <div className="rounded-[1.5rem] border border-emerald-400/20 bg-emerald-500/10 p-6">
-                                        <div className="flex items-start gap-4">
-                                            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-400/15">
-                                                <CheckCircle2 className="h-6 w-6 text-emerald-200" />
-                                            </div>
-                                            <div className="flex-1">
-                                                <p className="text-lg font-medium text-white">
-                                                    {authenticatedUser.full_name}
-                                                </p>
-                                                <p className="mt-1 text-sm text-emerald-100/85">
-                                                    {authenticatedUser.email}
-                                                </p>
-                                                <p className="mt-4 text-sm leading-7 text-slate-200">
-                                                    Oturum aktif. Dashboard veya landing sayfasına
-                                                    geçebilirsiniz.
-                                                </p>
-                                            </div>
-                                        </div>
-
-                                        <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-                                            <button
-                                                type="button"
-                                                onClick={() =>
-                                                    startTransition(() => {
-                                                        router.replace(nextPath);
-                                                    })
-                                                }
-                                                className="inline-flex cursor-pointer items-center justify-center gap-3 rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-950 transition-transform duration-300 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
-                                                disabled={isPending}
-                                            >
-                                                Dashboard aç
-                                                <ArrowRight className="h-4 w-4" />
-                                            </button>
-                                            <Link
-                                                href="/homepage"
-                                                className="inline-flex cursor-pointer items-center justify-center gap-3 rounded-full border border-white/15 bg-white/5 px-5 py-3 text-sm font-semibold text-white transition-colors duration-300 hover:bg-white/10"
-                                            >
-                                                Landing sayfası
-                                            </Link>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <form className="space-y-4" onSubmit={handleSubmit}>
+                                <form className="space-y-4" onSubmit={handleSubmit}>
                                         <label className="block">
                                             <span className="mb-2 block text-sm text-slate-300">E-posta</span>
                                             <input
@@ -338,9 +266,8 @@ export default function LoginClient({ nextPath, registered = false }: LoginClien
                                             </Link>
                                         </p>
                                     </form>
-                                )}
-                            </div>
-                        )}
+                                </div>
+                            )}
                     </div>
                 </section>
             </div>

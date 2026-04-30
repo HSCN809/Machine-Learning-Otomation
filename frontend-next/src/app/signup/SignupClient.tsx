@@ -44,8 +44,6 @@ export default function SignupClient({ nextPath }: SignupClientProps) {
     const [fullName, setFullName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [errorMessage, setErrorMessage] = useState('');
-    const [successMessage, setSuccessMessage] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
@@ -74,8 +72,7 @@ export default function SignupClient({ nextPath }: SignupClientProps) {
                 }
 
                 logger.error('Signup page bootstrap failed', error);
-                setPageState('error');
-                setErrorMessage(getErrorMessage(error));
+                notify.error(error, 'Sayfa yüklenirken hata oluştu');
             }
         }
 
@@ -94,11 +91,9 @@ export default function SignupClient({ nextPath }: SignupClientProps) {
 
     async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
         event.preventDefault();
-        setErrorMessage('');
-        setSuccessMessage('');
 
         if (!fullName.trim() || !email.trim() || !password.trim()) {
-            setErrorMessage('Ad soyad, e-posta ve parola zorunlu.');
+            notify.warning('Ad soyad, e-posta ve parola zorunlu.');
             return;
         }
 
@@ -106,7 +101,6 @@ export default function SignupClient({ nextPath }: SignupClientProps) {
 
         try {
             await setupFirstUser(fullName.trim(), email.trim(), password);
-            setSuccessMessage('Hesabınız oluşturuldu. Giriş sayfasına yönlendiriliyorsunuz.');
             notify.success('Hesap oluşturuldu');
 
             startTransition(() => {
@@ -115,7 +109,6 @@ export default function SignupClient({ nextPath }: SignupClientProps) {
         } catch (error) {
             logger.error('Signup submit failed', error, { email: email.trim() });
             setPageState('ready');
-            setErrorMessage(getErrorMessage(error));
             notify.error(error, 'Kayıt sırasında hata oluştu');
         } finally {
             setIsSubmitting(false);
@@ -205,26 +198,8 @@ export default function SignupClient({ nextPath }: SignupClientProps) {
                             </div>
                         )}
 
-                        {pageState === 'error' && (
-                            <div className="mt-6 rounded-[1.5rem] border border-red-400/25 bg-red-500/10 p-5 text-sm leading-7 text-red-100">
-                                {errorMessage}
-                            </div>
-                        )}
-
                         {pageState === 'ready' && (
                             <div className="mt-6">
-                                {errorMessage && (
-                                    <div className="mb-4 rounded-[1.25rem] border border-red-400/25 bg-red-500/10 p-4 text-sm text-red-100">
-                                        {errorMessage}
-                                    </div>
-                                )}
-
-                                {successMessage && (
-                                    <div className="mb-4 rounded-[1.25rem] border border-emerald-400/25 bg-emerald-500/10 p-4 text-sm text-emerald-100">
-                                        {successMessage}
-                                    </div>
-                                )}
-
                                 {requiresSetup ? (
                                     <form className="space-y-4" onSubmit={handleSubmit}>
                                         <label className="block">

@@ -10,13 +10,12 @@ import {
 } from '@/types/eda';
 import * as api from '@/lib/api';
 import { logger } from '@/lib/logger';
-import { getErrorMessage, notify } from '@/lib/notify';
+import { notify } from '@/lib/notify';
 import { clearDatasetQueries, datasetQueryKeys, invalidateDatasetQueries } from '@/lib/query-cache';
 
 interface UseEDAReturn {
     edaData: EDAData | null;
     isLoading: boolean;
-    error: string | null;
     selectedNumericColumn: string | null;
     selectedCategoricalColumn: string | null;
     setSelectedNumericColumn: (col: string) => void;
@@ -241,14 +240,9 @@ export function useEDA(): UseEDAReturn {
         });
     }, [queryClient]);
 
-    const errorMessage = edaError && !api.isSessionRequiredError(edaError) 
-        ? getErrorMessage(edaError, 'EDA verisi yüklenirken hata oluştu') 
-        : null;
-
     return {
         edaData,
         isLoading: isEdaLoading,
-        error: errorMessage,
         selectedNumericColumn: resolvedSelectedNumericColumn,
         selectedCategoricalColumn: resolvedSelectedCategoricalColumn,
         setSelectedNumericColumn,

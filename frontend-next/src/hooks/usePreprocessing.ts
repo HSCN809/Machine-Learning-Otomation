@@ -14,7 +14,7 @@ import {
 } from '@/types/preprocessing';
 import * as api from '@/lib/api';
 import { logger } from '@/lib/logger';
-import { getErrorMessage, notify } from '@/lib/notify';
+import { notify } from '@/lib/notify';
 
 const HISTORY_ACTION_BY_STEP: Record<string, string> = {
     missing_values: 'fill_missing',
@@ -93,44 +93,6 @@ interface UsePreprocessingReturn {
     history: ProcessingHistory[];
     columns: ColumnInfo[];
     isLoading: boolean;
-    error: string | null; /*
-
-            setError(err instanceof Error ? err.message : 'İşlem geçmişi yüklenirken hata oluştu');
-
-    /*
-    /*
-    const loadInitialData = useCallback(async () => {
-        try {
-            setIsLoading(true);
-            setError(null);
-
-            const [columnTypes, timelineResponse] = await Promise.all([
-                api.getColumnTypes(),
-                api.getTimeline(),
-            ]);
-
-            setColumns(mapColumns(columnTypes.columns));
-            const nextHistory = timelineResponse.events
-                .filter((event) => event.category === 'preprocessing')
-                .map((entry, index) => mapHistoryEntry(entry, index))
-                .filter((entry): entry is ProcessingHistory => entry !== null);
-            setHistory(nextHistory);
-            return true;
-        } catch (err) {
-            if (api.isSessionRequiredError(err)) {
-                setColumns([]);
-                setHistory([]);
-                setError(null);
-                return false;
-            }
-            logger.error('Preprocessing data load failed', err);
-            setError(err instanceof Error ? err.message : 'Ön işleme verileri yüklenirken hata oluştu');
-        } finally {
-            setIsLoading(false);
-        }
-    }, []);
-
-    */
     // Navigation
     goToStep: (step: number) => void;
     nextStep: () => void;
@@ -167,7 +129,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
     const [history, setHistory] = useState<ProcessingHistory[]>([]);
     const [columns, setColumns] = useState<ColumnInfo[]>([]);
     const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+
 
     // Load columns from API
     const loadColumns = useCallback(async (): Promise<unknown> => {
@@ -189,11 +151,9 @@ export function usePreprocessing(): UsePreprocessingReturn {
         } catch (err) {
             if (api.isSessionRequiredError(err)) {
                 setColumns([]);
-                setError(null);
                 return false;
             }
             logger.error('Preprocessing columns load failed', err);
-            setError(getErrorMessage(err, 'Sütunlar yüklenirken hata oluştu'));
         } finally {
             setIsLoading(false);
         }
@@ -212,11 +172,9 @@ export function usePreprocessing(): UsePreprocessingReturn {
         } catch (err) {
             if (api.isSessionRequiredError(err)) {
                 setHistory([]);
-                setError(null);
                 return false;
             }
             logger.error('Preprocessing history load failed', err);
-            setError(getErrorMessage(err, 'İşlem geçmişi yüklenirken hata oluştu'));
         } finally {
             setIsLoading(false);
         }
@@ -225,7 +183,6 @@ export function usePreprocessing(): UsePreprocessingReturn {
     const loadInitialData = useCallback(async (): Promise<unknown> => {
         try {
             setIsLoading(true);
-            setError(null);
 
             const [columnTypes, timelineResponse] = await Promise.all([
                 api.getColumnTypes(),
@@ -242,11 +199,9 @@ export function usePreprocessing(): UsePreprocessingReturn {
             if (api.isSessionRequiredError(err)) {
                 setColumns([]);
                 setHistory([]);
-                setError(null);
                 return;
             }
             logger.error('Preprocessing data load failed', err);
-            setError(getErrorMessage(err, 'Ön işleme verileri yüklenirken hata oluştu'));
         } finally {
             setIsLoading(false);
         }
@@ -313,7 +268,6 @@ export function usePreprocessing(): UsePreprocessingReturn {
     const applyMissingValues = useCallback(async (config: MissingValueConfig) => {
         try {
             setIsLoading(true);
-            setError(null);
 
             await api.applyMissingValues(config.method, config.columns);
 
@@ -321,9 +275,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
             notifyDatasetMutation();
             notify.success('Eksik değer işlemi uygulandı');
         } catch (err) {
-            const message = getErrorMessage(err, 'İşlem sırasında hata oluştu');
             logger.error('Missing values preprocessing failed', err, { method: config.method });
-            setError(message);
             notify.error(err, 'İşlem sırasında hata oluştu');
         } finally {
             setIsLoading(false);
@@ -333,7 +285,6 @@ export function usePreprocessing(): UsePreprocessingReturn {
     const applyOutliers = useCallback(async (config: OutlierConfig) => {
         try {
             setIsLoading(true);
-            setError(null);
 
             await api.applyOutliers(
                 config.method,
@@ -346,9 +297,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
             notifyDatasetMutation();
             notify.success('Aykırı değer işlemi uygulandı');
         } catch (err) {
-            const message = getErrorMessage(err, 'İşlem sırasında hata oluştu');
             logger.error('Outlier preprocessing failed', err, { method: config.method });
-            setError(message);
             notify.error(err, 'İşlem sırasında hata oluştu');
         } finally {
             setIsLoading(false);
@@ -358,7 +307,6 @@ export function usePreprocessing(): UsePreprocessingReturn {
     const applyEncoding = useCallback(async (config: EncodingConfig) => {
         try {
             setIsLoading(true);
-            setError(null);
 
             await api.applyEncoding(
                 config.method,
@@ -371,9 +319,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
             notifyDatasetMutation();
             notify.success('Kodlama işlemi uygulandı');
         } catch (err) {
-            const message = getErrorMessage(err, 'İşlem sırasında hata oluştu');
             logger.error('Encoding preprocessing failed', err, { method: config.method });
-            setError(message);
             notify.error(err, 'İşlem sırasında hata oluştu');
         } finally {
             setIsLoading(false);
@@ -383,7 +329,6 @@ export function usePreprocessing(): UsePreprocessingReturn {
     const applyScaling = useCallback(async (config: ScalingConfig) => {
         try {
             setIsLoading(true);
-            setError(null);
 
             await api.applyScaling(config.method, config.columns, config.featureRange);
 
@@ -391,9 +336,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
             notifyDatasetMutation();
             notify.success('Ölçeklendirme işlemi uygulandı');
         } catch (err) {
-            const message = getErrorMessage(err, 'İşlem sırasında hata oluştu');
             logger.error('Scaling preprocessing failed', err, { method: config.method });
-            setError(message);
             notify.error(err, 'İşlem sırasında hata oluştu');
         } finally {
             setIsLoading(false);
@@ -403,7 +346,6 @@ export function usePreprocessing(): UsePreprocessingReturn {
     const applyFeatureEngineering = useCallback(async (config: FeatureConfig) => {
         try {
             setIsLoading(true);
-            setError(null);
 
             await api.applyFeatureEngineering(config);
 
@@ -411,9 +353,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
             notifyDatasetMutation();
             notify.success('Özellik mühendisliği işlemi uygulandı');
         } catch (err) {
-            const message = getErrorMessage(err, 'İşlem sırasında hata oluştu');
             logger.error('Feature engineering preprocessing failed', err, { operation: config.operation });
-            setError(message);
             notify.error(err, 'İşlem sırasında hata oluştu');
         } finally {
             setIsLoading(false);
@@ -423,15 +363,12 @@ export function usePreprocessing(): UsePreprocessingReturn {
     const dropColumns = useCallback(async (config: DropColumnConfig) => {
         try {
             setIsLoading(true);
-            setError(null);
             await api.dropColumns(config.columns, config.reason);
             await refreshColumnsAndHistory();
             notifyDatasetMutation();
             notify.success('Sütunlar silindi');
         } catch (err) {
-            const message = getErrorMessage(err, 'İşlem sırasında hata oluştu');
             logger.error('Drop columns failed', err, { columns: config.columns });
-            setError(message);
             notify.error(err, 'İşlem sırasında hata oluştu');
         } finally {
             setIsLoading(false);
@@ -445,15 +382,12 @@ export function usePreprocessing(): UsePreprocessingReturn {
 
         try {
             setIsLoading(true);
-            setError(null);
             await api.undoLastTimelineEvent();
             await refreshColumnsAndHistory();
             notifyDatasetMutation();
             notify.success('Son işlem geri alındı');
         } catch (err) {
-            const message = getErrorMessage(err, 'Geri alma sırasında hata oluştu');
             logger.error('Undo preprocessing failed', err);
-            setError(message);
             notify.error(err, 'Geri alma sırasında hata oluştu');
         } finally {
             setIsLoading(false);
@@ -463,15 +397,12 @@ export function usePreprocessing(): UsePreprocessingReturn {
     const undoToHistoryItem = useCallback(async (historyIndex: number) => {
         try {
             setIsLoading(true);
-            setError(null);
             await api.undoPreprocessingTo(historyIndex);
             await refreshColumnsAndHistory();
             notifyDatasetMutation();
             notify.success('Seçili işleme geri dönüldü');
         } catch (err) {
-            const message = getErrorMessage(err, 'Seçili işlem geri alınırken hata oluştu');
             logger.error('Undo preprocessing to history item failed', err, { historyIndex });
-            setError(message);
             notify.error(err, 'Seçili işlem geri alınırken hata oluştu');
         } finally {
             setIsLoading(false);
@@ -487,13 +418,10 @@ export function usePreprocessing(): UsePreprocessingReturn {
             setSkippedSteps([]);
             setCurrentStep(0);
             await loadColumns();
-            setError(null);
             notifyDatasetMutation();
             notify.success('Ön işleme adımları sıfırlandı');
         } catch (err) {
-            const message = getErrorMessage(err, 'Sıfırlama sırasında hata oluştu');
             logger.error('Reset preprocessing failed', err);
-            setError(message);
             notify.error(err, 'Sıfırlama sırasında hata oluştu');
         } finally {
             setIsLoading(false);
@@ -562,7 +490,6 @@ return {
         history,
         columns,
         isLoading,
-        error,
         goToStep,
         nextStep,
         skipStep,

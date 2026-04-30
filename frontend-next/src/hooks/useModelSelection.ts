@@ -13,7 +13,7 @@ import {
 } from '@/types/model-selection';
 import * as api from '@/lib/api';
 import { logger } from '@/lib/logger';
-import { getErrorMessage, notify } from '@/lib/notify';
+import { notify } from '@/lib/notify';
 
 interface ColumnInfo {
     name: string;
@@ -61,7 +61,6 @@ interface UseModelSelectionReturn {
     currentTrainingModel: string | null;
     completedTrainingModels: number;
     totalTrainingModels: number;
-    error: string | null;
     columns: ColumnInfo[];
     availableModels: ModelInfo[];
     goToStep: (step: number) => void;
@@ -154,7 +153,6 @@ export function useModelSelection(): UseModelSelectionReturn {
     const [currentTrainingModel, setCurrentTrainingModel] = useState<string | null>(null);
     const [completedTrainingModels, setCompletedTrainingModels] = useState(0);
     const [totalTrainingModels, setTotalTrainingModels] = useState(0);
-    const [error, setError] = useState<string | null>(null);
     const [columns, setColumns] = useState<ColumnInfo[]>([]);
     const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
     const [trainingJobId, setTrainingJobId] = useState<string | null>(null);
@@ -236,7 +234,6 @@ export function useModelSelection(): UseModelSelectionReturn {
         }
 
         if (snapshot.status === 'completed') {
-            setError(null);
             setCurrentStep(4);
             setCompletedSteps((prev) => (prev.includes(3) ? prev : [...prev, 3]));
             closeTrainingStream();
@@ -247,7 +244,6 @@ export function useModelSelection(): UseModelSelectionReturn {
         }
 
         if (snapshot.status === 'failed') {
-            setError(snapshot.error ?? 'Egitim sirasinda hata olustu');
             setCurrentStep(3);
             closeTrainingStream();
             notifyDatasetMutation();
@@ -257,7 +253,6 @@ export function useModelSelection(): UseModelSelectionReturn {
         }
 
         if (snapshot.status === 'stopped') {
-            setError('Eğitim durduruldu');
             setCurrentStep(3);
             closeTrainingStream();
             notifyDatasetMutation();
@@ -266,7 +261,6 @@ export function useModelSelection(): UseModelSelectionReturn {
             return;
         }
 
-        setError(null);
         setCurrentStep(3);
     }, [closeTrainingStream, loadAvailableModels, notifyDatasetMutation, scheduleTimelineRefresh]);
 
@@ -293,7 +287,6 @@ export function useModelSelection(): UseModelSelectionReturn {
                     jobId,
                     status: trainingStatusRef.current,
                 });
-                setError((prev) => prev ?? message);
                 notify.error(new Error(message), message);
             }
             closeTrainingStream();
@@ -347,13 +340,10 @@ export function useModelSelection(): UseModelSelectionReturn {
             if (api.isSessionRequiredError(err)) {
                 setColumns([]);
                 setAvailableModels([]);
-                setError(null);
                 return;
             }
 
-            const message = getErrorMessage(err, 'Sütunlar yüklenirken hata oluştu');
             logger.error('Model selection columns load failed', err);
-            setError(message);
             notify.error(err, 'Sütunlar yüklenirken hata oluştu');
         } finally {
             setIsLoading(false);
@@ -501,7 +491,6 @@ export function useModelSelection(): UseModelSelectionReturn {
     const setTargetColumn = useCallback(
         (column: string) => {
             setTargetColumnState(column);
-            setError(null);
             loggedStepPayloadsRef.current = {};
 
             closeTrainingStream();
@@ -523,7 +512,6 @@ export function useModelSelection(): UseModelSelectionReturn {
     const setProblemType = useCallback(
         (nextProblemType: ProblemType) => {
             setProblemTypeState(nextProblemType);
-            setError(null);
             loggedStepPayloadsRef.current = {};
             void loadAvailableModels(nextProblemType);
             setSelectedModels([]);
@@ -561,7 +549,6 @@ export function useModelSelection(): UseModelSelectionReturn {
 
         try {
             setIsTraining(true);
-            setError(null);
             setTrainingStatus('queued');
             setCurrentTrainingModel(null);
             setCompletedTrainingModels(0);
@@ -576,9 +563,7 @@ export function useModelSelection(): UseModelSelectionReturn {
             await refreshTimeline();
             notify.info('Model eğitimi başlatıldı');
         } catch (err) {
-            const message = getErrorMessage(err, 'Eğitim sırasında hata oluştu');
             logger.error('Model training failed to start', err);
-            setError(message);
             setIsTraining(false);
             setTrainingStatus('failed');
             notify.error(err, 'Eğitim sırasında hata oluştu');
@@ -591,14 +576,11 @@ export function useModelSelection(): UseModelSelectionReturn {
         }
 
         try {
-            setError(null);
             await api.stopModelTraining(trainingJobId);
             setTrainingStatus('stopping');
             notify.info('Eğitim durduruluyor');
         } catch (err) {
-            const message = getErrorMessage(err, 'Eğitim durdurulamadı');
             logger.error('Model training stop failed', err, { trainingJobId });
-            setError(message);
             notify.error(err, 'Eğitim durdurulamadı');
         }
     }, [trainingJobId]);
@@ -621,7 +603,6 @@ export function useModelSelection(): UseModelSelectionReturn {
         setCurrentTrainingModel(null);
         setCompletedTrainingModels(0);
         setTotalTrainingModels(0);
-        setError(null);
     }, [closeTrainingStream]);
 
     useEffect(() => {
@@ -648,7 +629,6 @@ export function useModelSelection(): UseModelSelectionReturn {
         currentTrainingModel,
         completedTrainingModels,
         totalTrainingModels,
-        error,
         columns,
         availableModels,
         goToStep,
