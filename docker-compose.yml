@@ -37,7 +37,7 @@ services:
       dockerfile: backend/Dockerfile
     container_name: ml_automation_backend
     restart: unless-stopped
-    command: uvicorn backend.api.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn backend.api.main:app --host 0.0.0.0 --port 8000
     depends_on:
       db:
         condition: service_healthy

@@ -3,10 +3,14 @@ Preprocessing Router - Data preprocessing endpoints
 """
 
 import ast
-from io import BytesIO
+import asyncio
 import logging
 import os
 import sys
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
+from io import BytesIO
 from typing import Any, List, Optional
 
 import numpy as np
@@ -40,6 +44,16 @@ from backend.modules.data_preprocessing.scaling.processor import apply_scaling_m
 
 router = APIRouter()
 EXCEL_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+PREPROCESSING_MAX_WORKERS = int(os.getenv("PREPROCESSING_MAX_WORKERS", "4"))
+PREPROCESSING_EXECUTOR = ThreadPoolExecutor(
+    max_workers=PREPROCESSING_MAX_WORKERS,
+    thread_name_prefix="preprocessing",
+)
+
+
+async def _run_preprocessing_cpu(func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(PREPROCESSING_EXECUTOR, partial(func, *args, **kwargs))
 
 
 def _escape_excel_formula_value(value: Any) -> Any:
@@ -306,6 +320,126 @@ def _validate_expression(expression: str, allowed_names: set[str]) -> ast.Expres
     return tree
 
 
+def _process_missing_values_dataframe(
+    df: pd.DataFrame,
+    method: str,
+    valid_columns: List[str],
+) -> tuple[pd.DataFrame, int]:
+    processed_df = df.copy(deep=True)
+    affected_rows = 0
+
+    for col in valid_columns:
+        if col not in processed_df.columns:
+            continue
+
+        initial_nulls = processed_df[col].isnull().sum()
+
+        if method == "fill_mean":
+            if np.issubdtype(processed_df[col].dtype, np.number):
+                processed_df[col] = processed_df[col].fillna(processed_df[col].mean())
+        elif method == "fill_median":
+            if np.issubdtype(processed_df[col].dtype, np.number):
+                processed_df[col] = processed_df[col].fillna(processed_df[col].median())
+        elif method == "fill_mode":
+            mode_val = processed_df[col].mode()
+            if len(mode_val) > 0:
+                processed_df[col] = processed_df[col].fillna(mode_val.iloc[0])
+        elif method == "fill_knn":
+            processed_df = fill_missing_values_knn(processed_df, [col])
+        elif method == "fill_interpolation":
+            processed_df = fill_missing_values_interpolation(processed_df, [col], method="linear")
+        elif method == "fill_regression":
+            processed_df = fill_missing_values_regression(processed_df, [col])
+        elif method == "fill_ffill":
+            processed_df[col] = processed_df[col].ffill()
+        elif method == "fill_bfill":
+            processed_df[col] = processed_df[col].bfill()
+        elif method == "drop_columns":
+            if processed_df[col].isnull().sum() > 0:
+                processed_df = processed_df.drop(columns=[col])
+
+        affected_rows += int(initial_nulls)
+
+    return processed_df, affected_rows
+
+
+def _analyze_outlier_dataframe(
+    df: pd.DataFrame,
+    method: str,
+    requested_columns: Optional[List[str]],
+    threshold: Optional[float],
+) -> dict[str, Any]:
+    return _analyze_outliers_for_columns(
+        df=df.copy(deep=True),
+        method=method,
+        requested_columns=requested_columns,
+        threshold=threshold,
+    )
+
+
+def _process_outlier_dataframe(
+    df: pd.DataFrame,
+    method: str,
+    requested_columns: Optional[List[str]],
+    threshold: Optional[float],
+    winsorize_percent: Optional[float],
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    working_df = df.copy(deep=True)
+    analysis = _analyze_outliers_for_columns(
+        df=working_df,
+        method=method,
+        requested_columns=requested_columns,
+        threshold=threshold,
+    )
+    outlier_method = analysis["outlier_method"]
+    detected_columns = analysis["detected_columns"]
+
+    if not detected_columns:
+        return working_df, analysis
+
+    process_kwargs: dict[str, Any] = {}
+    resolved_threshold = analysis.get("resolved_threshold")
+    if outlier_method in {"iqr_cap", "iqr_winsorize"} and resolved_threshold is not None:
+        process_kwargs["factor"] = resolved_threshold
+    if outlier_method == "iqr_winsorize":
+        process_kwargs["tail_percent"] = winsorize_percent if winsorize_percent is not None else 5.0
+
+    return (
+        apply_outlier_method(
+            working_df,
+            detected_columns,
+            method=outlier_method,
+            **process_kwargs,
+        ),
+        analysis,
+    )
+
+
+def _process_scaling_dataframe(
+    df: pd.DataFrame,
+    method: str,
+    valid_columns: List[str],
+    feature_range: Optional[tuple[float, float]],
+) -> pd.DataFrame:
+    working_df = df.copy(deep=True)
+
+    if method == "standard":
+        return apply_scaling_method(working_df, valid_columns, "standard_scaler")
+    if method == "minmax":
+        scaling_kwargs: dict[str, Any] = {}
+        if feature_range is not None:
+            scaling_kwargs["feature_range"] = tuple(feature_range)
+        return apply_scaling_method(working_df, valid_columns, "minmax_scaler", **scaling_kwargs)
+    if method == "robust":
+        return apply_scaling_method(working_df, valid_columns, "robust_scaler")
+    if method == "maxabs":
+        return apply_scaling_method(working_df, valid_columns, "maxabs_scaler")
+    if method == "normalizer":
+        return apply_scaling_method(working_df, valid_columns, "normalizer")
+
+    raise HTTPException(status_code=400, detail=f"Unsupported scaling method: {method}")
+
+
 @router.post("/missing-values")
 async def handle_missing_values(
     request: MissingValuesRequest,
@@ -319,7 +453,6 @@ async def handle_missing_values(
     
     try:
         previous_df = df.copy(deep=True)
-        affected_rows = 0
 
         if request.method not in SUPPORTED_MISSING_VALUE_METHODS:
             raise HTTPException(status_code=400, detail=f"Unsupported missing values method: {request.method}")
@@ -331,37 +464,12 @@ async def handle_missing_values(
         if not valid_columns:
             raise HTTPException(status_code=400, detail="İşlem için geçerli sütun bulunamadı")
 
-        for col in valid_columns:
-            if col not in df.columns:
-                continue
-            
-            initial_nulls = df[col].isnull().sum()
-            
-            if request.method == "fill_mean":
-                if np.issubdtype(df[col].dtype, np.number):
-                    df[col] = df[col].fillna(df[col].mean())
-            elif request.method == "fill_median":
-                if np.issubdtype(df[col].dtype, np.number):
-                    df[col] = df[col].fillna(df[col].median())
-            elif request.method == "fill_mode":
-                mode_val = df[col].mode()
-                if len(mode_val) > 0:
-                    df[col] = df[col].fillna(mode_val.iloc[0])
-            elif request.method == "fill_knn":
-                df = fill_missing_values_knn(df, [col])
-            elif request.method == "fill_interpolation":
-                df = fill_missing_values_interpolation(df, [col], method="linear")
-            elif request.method == "fill_regression":
-                df = fill_missing_values_regression(df, [col])
-            elif request.method == "fill_ffill":
-                df[col] = df[col].ffill()
-            elif request.method == "fill_bfill":
-                df[col] = df[col].bfill()
-            elif request.method == "drop_columns":
-                if df[col].isnull().sum() > 0:
-                    df = df.drop(columns=[col])
-            
-            affected_rows += int(initial_nulls)
+        processed_df, affected_rows = await _run_preprocessing_cpu(
+            _process_missing_values_dataframe,
+            df,
+            request.method,
+            valid_columns,
+        )
         
         history_payload = {
             "step": "missing_values",
@@ -372,7 +480,7 @@ async def handle_missing_values(
             },
             "affected_rows": affected_rows,
         }
-        session_manager.set_dataframe(session_id, df)
+        session_manager.set_dataframe(session_id, processed_df)
         session_manager.add_history_snapshot(session_id, previous_df)
         session_manager.add_history(session_id, dict(history_payload))
         _record_preprocessing_timeline_event(
@@ -391,7 +499,7 @@ async def handle_missing_values(
             "columns": valid_columns,
             "skipped_columns": skipped_columns,
             "affected_rows": affected_rows,
-            "remaining_nulls": int(df.isnull().sum().sum()),
+            "remaining_nulls": int(processed_df.isnull().sum().sum()),
         }
 
     except HTTPException:
@@ -413,13 +521,15 @@ async def handle_outliers(
     
     try:
         previous_df = df.copy(deep=True)
-        analysis = _analyze_outliers_for_columns(
-            df=df,
-            method=request.method,
-            requested_columns=request.columns,
-            threshold=request.threshold,
+        processed_df, analysis = await _run_preprocessing_cpu(
+            _process_outlier_dataframe,
+            df,
+            request.method,
+            request.columns,
+            request.threshold,
+            request.winsorize_percent,
         )
-        outlier_method = _parse_outlier_method(request.method)
+        outlier_method = analysis["outlier_method"]
         detected_columns = analysis["detected_columns"]
 
         if not detected_columns:
@@ -432,22 +542,7 @@ async def handle_outliers(
                 "remaining_rows": len(df),
             }
 
-        process_kwargs: dict[str, Any] = {}
         resolved_threshold = analysis.get("resolved_threshold")
-        if outlier_method in {"iqr_cap", "iqr_winsorize"} and resolved_threshold is not None:
-            process_kwargs["factor"] = resolved_threshold
-        if outlier_method == "iqr_winsorize":
-            process_kwargs["tail_percent"] = (
-                request.winsorize_percent if request.winsorize_percent is not None else 5.0
-            )
-
-        processed_df = apply_outlier_method(
-            df,
-            detected_columns,
-            method=outlier_method,
-            **process_kwargs,
-        )
-
         affected_rows = int(analysis.get("total_outliers", 0))
 
         history_payload = {
@@ -499,11 +594,12 @@ async def analyze_outlier_columns(
         raise HTTPException(status_code=400, detail="No data loaded")
 
     try:
-        analysis = _analyze_outliers_for_columns(
-            df=df,
-            method=request.method,
-            requested_columns=request.columns,
-            threshold=request.threshold,
+        analysis = await _run_preprocessing_cpu(
+            _analyze_outlier_dataframe,
+            df,
+            request.method,
+            request.columns,
+            request.threshold,
         )
 
         return {
@@ -641,21 +737,13 @@ async def handle_scaling(
         if not valid_columns:
             raise HTTPException(status_code=400, detail="Ölçeklendirme için geçerli sayısal sütun bulunamadı")
 
-        if request.method == "standard":
-            df = apply_scaling_method(df, valid_columns, "standard_scaler")
-        elif request.method == "minmax":
-            scaling_kwargs: dict[str, Any] = {}
-            if request.feature_range is not None:
-                scaling_kwargs["feature_range"] = tuple(request.feature_range)
-            df = apply_scaling_method(df, valid_columns, "minmax_scaler", **scaling_kwargs)
-        elif request.method == "robust":
-            df = apply_scaling_method(df, valid_columns, "robust_scaler")
-        elif request.method == "maxabs":
-            df = apply_scaling_method(df, valid_columns, "maxabs_scaler")
-        elif request.method == "normalizer":
-            df = apply_scaling_method(df, valid_columns, "normalizer")
-        else:
-            raise HTTPException(status_code=400, detail=f"Unsupported scaling method: {request.method}")
+        processed_df = await _run_preprocessing_cpu(
+            _process_scaling_dataframe,
+            df,
+            request.method,
+            valid_columns,
+            request.feature_range,
+        )
         
         history_payload = {
             "step": "scaling",
@@ -666,7 +754,7 @@ async def handle_scaling(
                 "skipped_columns": skipped_columns,
             },
         }
-        session_manager.set_dataframe(session_id, df)
+        session_manager.set_dataframe(session_id, processed_df)
         session_manager.add_history_snapshot(session_id, previous_df)
         session_manager.add_history(session_id, dict(history_payload))
         _record_preprocessing_timeline_event(
