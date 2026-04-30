@@ -19,6 +19,11 @@ const EMPTY_DRAFT: DataEditorDraft = {
     renamedColumns: [],
 };
 
+interface DraftState {
+    current: DataEditorDraft;
+    history: DataEditorDraft[];
+}
+
 function cloneDraft(draft: DataEditorDraft): DataEditorDraft {
     return {
         updatedCells: draft.updatedCells.map((cell) => ({ ...cell })),
@@ -110,8 +115,8 @@ export function useDataEditor({ onSaved }: UseDataEditorOptions = {}): UseDataEd
     const [isLoading, setIsLoading] = useState(false);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
-    const [draft, setDraft] = useState<DataEditorDraft>(EMPTY_DRAFT);
-    const [, setDraftHistory] = useState<DataEditorDraft[]>([]);
+    const [draftState, setDraftState] = useState<DraftState>({ current: EMPTY_DRAFT, history: [] });
+    const draft = draftState.current;
     const [selectedRows, setSelectedRows] = useState<number[]>([]);
     const [selectedTrimColumns, setSelectedTrimColumns] = useState<string[]>([]);
     const [activeCell, setActiveCell] = useState<DataEditorCellRef | null>(null);
@@ -172,14 +177,15 @@ export function useDataEditor({ onSaved }: UseDataEditorOptions = {}): UseDataEd
     }, [loadPage]);
 
     const applyDraftChange = useCallback((mutator: (draft: DataEditorDraft) => DataEditorDraft) => {
-        setDraft((previousDraft) => {
-            const nextDraft = mutator(cloneDraft(previousDraft));
-            if (draftsEqual(previousDraft, nextDraft)) {
-                return previousDraft;
+        setDraftState((previousState) => {
+            const nextDraft = mutator(cloneDraft(previousState.current));
+            if (draftsEqual(previousState.current, nextDraft)) {
+                return previousState;
             }
-
-            setDraftHistory((previousHistory) => [...previousHistory, cloneDraft(previousDraft)]);
-            return nextDraft;
+            return {
+                current: nextDraft,
+                history: [...previousState.history, cloneDraft(previousState.current)],
+            };
         });
     }, []);
 
@@ -420,20 +426,21 @@ export function useDataEditor({ onSaved }: UseDataEditorOptions = {}): UseDataEd
     );
 
     const undoLastChange = useCallback(() => {
-        setDraftHistory((previousHistory) => {
-            if (previousHistory.length === 0) {
-                return previousHistory;
+        setDraftState((previousState) => {
+            if (previousState.history.length === 0) {
+                return previousState;
             }
 
-            const lastSnapshot = previousHistory[previousHistory.length - 1];
-            setDraft(cloneDraft(lastSnapshot));
-            return previousHistory.slice(0, -1);
+            const lastSnapshot = previousState.history[previousState.history.length - 1];
+            return {
+                current: cloneDraft(lastSnapshot),
+                history: previousState.history.slice(0, -1),
+            };
         });
     }, []);
 
     const discardChanges = useCallback(() => {
-        setDraft(cloneDraft(EMPTY_DRAFT));
-        setDraftHistory([]);
+        setDraftState({ current: cloneDraft(EMPTY_DRAFT), history: [] });
         setSelectedRows([]);
         setSelectedTrimColumns([]);
         setActiveCell(null);
@@ -456,11 +463,14 @@ export function useDataEditor({ onSaved }: UseDataEditorOptions = {}): UseDataEd
         const hasEmptyRenamedColumns = renamedColumnNames.some((name) => name.length === 0);
 
         if (hasEmptyRenamedColumns) {
-            setDraft((previousDraft) => ({
-                ...previousDraft,
-                renamedColumns: previousDraft.renamedColumns.filter(
-                    (item) => item.newName.trim().length > 0
-                ),
+            setDraftState((previousState) => ({
+                ...previousState,
+                current: {
+                    ...previousState.current,
+                    renamedColumns: previousState.current.renamedColumns.filter(
+                        (item) => item.newName.trim().length > 0
+                    ),
+                },
             }));
             notify.warning('Sütun ismi boş bırakılamaz');
             return false;
@@ -483,8 +493,7 @@ export function useDataEditor({ onSaved }: UseDataEditorOptions = {}): UseDataEd
             }
             await loadPage(1);
 
-            setDraft(cloneDraft(EMPTY_DRAFT));
-            setDraftHistory([]);
+            setDraftState({ current: cloneDraft(EMPTY_DRAFT), history: [] });
             setSelectedRows([]);
             setSelectedTrimColumns([]);
             setActiveCell(null);
