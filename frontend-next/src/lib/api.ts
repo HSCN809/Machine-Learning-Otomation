@@ -65,6 +65,15 @@ export function subscribeToStoredSession(listener: () => void): () => void {
     };
 }
 
+export async function checkBackendHealth(): Promise<boolean> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/health`, { signal: AbortSignal.timeout(5000) });
+        return response.ok;
+    } catch {
+        return false;
+    }
+}
+
 export class SessionRequiredError extends Error {
     constructor(message: string = SESSION_REQUIRED_MESSAGE) {
         super(message);

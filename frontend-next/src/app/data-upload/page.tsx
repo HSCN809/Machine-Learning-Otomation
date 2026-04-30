@@ -60,9 +60,21 @@ export default function DataUploadPage() {
     useEffect(() => {
         let cancelled = false;
 
+        const waitForBackend = async (): Promise<boolean> => {
+            for (let attempt = 0; attempt < 5; attempt++) {
+                if (cancelled) return false;
+                if (await api.checkBackendHealth()) return true;
+                await new Promise((r) => setTimeout(r, 1000));
+            }
+            return false;
+        };
+
         const bootstrap = async () => {
             try {
-                await refreshSavedDatasets();
+                await waitForBackend();
+                if (!cancelled) {
+                    await refreshSavedDatasets();
+                }
                 if (!cancelled) {
                     setShowDropzone(!api.hasStoredSession());
                 }

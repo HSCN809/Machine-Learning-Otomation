@@ -138,10 +138,17 @@ export function DataUploadProvider({ children }: { children: ReactNode }) {
             setSavedDatasets(await api.getSavedDatasets());
         } catch (err) {
             logger.error('Saved dataset list load failed', err);
+            if (api.isSessionRequiredError(err)) {
+                clearLoadedState('idle');
+            } else {
+                const message = getErrorMessage(err, 'Kayıtlı veri setleri yüklenemedi');
+                setError(message);
+                notify.error(err, 'Kayıtlı veri setleri yüklenemedi');
+            }
         } finally {
             setIsSavedDatasetsLoading(false);
         }
-    }, []);
+    }, [clearLoadedState]);
 
     const reset = useCallback(async () => {
         try {
