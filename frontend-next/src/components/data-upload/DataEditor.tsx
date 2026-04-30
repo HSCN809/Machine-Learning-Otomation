@@ -1635,9 +1635,6 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                                                                 )
                                                                     ? 'bg-cyan-500/5'
                                                                     : '',
-                                                                isCutColumn
-                                                                    ? 'border-amber-400/60 border-dashed bg-amber-500/10'
-                                                                    : '',
                                                                 selectedColumnSet.has(column)
                                                                     ? 'border-cyan-400 bg-cyan-500/10 text-white shadow-[0_0_0_1px_rgba(34,211,238,0.18)]'
                                                                     : '',
@@ -1646,7 +1643,7 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                                                             <span className="block min-h-[1.5rem] truncate">
                                                                 {getColumnDisplayName(column) || '\u00A0'}
                                                             </span>
-                                                            {isCopiedColumn && (
+                                                            {(isCutColumn || isCopiedColumn) && (
                                                                 <span
                                                                     aria-hidden="true"
                                                                     className="data-editor-copy-ants"
@@ -1778,9 +1775,6 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                                                                         !isSelectedCell
                                                                             ? 'ring-1 ring-cyan-500/30'
                                                                             : '',
-                                                                        isCutCell
-                                                                            ? 'border-amber-400/60 border-dashed bg-amber-500/10'
-                                                                            : '',
                                                                         isSelectedCell
                                                                             ? 'border-cyan-400 bg-cyan-500/10 shadow-[0_0_0_1px_rgba(34,211,238,0.18)]'
                                                                             : '',
@@ -1789,7 +1783,7 @@ export function DataEditor({ onSaved, onDelete }: DataEditorProps) {
                                                                     <span className="block min-h-[1.5rem] truncate">
                                                                         {currentValue || '\u00A0'}
                                                                     </span>
-                                                                    {isCopyCell && (
+                                                                    {(isCutCell || isCopyCell) && (
                                                                         <span
                                                                             aria-hidden="true"
                                                                             className="data-editor-copy-ants"
