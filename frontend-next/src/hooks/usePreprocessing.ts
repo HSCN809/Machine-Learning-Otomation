@@ -154,6 +154,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
                 return false;
             }
             logger.error('Preprocessing columns load failed', err);
+            notify.error(err, 'Sütunlar yüklenirken hata oluştu');
         } finally {
             setIsLoading(false);
         }
@@ -175,6 +176,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
                 return false;
             }
             logger.error('Preprocessing history load failed', err);
+            notify.error(err, 'İşlem geçmişi yüklenirken hata oluştu');
         } finally {
             setIsLoading(false);
         }
@@ -202,6 +204,7 @@ export function usePreprocessing(): UsePreprocessingReturn {
                 return;
             }
             logger.error('Preprocessing data load failed', err);
+            notify.error(err, 'Ön işleme verileri yüklenirken hata oluştu');
         } finally {
             setIsLoading(false);
         }
