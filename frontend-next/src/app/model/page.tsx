@@ -175,7 +175,7 @@ export default function ModelSelectionPage() {
                                 <button
                                     onClick={stopTraining}
                                     disabled={trainingStatus === 'stopping'}
-                                    className="inline-flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-6 py-3 font-medium text-red-300 transition-all hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                                    className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-6 py-3 font-medium text-red-300 transition-all hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                     {trainingStatus === 'stopping' ? 'Durduruluyor...' : 'Eğitimi Durdur'}
                                 </button>
