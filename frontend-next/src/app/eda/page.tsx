@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { Sidebar, Header } from '@/components/layout';
+import { TimelineDrawerLauncher } from '@/components/timeline';
 import { ProtectedRouteBoundary } from '@/components/auth/ProtectedRouteBoundary';
 import { NoDataWarning, SessionPageSkeleton, StepProgress } from '@/components/common';
 import { DataTypesTable } from '@/components/eda/DataTypesTable';
@@ -410,6 +411,13 @@ export default function EDAPage() {
                         )}
                     </main>
                 </div>
+                <TimelineDrawerLauncher
+                    visible={!datasetBootstrap.isChecking}
+                    enabled={Boolean(edaData)}
+                    onAfterUndo={async () => {
+                        await loadEDAData();
+                    }}
+                />
             </div>
         </ProtectedRouteBoundary>
     );

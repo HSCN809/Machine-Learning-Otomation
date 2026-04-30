@@ -306,18 +306,7 @@ def _append_model_timeline_event(
     db: Session,
     metadata: Optional[Dict[str, Any]] = None,
 ):
-    session_manager.add_timeline_event(
-        session_id,
-        {
-            "category": "model",
-            "action": action,
-            "title": title,
-            "description": description,
-            "undoable": False,
-            "metadata": metadata or {},
-            "payload": metadata or {},
-        },
-    )
+    logger.info("Model event skipped for timeline: session=%s action=%s", session_id, action)
     persist_session(session_id, db)
 
 

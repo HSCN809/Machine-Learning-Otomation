@@ -25,7 +25,6 @@ const eventCategoryLabels: Record<string, string> = {
     upload: 'Yükleme',
     editor: 'Düzenleyici',
     preprocessing: 'Ön İşleme',
-    model: 'Model',
 };
 
 const preprocessingActionLabels: Record<string, string> = {
@@ -125,15 +124,6 @@ function getDetailLines(event: TimelineEvent): string[] {
         return lines;
     }
 
-    if (event.category === 'model') {
-        const models = Array.isArray(metadata.models)
-            ? metadata.models
-            : Array.isArray(metadata.model_ids)
-              ? metadata.model_ids
-              : [];
-        return models.length > 0 ? [`Modeller: ${models.join(', ')}`] : [];
-    }
-
     return [];
 }
 
@@ -156,12 +146,13 @@ export function TimelineLog({
 }: TimelineLogProps) {
     const [searchTerm, setSearchTerm] = useState('');
     const normalizedSearchTerm = searchTerm.trim().toLocaleLowerCase('tr-TR');
+    const visibleEvents = useMemo(() => events.filter((event) => event.category !== 'model'), [events]);
     const filteredEvents = useMemo(() => {
         if (!normalizedSearchTerm) {
-            return events;
+            return visibleEvents;
         }
 
-        return events.filter((event) => {
+        return visibleEvents.filter((event) => {
             const details = getDetailLines(event).join(' ');
             const searchableText = [
                 getTitle(event),
@@ -179,15 +170,15 @@ export function TimelineLog({
 
             return searchableText.includes(normalizedSearchTerm);
         });
-    }, [events, normalizedSearchTerm]);
+    }, [visibleEvents, normalizedSearchTerm]);
 
-    if (events.length === 0) {
+    if (visibleEvents.length === 0) {
         return (
             <div className="rounded-2xl border border-white/10 bg-white/5 p-5 text-left">
                 <Clock className="mb-3 h-8 w-8 text-cyan-400" />
                 <p className="text-sm text-gray-300">Henüz işlem geçmişi kaydı yok.</p>
                 <p className="mt-1 text-xs text-gray-500">
-                    Veri yükleme, düzenleme, ön işleme ve model seçimi işlemleri burada listelenecek.
+                    Veri yükleme, düzenleme ve ön işleme işlemleri burada listelenecek.
                 </p>
             </div>
         );
@@ -200,7 +191,7 @@ export function TimelineLog({
                     <Clock className="h-4 w-4 text-cyan-400" />
                     <span className="font-medium text-white">İşlem Timeline</span>
                     <span className="rounded-full bg-cyan-500/20 px-2 py-0.5 text-xs text-cyan-400">
-                        {events.length}
+                        {visibleEvents.length}
                     </span>
                 </div>
                 {onUndoLast && (

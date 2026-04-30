@@ -40,13 +40,13 @@ export function TimelineDrawerLauncher({
     const didDragRef = useRef(false);
     const {
         events,
-        count,
         canUndoLast,
         isLoading,
         undoLast,
         getRollbackPlan,
         rollbackEvent,
     } = useDatasetTimeline({ enabled });
+    const visibleEvents = events.filter((event) => event.category !== 'model');
 
     useEffect(() => {
         if (!isOpen) {
@@ -181,7 +181,7 @@ export function TimelineDrawerLauncher({
             >
                 <History className="h-5 w-5" />
                 <span className="pointer-events-none absolute -bottom-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-cyan-500 px-1 text-[10px] font-semibold text-slate-950">
-                    {count}
+                    {visibleEvents.length}
                 </span>
                 <span className="pointer-events-none absolute -top-1 -left-1 rounded-full border border-white/10 bg-slate-950/90 p-1 text-gray-400">
                     <Grip className="h-3 w-3" />
@@ -204,7 +204,7 @@ export function TimelineDrawerLauncher({
                             </p>
                             <h3 className="mt-1 text-xl font-semibold text-white">İşlem Timeline</h3>
                             <p className="mt-1 text-sm text-gray-400">
-                                Veri yükleme, düzenleme, ön işleme ve model seçimi işlemlerini kronolojik görüntüleyin.
+                                Veri yükleme, düzenleme ve ön işleme işlemlerini kronolojik görüntüleyin.
                             </p>
                         </div>
                         <button
@@ -219,7 +219,7 @@ export function TimelineDrawerLauncher({
 
                     <div className="p-5">
                         <TimelineLog
-                            events={events}
+                            events={visibleEvents}
                             canUndoLast={canUndoLast}
                             isLoading={isLoading || isRollbackPlanLoading || isRollbackApplying}
                             onUndoLast={() => void handleUndoLast()}
@@ -259,7 +259,7 @@ export function TimelineDrawerLauncher({
                                     {rollbackPlan.targetEvent.title || rollbackPlan.targetEvent.action || rollbackPlan.targetEvent.id}
                                 </p>
                             </div>
-                            <div className="grid grid-cols-3 gap-3">
+                            <div className="grid grid-cols-2 gap-3">
                                 <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
                                     <p className="text-xs text-gray-500">Bağlı</p>
                                     <p className="mt-1 text-lg font-semibold text-amber-300">{rollbackPlan.dependentEvents.length}</p>
@@ -267,10 +267,6 @@ export function TimelineDrawerLauncher({
                                 <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
                                     <p className="text-xs text-gray-500">Korunan</p>
                                     <p className="mt-1 text-lg font-semibold text-emerald-300">{rollbackPlan.preservedEvents.length}</p>
-                                </div>
-                                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                                    <p className="text-xs text-gray-500">Model</p>
-                                    <p className="mt-1 text-lg font-semibold text-cyan-300">{rollbackPlan.invalidatedModelEvents.length}</p>
                                 </div>
                             </div>
                             {rollbackPlan.unsupportedReplayEvents.length > 0 && (

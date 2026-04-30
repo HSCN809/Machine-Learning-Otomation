@@ -375,6 +375,10 @@ export function useModelSelection(): UseModelSelectionReturn {
         payload: Record<string, unknown>;
         step?: string;
     }) => {
+        if (request.category === 'model') {
+            return;
+        }
+
         const payloadSignature = JSON.stringify(request.payload);
         if (loggedStepPayloadsRef.current[key] === payloadSignature) {
             return;

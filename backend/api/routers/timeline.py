@@ -59,13 +59,28 @@ def _summarize_event(event: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _visible_timeline_events(session_id: str) -> list[dict[str, Any]]:
+    return [
+        normalize_event_metadata(dict(event))
+        for event in session_manager.get_timeline_events(session_id)
+        if event.get("category") != "model"
+    ]
+
+
 @router.get("")
 async def get_timeline(session_id: str = Depends(require_session)):
-    events = [normalize_event_metadata(dict(event)) for event in session_manager.get_timeline_events(session_id)]
+    events = _visible_timeline_events(session_id)
+    all_events = session_manager.get_timeline_events(session_id)
+    actual_last_event_id = all_events[-1]["id"] if all_events else None
+    visible_last_event_id = events[-1]["id"] if events else None
     return {
         "events": events,
-        "canUndoLast": session_manager.can_undo_last_timeline_event(session_id),
-        "lastEventId": events[-1]["id"] if events else None,
+        "canUndoLast": bool(
+            visible_last_event_id
+            and actual_last_event_id == visible_last_event_id
+            and session_manager.can_undo_last_timeline_event(session_id)
+        ),
+        "lastEventId": visible_last_event_id,
     }
 
 
@@ -108,7 +123,7 @@ async def get_rollback_plan(
         "targetEvent": _summarize_event(plan["target_event"]),
         "dependentEvents": [_summarize_event(event) for event in plan["dependent_events"]],
         "preservedEvents": [_summarize_event(event) for event in plan["preserved_events"]],
-        "invalidatedModelEvents": [_summarize_event(event) for event in plan["invalidated_model_events"]],
+        "invalidatedModelEvents": [],
         "unsupportedReplayEvents": [_summarize_event(event) for event in plan["unsupported_replay_events"]],
     }
 
@@ -183,7 +198,7 @@ async def rollback_timeline_event(
         "rollbackEventId": rollback_event["id"],
         "revertedEventIds": result["plan"]["rollback_event_ids"],
         "dependentCount": len(result["plan"]["dependent_events"]),
-        "invalidatedModelCount": len(result["plan"]["invalidated_model_events"]),
+        "invalidatedModelCount": 0,
         "rows": len(current_df),
         "columns": len(current_df.columns),
     }
