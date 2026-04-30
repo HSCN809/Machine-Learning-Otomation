@@ -1,7 +1,16 @@
 import { toast } from 'sonner';
 
 export function getErrorMessage(error: unknown, fallback: string): string {
-    return error instanceof Error && error.message ? error.message : fallback;
+    if (!(error instanceof Error) || !error.message) {
+        return fallback;
+    }
+
+    const message = error.message.trim();
+    if (!message || message.toLowerCase() === 'unknown error') {
+        return fallback;
+    }
+
+    return message;
 }
 
 export const notify = {

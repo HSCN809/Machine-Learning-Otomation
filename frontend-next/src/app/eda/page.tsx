@@ -97,7 +97,7 @@ const CategoryDistribution = dynamic(
     }
 );
 
-export default function EDAPage() {
+function EDAContent() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [activeTab, setActiveTab] = useState<TabId>('summary');
     const pathname = usePathname();
@@ -123,7 +123,6 @@ export default function EDAPage() {
     const activeTabIndex = tabs.findIndex((tab) => tab.id === activeTab);
 
     return (
-        <ProtectedRouteBoundary>
             <div className="min-h-screen">
                 <Sidebar
                     isCollapsed={sidebarCollapsed}
@@ -409,6 +408,13 @@ export default function EDAPage() {
                     }}
                 />
             </div>
+    );
+}
+
+export default function EDAPage() {
+    return (
+        <ProtectedRouteBoundary>
+            <EDAContent />
         </ProtectedRouteBoundary>
     );
 }

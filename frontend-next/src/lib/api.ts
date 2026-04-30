@@ -14,6 +14,7 @@ import type { TimelineResponse, TimelineRollbackPlan, TimelineScope } from '@/ty
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api/backend';
 const SESSION_REQUIRED_MESSAGE = 'Valid session ID required. Upload data first.';
 const SESSION_ERROR_MESSAGES = new Set([SESSION_REQUIRED_MESSAGE, 'Session not found']);
+const UNKNOWN_API_ERROR_MESSAGE = 'İşlem tamamlanamadı. Lütfen tekrar deneyin.';
 
 // Session ID management
 let sessionId: string | null = null;
@@ -94,7 +95,7 @@ function getApiErrorDetail(errorPayload: unknown, status: number): string {
         const detail = (errorPayload as { detail: unknown }).detail;
 
         if (typeof detail === 'string') {
-            return detail;
+            return detail.trim().toLowerCase() === 'unknown error' ? UNKNOWN_API_ERROR_MESSAGE : detail;
         }
 
         if (Array.isArray(detail)) {
@@ -148,7 +149,7 @@ async function apiFetch<T>(
     }
 
     if (!response.ok) {
-        const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+        const error = await response.json().catch(() => ({ detail: UNKNOWN_API_ERROR_MESSAGE }));
         const detail = getApiErrorDetail(error, response.status);
 
         if (SESSION_ERROR_MESSAGES.has(detail)) {
@@ -191,7 +192,7 @@ async function downloadWithSession(endpoint: string, fallbackFilename: string): 
     }
 
     if (!response.ok) {
-        const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+        const error = await response.json().catch(() => ({ detail: UNKNOWN_API_ERROR_MESSAGE }));
         const detail = getApiErrorDetail(error, response.status);
 
         if (SESSION_ERROR_MESSAGES.has(detail)) {

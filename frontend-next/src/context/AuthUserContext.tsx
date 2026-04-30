@@ -30,10 +30,25 @@ const AuthUserContext = createContext<AuthUserContextValue | undefined>(undefine
 
 function getErrorMessage(error: unknown): string {
     if (error instanceof Error && error.message) {
+        if (error.message.trim().toLowerCase() === 'unknown error') {
+            return 'Oturum kontrolü tamamlanamadı. Lütfen tekrar deneyin.';
+        }
+
         return error.message;
     }
 
-    return 'Auth state could not be resolved. Please try again.';
+    return 'Oturum kontrolü tamamlanamadı. Lütfen tekrar deneyin.';
+}
+
+function getErrorLogContext(error: unknown): Record<string, unknown> {
+    if (error instanceof Error) {
+        return {
+            name: error.name,
+            message: error.message,
+        };
+    }
+
+    return { error };
 }
 
 export function AuthUserProvider({ children }: { children: ReactNode }) {
@@ -65,7 +80,10 @@ export function AuthUserProvider({ children }: { children: ReactNode }) {
                 setStatus('unauthenticated');
                 return;
             } catch (error) {
-                logger.error('Auth refresh failed', error);
+                logger.warn('Auth refresh failed', {
+                    attempt: attempt + 1,
+                    ...getErrorLogContext(error),
+                });
                 if (attempt < 2) {
                     await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt)));
                     continue;
@@ -73,7 +91,7 @@ export function AuthUserProvider({ children }: { children: ReactNode }) {
                 setCurrentUser(null);
                 setErrorMessage(getErrorMessage(error));
                 setStatus('error');
-                notify.error(error, 'Oturum durumu kontrol edilemedi');
+                notify.error(error, 'Oturum kontrolü tamamlanamadı. Lütfen tekrar deneyin.');
             }
         }
     }, []);

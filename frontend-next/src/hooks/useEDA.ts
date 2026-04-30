@@ -41,7 +41,6 @@ export function useEDA(): UseEDAReturn {
     const {
         data: edaData = null,
         isLoading: isEdaLoading,
-        error: edaError,
         refetch: refetchEda,
     } = useQuery({
         queryKey: datasetQueryKeys.edaSummary(sessionId),
@@ -217,8 +216,11 @@ export function useEDA(): UseEDAReturn {
         const result = await refetchEda();
         if (result.isError) {
             if (!api.isSessionRequiredError(result.error)) {
+                const loadError: unknown = result.error;
                 notify.error(result.error, 'EDA verisi yüklenirken hata oluştu');
-                logger.error('EDA data load failed', result.error);
+                logger.warn('EDA data load failed', {
+                    message: loadError instanceof Error ? loadError.message : String(loadError),
+                });
             }
             return false;
         }
