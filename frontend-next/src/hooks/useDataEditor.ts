@@ -462,14 +462,12 @@ export function useDataEditor({ onSaved }: UseDataEditorOptions = {}): UseDataEd
                     (item) => item.newName.trim().length > 0
                 ),
             }));
-            setError('Sütun ismi boş bırakılamaz');
             notify.warning('Sütun ismi boş bırakılamaz');
             return false;
         }
 
         const nextColumnNames = columns.map((column) => getColumnDisplayName(column).trim());
         if (new Set(nextColumnNames).size !== nextColumnNames.length) {
-            setError('Sütun adları kaydetmeden önce benzersiz olmalıdır');
             notify.warning('Sütun adları kaydetmeden önce benzersiz olmalıdır');
             return false;
         }
