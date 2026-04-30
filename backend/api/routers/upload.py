@@ -45,6 +45,10 @@ UPLOAD_CHUNK_SIZE = 1024 * 1024
 ALLOWED_UPLOAD_EXTENSIONS = {".csv", ".xls", ".xlsx", ".json"}
 EXCEL_OLE_SIGNATURE = b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1"
 XLSX_REQUIRED_MEMBERS = {"[Content_Types].xml", "xl/workbook.xml"}
+MAX_XLSX_ZIP_ENTRIES = 1000
+MAX_XLSX_TOTAL_UNCOMPRESSED_BYTES = 300 * 1024 * 1024
+MAX_XLSX_ENTRY_UNCOMPRESSED_BYTES = 100 * 1024 * 1024
+MAX_XLSX_COMPRESSION_RATIO = 100
 
 
 def _max_upload_bytes() -> int:
@@ -113,15 +117,55 @@ def _detect_mime_type(content: bytes) -> Optional[str]:
         return None
 
 
+def _validate_zip_member_name(name: str) -> str:
+    normalized = name.replace("\\", "/")
+    parts = normalized.split("/")
+    if (
+        not normalized
+        or normalized.startswith("/")
+        or ":" in normalized
+        or any(part == ".." for part in parts)
+    ):
+        raise HTTPException(status_code=400, detail="Invalid XLSX file content.")
+    return normalized
+
+
 def _validate_xlsx_content(content: bytes) -> None:
     if not zipfile.is_zipfile(io.BytesIO(content)):
         raise HTTPException(status_code=400, detail="Invalid XLSX file content.")
 
     try:
         with zipfile.ZipFile(io.BytesIO(content)) as archive:
-            names = set(archive.namelist())
+            entries = archive.infolist()
     except zipfile.BadZipFile as exc:
         raise HTTPException(status_code=400, detail="Invalid XLSX file content.") from exc
+
+    if len(entries) > MAX_XLSX_ZIP_ENTRIES:
+        raise HTTPException(status_code=400, detail="Invalid XLSX file content.")
+
+    names = set()
+    total_uncompressed = 0
+
+    for entry in entries:
+        normalized_name = _validate_zip_member_name(entry.filename)
+        names.add(normalized_name)
+
+        if entry.is_dir():
+            continue
+
+        total_uncompressed += entry.file_size
+        if total_uncompressed > MAX_XLSX_TOTAL_UNCOMPRESSED_BYTES:
+            raise HTTPException(status_code=400, detail="Invalid XLSX file content.")
+
+        if entry.file_size > MAX_XLSX_ENTRY_UNCOMPRESSED_BYTES:
+            raise HTTPException(status_code=400, detail="Invalid XLSX file content.")
+
+        if entry.file_size > 0 and entry.compress_size == 0:
+            raise HTTPException(status_code=400, detail="Invalid XLSX file content.")
+
+        compression_ratio = entry.file_size / max(entry.compress_size, 1)
+        if compression_ratio > MAX_XLSX_COMPRESSION_RATIO:
+            raise HTTPException(status_code=400, detail="Invalid XLSX file content.")
 
     if not XLSX_REQUIRED_MEMBERS.issubset(names):
         raise HTTPException(status_code=400, detail="Invalid XLSX file content.")

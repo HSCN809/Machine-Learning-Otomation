@@ -1,5 +1,6 @@
 import asyncio
 import unittest
+import zipfile
 from io import BytesIO
 from unittest.mock import patch
 
@@ -12,8 +13,12 @@ from sqlalchemy.orm import sessionmaker
 from backend.api.database import Base
 from backend.api.dependencies import persist_session, restore_persisted_session, session_manager
 from backend.api.redis_cache import make_cache_key
-from backend.api.routers.preprocessing import MissingValuesRequest, handle_missing_values
-from backend.api.routers.upload import upload_file
+from backend.api.routers.preprocessing import (
+    MissingValuesRequest,
+    _sanitize_dataframe_for_excel_export,
+    handle_missing_values,
+)
+from backend.api.routers.upload import _validate_xlsx_content, upload_file
 from backend.modules.auth.models import User
 from backend.modules.data_upload.models import DatasetSession, PreprocessingEvent, TimelineSnapshot
 from backend.modules.data_upload.persistence import (
@@ -31,6 +36,16 @@ class RenameMetadata(BaseModel):
 class DummyRequest:
     def __init__(self, headers=None):
         self.headers = headers or {}
+
+
+def build_minimal_xlsx_zip(extra_entries=None) -> bytes:
+    output = BytesIO()
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("[Content_Types].xml", b"<Types></Types>")
+        archive.writestr("xl/workbook.xml", b"<workbook></workbook>")
+        for name, content in (extra_entries or {}).items():
+            archive.writestr(name, content)
+    return output.getvalue()
 
 
 class DataUploadPersistenceTests(unittest.TestCase):
@@ -370,6 +385,44 @@ class DataUploadPersistenceTests(unittest.TestCase):
             self.assertEqual(response["rows"], 2)
             self.assertEqual(response["columns"], 2)
             self.assertEqual(response["column_names"], ["city", "value"])
+
+    def test_xlsx_preflight_accepts_minimal_excel_package(self):
+        _validate_xlsx_content(build_minimal_xlsx_zip())
+
+    def test_xlsx_preflight_rejects_high_compression_ratio(self):
+        payload = build_minimal_xlsx_zip({"xl/sharedStrings.xml": b"A" * (1024 * 1024)})
+
+        with self.assertRaises(HTTPException) as exc:
+            _validate_xlsx_content(payload)
+
+        self.assertEqual(exc.exception.status_code, 400)
+        self.assertEqual(exc.exception.detail, "Invalid XLSX file content.")
+
+    def test_xlsx_preflight_rejects_path_traversal_member(self):
+        payload = build_minimal_xlsx_zip({"../evil.xml": b"bad"})
+
+        with self.assertRaises(HTTPException) as exc:
+            _validate_xlsx_content(payload)
+
+        self.assertEqual(exc.exception.status_code, 400)
+        self.assertEqual(exc.exception.detail, "Invalid XLSX file content.")
+
+    def test_excel_export_sanitizes_formula_strings(self):
+        df = pd.DataFrame(
+            {
+                "text": ["=1+1", "+cmd", "-cmd", "@SUM(A1)", "\t=1", "\r=1", "safe"],
+                "number": [1, 2, 3, 4, 5, 6, 7],
+            }
+        )
+
+        sanitized = _sanitize_dataframe_for_excel_export(df)
+
+        self.assertEqual(
+            sanitized["text"].tolist(),
+            ["'=1+1", "'+cmd", "'-cmd", "'@SUM(A1)", "'\t=1", "'\r=1", "safe"],
+        )
+        self.assertEqual(sanitized["number"].tolist(), df["number"].tolist())
+        self.assertEqual(df["text"].iloc[0], "=1+1")
 
     def test_missing_values_preprocessing_persists_processed_data(self):
         df = pd.DataFrame({"city": ["Ankara", "Izmir"], "value": [10.0, None]})

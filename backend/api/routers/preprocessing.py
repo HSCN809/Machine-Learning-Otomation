@@ -39,6 +39,30 @@ from backend.modules.data_preprocessing.outlier.processor import apply_outlier_m
 from backend.modules.data_preprocessing.scaling.processor import apply_scaling_method
 
 router = APIRouter()
+EXCEL_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _escape_excel_formula_value(value: Any) -> Any:
+    if isinstance(value, str) and value.startswith(EXCEL_FORMULA_PREFIXES):
+        return f"'{value}"
+    return value
+
+
+def _sanitize_dataframe_for_excel_export(df: pd.DataFrame) -> pd.DataFrame:
+    sanitized = df.copy(deep=True)
+
+    for column in sanitized.columns:
+        series = sanitized[column]
+        if not (
+            pd.api.types.is_object_dtype(series.dtype)
+            or pd.api.types.is_string_dtype(series.dtype)
+            or isinstance(series.dtype, pd.CategoricalDtype)
+        ):
+            continue
+
+        sanitized[column] = series.astype("object").map(_escape_excel_formula_value)
+
+    return sanitized
 
 
 def _raise_internal_error(log_message: str, user_message: str, exc: Exception, session_id: str) -> None:
@@ -1008,9 +1032,10 @@ async def export_processed_data(session_id: str = Depends(require_session)):
     if df is None:
         raise HTTPException(status_code=400, detail="No data loaded")
 
+    export_df = _sanitize_dataframe_for_excel_export(df)
     output = BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False, sheet_name="processed_data")
+        export_df.to_excel(writer, index=False, sheet_name="processed_data")
     output.seek(0)
 
     return StreamingResponse(
