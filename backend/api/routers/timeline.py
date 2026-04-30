@@ -63,7 +63,7 @@ def _visible_timeline_events(session_id: str) -> list[dict[str, Any]]:
     return [
         normalize_event_metadata(dict(event))
         for event in session_manager.get_timeline_events(session_id)
-        if event.get("category") != "model"
+        if event.get("category") not in {"model", "system"}
     ]
 
 
