@@ -155,7 +155,7 @@ export default function EDAPage() {
                             />
                         )}
 
-                        {edaData && !isLoading && (
+                        {!datasetBootstrap.isChecking && edaData && !isLoading && (
                             <>
                                 <StepProgress
                                     steps={tabs.map((tab) => ({
