@@ -11,8 +11,9 @@ import {
 } from 'react';
 import { usePathname } from 'next/navigation';
 
-import { getAuthStatus, type AuthUser } from '@/lib/api';
+import { checkBackendHealth, getAuthStatus, type AuthUser } from '@/lib/api';
 import { logger } from '@/lib/logger';
+import { notify } from '@/lib/notify';
 import { isProtectedPath } from '@/lib/routing';
 
 type AuthResolutionStatus = 'idle' | 'loading' | 'authenticated' | 'unauthenticated' | 'error';
@@ -45,22 +46,35 @@ export function AuthUserProvider({ children }: { children: ReactNode }) {
         setStatus('loading');
         setErrorMessage('');
 
-        try {
-            const response = await getAuthStatus();
+        for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+                if (attempt === 0 && !(await checkBackendHealth())) {
+                    await new Promise((r) => setTimeout(r, 1000));
+                    continue;
+                }
 
-            if (response.authenticated && response.user) {
-                setCurrentUser(response.user);
-                setStatus('authenticated');
+                const response = await getAuthStatus();
+
+                if (response.authenticated && response.user) {
+                    setCurrentUser(response.user);
+                    setStatus('authenticated');
+                    return;
+                }
+
+                setCurrentUser(null);
+                setStatus('unauthenticated');
                 return;
+            } catch (error) {
+                logger.error('Auth refresh failed', error);
+                if (attempt < 2) {
+                    await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt)));
+                    continue;
+                }
+                setCurrentUser(null);
+                setErrorMessage(getErrorMessage(error));
+                setStatus('error');
+                notify.error(error, 'Oturum durumu kontrol edilemedi');
             }
-
-            setCurrentUser(null);
-            setStatus('unauthenticated');
-        } catch (error) {
-            logger.error('Auth refresh failed', error);
-            setCurrentUser(null);
-            setErrorMessage(getErrorMessage(error));
-            setStatus('error');
         }
     }, []);
 
