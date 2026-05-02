@@ -320,6 +320,11 @@ export function DataUploadProvider({ children }: { children: ReactNode }) {
 
     const loadSavedDataset = useCallback(
         async (datasetId: string) => {
+            if (activeDatasetId === datasetId) {
+                notify.warning('Bu veri seti zaten yüklü');
+                return;
+            }
+
             try {
                 setIsInitializing(true);
                 setError(null);
@@ -335,7 +340,7 @@ export function DataUploadProvider({ children }: { children: ReactNode }) {
                 setIsInitializing(false);
             }
         },
-        [hydrateSession]
+        [activeDatasetId, hydrateSession]
     );
 
     const renameSavedDataset = useCallback(
