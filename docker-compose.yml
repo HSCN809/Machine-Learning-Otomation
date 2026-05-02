@@ -133,7 +133,7 @@ services:
         condition: service_healthy
     environment:
       BACKEND_API_URL: http://backend:8000
-      NEXT_PUBLIC_API_URL: /api
+      NEXT_PUBLIC_API_URL: ""
       NEXT_PUBLIC_AUTH_COOKIE_NAME: ml_auth_session
     volumes:
       - ./frontend-next:/app

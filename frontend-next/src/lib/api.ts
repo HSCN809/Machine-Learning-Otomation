@@ -11,7 +11,7 @@ import type {
 import type { FeatureConfig } from '@/types/preprocessing';
 import type { TimelineResponse, TimelineRollbackPlan, TimelineScope } from '@/types/timeline';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '');
 const SESSION_REQUIRED_MESSAGE = 'Valid session ID required. Upload data first.';
 const SESSION_ERROR_MESSAGES = new Set([SESSION_REQUIRED_MESSAGE, 'Session not found']);
 const UNKNOWN_API_ERROR_MESSAGE = 'İşlem tamamlanamadı. Lütfen tekrar deneyin.';
