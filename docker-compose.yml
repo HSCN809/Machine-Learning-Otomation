@@ -41,6 +41,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/ml_automation
       AUTH_COOKIE_NAME: ml_auth_session
@@ -69,6 +71,10 @@ services:
       MAX_TIMELINE_SNAPSHOTS: ${MAX_TIMELINE_SNAPSHOTS:-1}
       MAX_TIMELINE_SNAPSHOT_MEMORY_MB: ${MAX_TIMELINE_SNAPSHOT_MEMORY_MB:-256}
       REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      TRAINING_MAX_WORKERS: ${TRAINING_MAX_WORKERS:-2}
+      TRAINING_STOP_SIGNAL: ${TRAINING_STOP_SIGNAL:-SIGTERM}
     ports:
       - "8000:8000"
     volumes:
@@ -82,6 +88,37 @@ services:
       interval: 15s
       timeout: 5s
       retries: 10
+
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: ml_automation_worker
+    restart: unless-stopped
+    command: celery -A backend.api.tasks.model_training:celery_app worker --loglevel=info --concurrency=${TRAINING_MAX_WORKERS:-2} --pool=prefork
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/ml_automation
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      TRAINING_MAX_WORKERS: ${TRAINING_MAX_WORKERS:-2}
+      TRAINING_STOP_SIGNAL: ${TRAINING_STOP_SIGNAL:-SIGTERM}
+      MAX_DATAFRAME_ROWS: ${MAX_DATAFRAME_ROWS:-1000000}
+      MAX_DATAFRAME_COLUMNS: ${MAX_DATAFRAME_COLUMNS:-500}
+      MAX_DATAFRAME_MEMORY_MB: ${MAX_DATAFRAME_MEMORY_MB:-512}
+      MAX_TIMELINE_SNAPSHOTS: ${MAX_TIMELINE_SNAPSHOTS:-1}
+      MAX_TIMELINE_SNAPSHOT_MEMORY_MB: ${MAX_TIMELINE_SNAPSHOT_MEMORY_MB:-256}
+    volumes:
+      - ./backend:/app/backend
+      - ./requirements.txt:/app/requirements.txt:ro
+      - ./alembic.ini:/app/alembic.ini:ro
+      - backend_temp:/app/backend/temp
+      - backend_logs:/app/backend/logs
 
   frontend:
     build:

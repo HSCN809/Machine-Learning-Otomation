@@ -114,6 +114,23 @@ class DataSessionRepository:
         record.metadata_json = metadata_payload
         return record
 
+    def update_metadata(
+        self,
+        session_id: str,
+        user_id: str,
+        metadata: dict[str, Any] | None,
+    ) -> DatasetSession | None:
+        record = self.get_session(session_id, user_id)
+        if record is None:
+            return None
+
+        metadata_payload = jsonable_encoder(metadata or {})
+        record.metadata_json = metadata_payload
+
+        filename = metadata_payload.get("filename")
+        record.filename = str(filename) if filename is not None else None
+        return record
+
     def list_timeline_events(self, session_id: str, user_id: str) -> list[dict[str, Any]]:
         events = self.db.scalars(
             select(PreprocessingEvent)

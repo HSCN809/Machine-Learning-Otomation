@@ -8,9 +8,7 @@ import logging
 import os
 import pickle
 import sys
-import threading
 import uuid
-from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime
 from io import BytesIO
 from typing import Any, Dict, List, Optional
@@ -30,8 +28,12 @@ from ..dependencies import (
     get_db,
     persist_session,
     require_session,
+    restore_persisted_session,
     session_manager,
 )
+from backend.api.celery_app import celery_app
+from backend.api.redis_cache import get_redis_client
+from backend.modules.data_upload.persistence import DataSessionRepository
 from backend.modules.model_selection.persistence import TrainedModelRepository
 
 try:
@@ -42,13 +44,10 @@ except ImportError:
 router = APIRouter()
 logger = logging.getLogger(__name__)
 TRAINING_MAX_WORKERS = int(os.getenv("TRAINING_MAX_WORKERS", "2"))
-TRAINING_JOBS: Dict[str, Dict[str, Any]] = {}
-TRAINING_JOB_FUTURES: Dict[str, Future[Any]] = {}
-TRAINING_JOBS_LOCK = threading.Lock()
-TRAINING_EXECUTOR = ThreadPoolExecutor(
-    max_workers=TRAINING_MAX_WORKERS,
-    thread_name_prefix="model-training",
-)
+TRAINING_JOB_TTL_SECONDS = int(os.getenv("TRAINING_JOB_TTL_SECONDS", "86400"))
+TRAINING_STOP_SIGNAL = os.getenv("TRAINING_STOP_SIGNAL", "SIGTERM")
+TRAINING_JOB_KEY_PREFIX = "training_job:"
+MODEL_TRAINING_TASK = "backend.model_training.run"
 
 
 # Request schemas
@@ -301,6 +300,13 @@ def _store_training_metadata(
         session_manager.set_metadata(session_id, "training_results", results)
     session_manager.set_metadata(session_id, "active_training_job_id", active_job_id)
     if db is not None:
+        session = session_manager.get_session(session_id)
+        user_id = session.get("owner_user_id") if session else None
+        if user_id:
+            repository = DataSessionRepository(db)
+            if repository.update_metadata(session_id, user_id, session.get("metadata", {})) is not None:
+                db.commit()
+                return
         persist_session(session_id, db)
 
 
@@ -314,6 +320,13 @@ def _append_model_timeline_event(
     metadata: Optional[Dict[str, Any]] = None,
 ):
     logger.info("Model event skipped for timeline: session=%s action=%s", session_id, action)
+    session = session_manager.get_session(session_id)
+    user_id = session.get("owner_user_id") if session else None
+    if user_id:
+        repository = DataSessionRepository(db)
+        if repository.update_metadata(session_id, user_id, session.get("metadata", {})) is not None:
+            db.commit()
+            return
     persist_session(session_id, db)
 
 
@@ -366,19 +379,84 @@ def _load_persisted_training_results(
     return _sort_training_results(results, problem_type), problem_type, target_column
 
 
-def _active_training_job_count() -> int:
-    return sum(
-        1
-        for job in TRAINING_JOBS.values()
-        if job.get("status") in {"queued", "running", "stopping"}
+def _training_job_key(job_id: str) -> str:
+    return f"{TRAINING_JOB_KEY_PREFIX}{job_id}"
+
+
+def _json_default(value: Any):
+    if isinstance(value, np.generic):
+        return value.item()
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    return str(value)
+
+
+def _get_training_redis():
+    client = get_redis_client()
+    if client is None:
+        raise HTTPException(status_code=503, detail="Training queue is unavailable")
+    return client
+
+
+def _read_training_job(job_id: str) -> Optional[Dict[str, Any]]:
+    client = get_redis_client()
+    if client is None:
+        return None
+
+    raw_job = client.get(_training_job_key(job_id))
+    if raw_job is None:
+        return None
+
+    try:
+        return json.loads(raw_job)
+    except json.JSONDecodeError:
+        logger.warning("Invalid training job payload in Redis: job_id=%s", job_id)
+        return None
+
+
+def _write_training_job(job: Dict[str, Any]) -> None:
+    client = _get_training_redis()
+    client.setex(
+        _training_job_key(job["job_id"]),
+        TRAINING_JOB_TTL_SECONDS,
+        json.dumps(job, default=_json_default),
     )
 
 
+def _active_training_job_count() -> int:
+    client = _get_training_redis()
+    count = 0
+    for key in client.scan_iter(match=f"{TRAINING_JOB_KEY_PREFIX}*", count=100):
+        raw_job = client.get(key)
+        if raw_job is None:
+            continue
+        try:
+            job = json.loads(raw_job)
+        except json.JSONDecodeError:
+            continue
+        if job.get("status") in {"queued", "running", "stopping"}:
+            count += 1
+    return count
+
+
 def _create_job(session_id: str, request: TrainRequest) -> str:
+    session = session_manager.get_session(session_id)
+    owner_user_id = session.get("owner_user_id") if session else None
+    if not owner_user_id:
+        raise HTTPException(status_code=400, detail="Valid session ID required. Upload data first.")
+
+    if _active_training_job_count() >= TRAINING_MAX_WORKERS:
+        raise HTTPException(
+            status_code=409,
+            detail="Training capacity is full. Try again after a running job finishes.",
+        )
+
     job_id = str(uuid.uuid4())
     job = {
         "job_id": job_id,
         "session_id": session_id,
+        "owner_user_id": owner_user_id,
+        "celery_task_id": None,
         "target_column": request.target_column,
         "problem_type": request.problem_type,
         "models": request.models,
@@ -395,13 +473,7 @@ def _create_job(session_id: str, request: TrainRequest) -> str:
         "started_at": datetime.now().isoformat(),
         "finished_at": None,
     }
-    with TRAINING_JOBS_LOCK:
-        if _active_training_job_count() >= TRAINING_MAX_WORKERS:
-            raise HTTPException(
-                status_code=409,
-                detail="Training capacity is full. Try again after a running job finishes.",
-            )
-        TRAINING_JOBS[job_id] = job
+    _write_training_job(job)
 
     _store_training_metadata(
         session_id,
@@ -413,52 +485,47 @@ def _create_job(session_id: str, request: TrainRequest) -> str:
     return job_id
 
 
-def _discard_training_future(job_id: str):
-    with TRAINING_JOBS_LOCK:
-        TRAINING_JOB_FUTURES.pop(job_id, None)
-
-
 def _submit_training_job(job_id: str):
-    future = TRAINING_EXECUTOR.submit(_run_training_job, job_id)
-    with TRAINING_JOBS_LOCK:
-        TRAINING_JOB_FUTURES[job_id] = future
-    future.add_done_callback(lambda _: _discard_training_future(job_id))
+    async_result = celery_app.send_task(MODEL_TRAINING_TASK, args=[job_id])
+    _update_job(job_id, celery_task_id=async_result.id)
+    return async_result.id
 
 
 def _get_job_snapshot(job_id: str) -> Optional[Dict[str, Any]]:
-    with TRAINING_JOBS_LOCK:
-        job = TRAINING_JOBS.get(job_id)
-        if job is None:
-            return None
-        return {
-            "job_id": job["job_id"],
-            "session_id": job["session_id"],
-            "target_column": job["target_column"],
-            "problem_type": job["problem_type"],
-            "models": list(job["models"]),
-            "test_size": job["test_size"],
-            "params": dict(job["params"]),
-            "status": job["status"],
-            "current_model": job["current_model"],
-            "total_models": job["total_models"],
-            "completed_models": job["completed_models"],
-            "results": list(job["results"]),
-            "error": job["error"],
-            "stop_requested": job["stop_requested"],
-            "revision": job["revision"],
-            "started_at": job["started_at"],
-            "finished_at": job["finished_at"],
-        }
+    job = _read_training_job(job_id)
+    if job is None:
+        return None
+    return {
+        "job_id": job["job_id"],
+        "session_id": job["session_id"],
+        "owner_user_id": job.get("owner_user_id"),
+        "celery_task_id": job.get("celery_task_id"),
+        "target_column": job["target_column"],
+        "problem_type": job["problem_type"],
+        "models": list(job["models"]),
+        "test_size": job["test_size"],
+        "params": dict(job["params"]),
+        "status": job["status"],
+        "current_model": job["current_model"],
+        "total_models": job["total_models"],
+        "completed_models": job["completed_models"],
+        "results": list(job["results"]),
+        "error": job["error"],
+        "stop_requested": job["stop_requested"],
+        "revision": job["revision"],
+        "started_at": job["started_at"],
+        "finished_at": job["finished_at"],
+    }
 
 
 def _update_job(job_id: str, **changes: Any) -> Optional[Dict[str, Any]]:
-    with TRAINING_JOBS_LOCK:
-        job = TRAINING_JOBS.get(job_id)
-        if job is None:
-            return None
-        job.update(changes)
-        job["revision"] += 1
-        return dict(job)
+    job = _read_training_job(job_id)
+    if job is None:
+        return None
+    job.update(changes)
+    job["revision"] = int(job.get("revision", 0)) + 1
+    _write_training_job(job)
+    return dict(job)
 
 
 def _find_active_job_for_session(session_id: str) -> Optional[Dict[str, Any]]:
@@ -466,6 +533,48 @@ def _find_active_job_for_session(session_id: str) -> Optional[Dict[str, Any]]:
     if not active_job_id:
         return None
     return _get_job_snapshot(active_job_id)
+
+
+def _ensure_training_session_loaded(session_id: str, owner_user_id: Optional[str], db: Session) -> bool:
+    if not owner_user_id:
+        return False
+    if session_manager.owns_session(session_id, owner_user_id):
+        return True
+    return restore_persisted_session(session_id, owner_user_id, db)
+
+
+def _finish_training_job(job_id: str, *, status: str, error: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    from backend.api.database import SessionLocal
+
+    snapshot = _get_job_snapshot(job_id)
+    if snapshot is None:
+        return None
+
+    updated = _update_job(
+        job_id,
+        status=status,
+        current_model=None,
+        error=error,
+        stop_requested=status == "stopped",
+        finished_at=datetime.now().isoformat(),
+    )
+
+    db = SessionLocal()
+    try:
+        if _ensure_training_session_loaded(snapshot["session_id"], snapshot.get("owner_user_id"), db):
+            _store_training_metadata(
+                snapshot["session_id"],
+                problem_type=snapshot.get("problem_type"),
+                results=snapshot.get("results") or [],
+                active_job_id=None,
+                db=db,
+            )
+    except Exception:
+        logger.exception("Failed to clear training metadata for job %s", job_id)
+    finally:
+        db.close()
+
+    return updated
 
 
 def _prepare_training_bundle(
@@ -625,6 +734,16 @@ def _run_training_job(job_id: str):
     db = SessionLocal()
 
     try:
+        if not _ensure_training_session_loaded(session_id, snapshot.get("owner_user_id"), db):
+            raise HTTPException(status_code=400, detail="No data loaded")
+
+        snapshot = _get_job_snapshot(job_id) or snapshot
+        if snapshot["status"] in {"completed", "failed", "stopped"}:
+            return
+        if snapshot["stop_requested"] or snapshot["status"] == "stopping":
+            _finish_training_job(job_id, status="stopped")
+            return
+
         df = session_manager.get_dataframe(session_id)
         if df is None:
             raise HTTPException(status_code=400, detail="No data loaded")
@@ -638,6 +757,11 @@ def _run_training_job(job_id: str):
             problem_type,
         )
         _validate_models_for_problem_type(model_ids=snapshot.get("models", []), problem_type=problem_type)
+        current_snapshot = _get_job_snapshot(job_id) or snapshot
+        if current_snapshot["stop_requested"] or current_snapshot["status"] == "stopping":
+            _finish_training_job(job_id, status="stopped")
+            return
+
         _update_job(job_id, status="running", problem_type=problem_type)
         _store_training_metadata(
             session_id,
@@ -656,20 +780,14 @@ def _run_training_job(job_id: str):
             current_snapshot = _get_job_snapshot(job_id)
             if current_snapshot is None:
                 return
-            if current_snapshot["stop_requested"]:
+            if current_snapshot["stop_requested"] or current_snapshot["status"] == "stopping":
                 _update_job(
                     job_id,
-                    status="stopped",
                     current_model=None,
+                    results=_sort_training_results(results, problem_type),
                     finished_at=datetime.now().isoformat(),
                 )
-                _store_training_metadata(
-                    session_id,
-                    problem_type=problem_type,
-                    results=_sort_training_results(results, problem_type),
-                    active_job_id=None,
-                    db=db,
-                )
+                _finish_training_job(job_id, status="stopped")
                 _append_model_timeline_event(
                     session_id,
                     action="training_stopped",
@@ -891,7 +1009,12 @@ async def start_training(
             "models": request.models,
         },
     )
-    _submit_training_job(job_id)
+    try:
+        _submit_training_job(job_id)
+    except Exception as exc:
+        logger.exception("Failed to enqueue training job %s", job_id)
+        _finish_training_job(job_id, status="failed", error=str(exc))
+        raise HTTPException(status_code=503, detail="Training queue is unavailable") from exc
 
     return {"success": True, "job_id": job_id}
 
@@ -956,17 +1079,36 @@ async def stream_training(
 @router.post("/train/stop")
 async def stop_training(
     request: StopTrainingRequest,
-    session_id: str = Depends(require_session)
+    session_id: str = Depends(require_session),
+    db: Session = Depends(get_db),
 ):
-    """Request background training to stop after the current checkpoint."""
+    """Terminate a queued/running Celery training task and clear active job metadata."""
     snapshot = _get_job_snapshot(request.job_id)
     if snapshot is None or snapshot["session_id"] != session_id:
         raise HTTPException(status_code=404, detail="Training job not found")
-    if snapshot["status"] not in {"queued", "running"}:
-        raise HTTPException(status_code=400, detail="Training job is not running")
+    if snapshot["status"] in {"completed", "failed", "stopped"}:
+        _store_training_metadata(
+            session_id,
+            problem_type=snapshot.get("problem_type"),
+            results=snapshot.get("results") or [],
+            active_job_id=None,
+            db=db,
+        )
+        return {"success": True, "job_id": request.job_id, "revoked": False}
 
     _update_job(request.job_id, stop_requested=True, status="stopping")
-    return {"success": True, "job_id": request.job_id}
+    task_id = snapshot.get("celery_task_id")
+    revoked = False
+    if task_id:
+        celery_app.control.revoke(
+            task_id,
+            terminate=True,
+            signal=TRAINING_STOP_SIGNAL,
+        )
+        revoked = True
+
+    _finish_training_job(request.job_id, status="stopped")
+    return {"success": True, "job_id": request.job_id, "revoked": revoked}
 
 
 @router.post("/train")
