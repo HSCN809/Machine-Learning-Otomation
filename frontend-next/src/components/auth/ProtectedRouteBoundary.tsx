@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { type ReactNode, useEffect, useMemo } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
@@ -14,7 +14,7 @@ interface ProtectedRouteBoundaryProps {
 export function ProtectedRouteBoundary({ children }: ProtectedRouteBoundaryProps) {
     const router = useRouter();
     const pathname = usePathname();
-    const { status, errorMessage } = useAuthUserContext();
+    const { status, errorMessage, errorTitle } = useAuthUserContext();
 
     const nextPath = useMemo(() => {
         if (!pathname) {
@@ -37,8 +37,8 @@ export function ProtectedRouteBoundary({ children }: ProtectedRouteBoundaryProps
     if (errorMessage) {
         return (
             <FullPageLoading
-                label="Bağlantı yenileniyor"
-                description="Oturum bilgileri tekrar kontrol ediliyor."
+                label={errorTitle || 'Bağlantı yenileniyor'}
+                description={errorMessage}
             />
         );
     }
@@ -49,3 +49,4 @@ export function ProtectedRouteBoundary({ children }: ProtectedRouteBoundaryProps
 
     return <>{children}</>;
 }
+

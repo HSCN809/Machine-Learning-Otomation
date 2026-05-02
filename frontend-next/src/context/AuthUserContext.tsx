@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import {
     createContext,
@@ -11,7 +11,13 @@ import {
 } from 'react';
 import { usePathname } from 'next/navigation';
 
-import { checkBackendHealth, getAuthStatus, type AuthUser } from '@/lib/api';
+import {
+    ApiRequestError,
+    getAuthStatus,
+    getBackendHealthStatus,
+    isApiRequestError,
+    type AuthUser,
+} from '@/lib/api';
 import { logger } from '@/lib/logger';
 import { notify } from '@/lib/notify';
 import { isProtectedPath } from '@/lib/routing';
@@ -22,23 +28,12 @@ interface AuthUserContextValue {
     currentUser: AuthUser | null;
     status: AuthResolutionStatus;
     errorMessage: string;
+    errorTitle: string;
     isLoading: boolean;
     refreshAuth: () => Promise<void>;
 }
 
 const AuthUserContext = createContext<AuthUserContextValue | undefined>(undefined);
-
-function getErrorMessage(error: unknown): string {
-    if (error instanceof Error && error.message) {
-        if (error.message.trim().toLowerCase() === 'unknown error') {
-            return 'Oturum kontrolü tamamlanamadı. Lütfen tekrar deneyin.';
-        }
-
-        return error.message;
-    }
-
-    return 'Oturum kontrolü tamamlanamadı. Lütfen tekrar deneyin.';
-}
 
 function getErrorLogContext(error: unknown): Record<string, unknown> {
     if (error instanceof Error) {
@@ -51,21 +46,76 @@ function getErrorLogContext(error: unknown): Record<string, unknown> {
     return { error };
 }
 
+function getAuthFailureContent(error: unknown): { title: string; description: string } {
+    if (isApiRequestError(error)) {
+        if (error.endpoint === '/api/auth/status' && (error.status === 404 || error.status === 503)) {
+            return {
+                title: 'Uygulama ara katmanı erişilemiyor',
+                description: 'Auth kontrol isteği proxy katmanında cevap vermedi. Nginx veya yönlendirme ayarlarını kontrol edin.',
+            };
+        }
+
+        if (error.kind === 'proxy_unavailable') {
+            return {
+                title: 'Uygulama ara katmanı erişilemiyor',
+                description: 'API yönlendirmesi şu anda cevap vermiyor. Reverse proxy servisini kontrol edin.',
+            };
+        }
+
+        if (error.kind === 'backend_unavailable' || error.kind === 'network_error') {
+            return {
+                title: 'Backend servisi kapalı',
+                description: 'FastAPI servisine ulaşılamıyor. Backend container veya servis durumunu kontrol edin.',
+            };
+        }
+    }
+
+    if (error instanceof Error && error.message && error.message.trim().toLowerCase() !== 'unknown error') {
+        return {
+            title: 'Oturum kontrolü tamamlanamadı',
+            description: error.message,
+        };
+    }
+
+    return {
+        title: 'Oturum kontrolü tamamlanamadı',
+        description: 'Lütfen tekrar deneyin.',
+    };
+}
+
 export function AuthUserProvider({ children }: { children: ReactNode }) {
     const pathname = usePathname();
     const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
     const [status, setStatus] = useState<AuthResolutionStatus>('idle');
+    const [errorTitle, setErrorTitle] = useState('');
     const [errorMessage, setErrorMessage] = useState('');
 
     const refreshAuth = useCallback(async () => {
         setStatus('loading');
+        setErrorTitle('');
         setErrorMessage('');
 
         for (let attempt = 0; attempt < 3; attempt++) {
             try {
-                if (attempt === 0 && !(await checkBackendHealth())) {
-                    await new Promise((r) => setTimeout(r, 1000));
-                    continue;
+                if (attempt === 0) {
+                    const health = await getBackendHealthStatus();
+                    if (!health.ok) {
+                        throw new ApiRequestError(
+                            health.kind === 'proxy_unavailable'
+                                ? 'Health check proxy katmanında cevap vermedi.'
+                                : 'Health check backend servisine ulaşamadı.',
+                            {
+                                endpoint: '/api/health',
+                                kind:
+                                    health.kind === 'proxy_unavailable'
+                                        ? 'proxy_unavailable'
+                                        : health.kind === 'backend_unavailable'
+                                          ? 'backend_unavailable'
+                                          : 'network_error',
+                                status: health.status,
+                            }
+                        );
+                    }
                 }
 
                 const response = await getAuthStatus();
@@ -73,13 +123,25 @@ export function AuthUserProvider({ children }: { children: ReactNode }) {
                 if (response.authenticated && response.user) {
                     setCurrentUser(response.user);
                     setStatus('authenticated');
+                    setErrorTitle('');
+                    setErrorMessage('');
                     return;
                 }
 
                 setCurrentUser(null);
                 setStatus('unauthenticated');
+                setErrorTitle('');
+                setErrorMessage('');
                 return;
             } catch (error) {
+                if (isApiRequestError(error) && error.endpoint === '/api/auth/status' && error.status === 401) {
+                    setCurrentUser(null);
+                    setStatus('unauthenticated');
+                    setErrorTitle('');
+                    setErrorMessage('');
+                    return;
+                }
+
                 logger.warn('Auth refresh failed', {
                     attempt: attempt + 1,
                     ...getErrorLogContext(error),
@@ -88,10 +150,12 @@ export function AuthUserProvider({ children }: { children: ReactNode }) {
                     await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt)));
                     continue;
                 }
+                const failure = getAuthFailureContent(error);
                 setCurrentUser(null);
-                setErrorMessage(getErrorMessage(error));
+                setErrorTitle(failure.title);
+                setErrorMessage(failure.description);
                 setStatus('error');
-                notify.error(error, 'Oturum kontrolü tamamlanamadı. Lütfen tekrar deneyin.');
+                notify.error(new Error(failure.title), failure.title);
             }
         }
     }, []);
@@ -118,6 +182,7 @@ export function AuthUserProvider({ children }: { children: ReactNode }) {
             if (customEvent.detail) {
                 setCurrentUser(customEvent.detail);
                 setStatus('authenticated');
+                setErrorTitle('');
                 setErrorMessage('');
             }
         }
@@ -125,6 +190,7 @@ export function AuthUserProvider({ children }: { children: ReactNode }) {
         function handleLogout() {
             setCurrentUser(null);
             setStatus('unauthenticated');
+            setErrorTitle('');
             setErrorMessage('');
         }
 
@@ -141,11 +207,12 @@ export function AuthUserProvider({ children }: { children: ReactNode }) {
         () => ({
             currentUser,
             status,
+            errorTitle,
             errorMessage,
             isLoading: status === 'loading',
             refreshAuth,
         }),
-        [currentUser, errorMessage, refreshAuth, status]
+        [currentUser, errorMessage, errorTitle, refreshAuth, status]
     );
 
     return <AuthUserContext.Provider value={value}>{children}</AuthUserContext.Provider>;
@@ -158,3 +225,6 @@ export function useAuthUserContext(): AuthUserContextValue {
     }
     return context;
 }
+
+
+

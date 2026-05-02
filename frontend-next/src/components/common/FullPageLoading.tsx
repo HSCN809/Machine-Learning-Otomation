@@ -1,4 +1,4 @@
-interface FullPageLoadingProps {
+﻿interface FullPageLoadingProps {
     label?: string;
     description?: string;
 }
@@ -36,3 +36,4 @@ export function FullPageLoading({
         </div>
     );
 }
+

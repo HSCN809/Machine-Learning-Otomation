@@ -133,15 +133,31 @@ services:
         condition: service_healthy
     environment:
       BACKEND_API_URL: http://backend:8000
-      NEXT_PUBLIC_API_URL: /api/backend
+      NEXT_PUBLIC_API_URL: /api
       NEXT_PUBLIC_AUTH_COOKIE_NAME: ml_auth_session
-      REDIS_URL: redis://redis:6379/0
-    ports:
-      - "3000:3000"
     volumes:
       - ./frontend-next:/app
       - frontend_node_modules:/app/node_modules
       - frontend_next_cache:/app/.next
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: ml_automation_nginx
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+    ports:
+      - "3000:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1/ >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
 
 volumes:
   postgres_data:

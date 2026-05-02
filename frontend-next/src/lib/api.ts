@@ -1,4 +1,4 @@
-/**
+﻿/**
  * API Client for FastAPI Backend
  */
 
@@ -11,10 +11,47 @@ import type {
 import type { FeatureConfig } from '@/types/preprocessing';
 import type { TimelineResponse, TimelineRollbackPlan, TimelineScope } from '@/types/timeline';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api/backend';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 const SESSION_REQUIRED_MESSAGE = 'Valid session ID required. Upload data first.';
 const SESSION_ERROR_MESSAGES = new Set([SESSION_REQUIRED_MESSAGE, 'Session not found']);
 const UNKNOWN_API_ERROR_MESSAGE = 'İşlem tamamlanamadı. Lütfen tekrar deneyin.';
+
+export type ApiFailureKind =
+    | 'network_error'
+    | 'proxy_unavailable'
+    | 'backend_unavailable'
+    | 'http_error';
+
+export class ApiRequestError extends Error {
+    status: number | null;
+    endpoint: string;
+    kind: ApiFailureKind;
+
+    constructor(
+        message: string,
+        options: {
+            endpoint: string;
+            kind: ApiFailureKind;
+            status?: number | null;
+        }
+    ) {
+        super(message);
+        this.name = 'ApiRequestError';
+        this.endpoint = options.endpoint;
+        this.kind = options.kind;
+        this.status = options.status ?? null;
+    }
+}
+
+export function isApiRequestError(error: unknown): error is ApiRequestError {
+    return error instanceof ApiRequestError;
+}
+
+export interface ServiceHealthStatus {
+    ok: boolean;
+    status: number | null;
+    kind: 'healthy' | 'proxy_unavailable' | 'backend_unavailable' | 'network_error';
+}
 
 // Session ID management
 let sessionId: string | null = null;
@@ -66,13 +103,30 @@ export function subscribeToStoredSession(listener: () => void): () => void {
     };
 }
 
-export async function checkBackendHealth(): Promise<boolean> {
+export async function getBackendHealthStatus(): Promise<ServiceHealthStatus> {
     try {
         const response = await fetch(`${API_BASE_URL}/api/health`, { signal: AbortSignal.timeout(5000) });
-        return response.ok;
+        if (response.ok) {
+            return { ok: true, status: response.status, kind: 'healthy' };
+        }
+
+        if ([502, 503, 504].includes(response.status)) {
+            return { ok: false, status: response.status, kind: 'backend_unavailable' };
+        }
+
+        if (response.status === 404) {
+            return { ok: false, status: response.status, kind: 'proxy_unavailable' };
+        }
+
+        return { ok: false, status: response.status, kind: 'backend_unavailable' };
     } catch {
-        return false;
+        return { ok: false, status: null, kind: 'network_error' };
     }
+}
+
+export async function checkBackendHealth(): Promise<boolean> {
+    const result = await getBackendHealthStatus();
+    return result.ok;
 }
 
 export class SessionRequiredError extends Error {
@@ -123,6 +177,28 @@ function getApiErrorDetail(errorPayload: unknown, status: number): string {
 }
 
 // Base fetch with session header
+function buildApiRequestError(endpoint: string, status: number, detail: string): ApiRequestError {
+    let kind: ApiFailureKind = 'http_error';
+
+    if (endpoint === '/api/health') {
+        if (status === 404) {
+            kind = 'proxy_unavailable';
+        } else if ([502, 503, 504].includes(status)) {
+            kind = 'backend_unavailable';
+        }
+    } else if (endpoint === '/api/auth/status' && [404, 503].includes(status)) {
+        kind = 'proxy_unavailable';
+    } else if ([502, 504].includes(status)) {
+        kind = 'backend_unavailable';
+    }
+
+    return new ApiRequestError(detail, {
+        endpoint,
+        kind,
+        status,
+    });
+}
+
 async function apiFetch<T>(
     endpoint: string,
     options: RequestInit = {}
@@ -145,7 +221,10 @@ async function apiFetch<T>(
             credentials: 'include',
         });
     } catch {
-        throw new Error('Backend service unavailable. API proxy could not reach FastAPI server.');
+        throw new ApiRequestError('API bağlantısı kurulamadı.', {
+            endpoint,
+            kind: 'network_error',
+        });
     }
 
     if (!response.ok) {
@@ -157,7 +236,7 @@ async function apiFetch<T>(
             throw new SessionRequiredError();
         }
 
-        throw new Error(detail);
+        throw buildApiRequestError(endpoint, response.status, detail);
     }
 
     return response.json();
@@ -188,7 +267,10 @@ async function downloadWithSession(endpoint: string, fallbackFilename: string): 
             credentials: 'include',
         });
     } catch {
-        throw new Error('Backend service unavailable. API proxy could not reach FastAPI server.');
+        throw new ApiRequestError('API bağlantısı kurulamadı.', {
+            endpoint,
+            kind: 'network_error',
+        });
     }
 
     if (!response.ok) {
@@ -200,7 +282,7 @@ async function downloadWithSession(endpoint: string, fallbackFilename: string): 
             throw new SessionRequiredError();
         }
 
-        throw new Error(detail);
+        throw buildApiRequestError(endpoint, response.status, detail);
     }
 
     const blob = await response.blob();
@@ -1227,3 +1309,6 @@ export async function deleteAccount(currentPassword: string): Promise<AuthMutati
 export async function healthCheck(): Promise<{ status: string }> {
     return apiFetch('/api/health');
 }
+
+
+
