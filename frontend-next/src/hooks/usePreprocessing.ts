@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
     PreprocessingStep,
     ProcessingHistory,
@@ -85,6 +85,10 @@ export const PREPROCESSING_STEPS: PreprocessingStep[] = [
     { id: '6', name: 'Summary', icon: '📋', key: 'summary', description: 'İşlemleri gözden geçir' },
 ];
 
+const PREPROCESSING_STEP_INDEX_BY_KEY = new Map(
+    PREPROCESSING_STEPS.map((step, index) => [step.key, index])
+);
+
 interface UsePreprocessingReturn {
     // State
     currentStep: number;
@@ -129,6 +133,8 @@ export function usePreprocessing(): UsePreprocessingReturn {
     const [history, setHistory] = useState<ProcessingHistory[]>([]);
     const [columns, setColumns] = useState<ColumnInfo[]>([]);
     const [isLoading, setIsLoading] = useState(false);
+    const workflowHydratedRef = useRef(false);
+    const workflowPersistTimeoutRef = useRef<number | null>(null);
 
 
     // Load columns from API
@@ -186,9 +192,10 @@ export function usePreprocessing(): UsePreprocessingReturn {
         try {
             setIsLoading(true);
 
-            const [columnTypes, timelineResponse] = await Promise.all([
+            const [columnTypes, timelineResponse, workflowState] = await Promise.all([
                 api.getColumnTypes(),
                 api.getTimeline(),
+                api.getPreprocessingWorkflowState().catch(() => null),
             ]);
 
             setColumns(mapColumns(columnTypes.columns));
@@ -197,10 +204,36 @@ export function usePreprocessing(): UsePreprocessingReturn {
                 .map((entry, index) => mapHistoryEntry(entry, index))
                 .filter((entry): entry is ProcessingHistory => entry !== null);
             setHistory(nextHistory);
+            if (workflowState) {
+                setCurrentStep(
+                    workflowState.current_step_key
+                        ? (PREPROCESSING_STEP_INDEX_BY_KEY.get(workflowState.current_step_key) ?? 0)
+                        : 0
+                );
+                setCompletedSteps(
+                    workflowState.completed_step_keys
+                        .map((key) => PREPROCESSING_STEP_INDEX_BY_KEY.get(key))
+                        .filter((step): step is number => step !== undefined)
+                );
+                setSkippedSteps(
+                    workflowState.skipped_step_keys
+                        .map((key) => PREPROCESSING_STEP_INDEX_BY_KEY.get(key))
+                        .filter((step): step is number => step !== undefined)
+                );
+            } else {
+                setCurrentStep(0);
+                setCompletedSteps([]);
+                setSkippedSteps([]);
+            }
+            workflowHydratedRef.current = true;
         } catch (err) {
             if (api.isSessionRequiredError(err)) {
                 setColumns([]);
                 setHistory([]);
+                setCurrentStep(0);
+                setCompletedSteps([]);
+                setSkippedSteps([]);
+                workflowHydratedRef.current = false;
                 return;
             }
             logger.error('Preprocessing data load failed', err);
@@ -245,6 +278,38 @@ export function usePreprocessing(): UsePreprocessingReturn {
 
     const canGoNext = currentStep < PREPROCESSING_STEPS.length - 1;
     const canGoPrev = currentStep > 0;
+
+    useEffect(() => {
+        if (!workflowHydratedRef.current) {
+            return;
+        }
+
+        if (workflowPersistTimeoutRef.current) {
+            window.clearTimeout(workflowPersistTimeoutRef.current);
+        }
+
+        workflowPersistTimeoutRef.current = window.setTimeout(() => {
+            workflowPersistTimeoutRef.current = null;
+            void api.updatePreprocessingWorkflowState({
+                current_step_key: PREPROCESSING_STEPS[currentStep]?.key ?? null,
+                completed_step_keys: completedSteps
+                    .map((step) => PREPROCESSING_STEPS[step]?.key)
+                    .filter((key): key is string => Boolean(key)),
+                skipped_step_keys: skippedSteps
+                    .map((step) => PREPROCESSING_STEPS[step]?.key)
+                    .filter((key): key is string => Boolean(key)),
+            }).catch((err) => {
+                logger.error('Preprocessing workflow state persist failed', err);
+            });
+        }, 150);
+
+        return () => {
+            if (workflowPersistTimeoutRef.current) {
+                window.clearTimeout(workflowPersistTimeoutRef.current);
+                workflowPersistTimeoutRef.current = null;
+            }
+        };
+    }, [completedSteps, currentStep, skippedSteps]);
 
     const refreshColumnsAndHistory = useCallback(async () => {
         const [columnTypes, timelineResponse] = await Promise.all([
@@ -485,6 +550,14 @@ export function usePreprocessing(): UsePreprocessingReturn {
 
     const columnsWithMissing = useMemo(() =>
         columns.filter(col => col.missingCount > 0), [columns]);
+
+    useEffect(() => {
+        return () => {
+            if (workflowPersistTimeoutRef.current) {
+                window.clearTimeout(workflowPersistTimeoutRef.current);
+            }
+        };
+    }, []);
 
 return {
         currentStep,

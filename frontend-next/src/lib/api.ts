@@ -1198,6 +1198,50 @@ export function getModelTrainingStreamUrl(jobId: string): string {
     return `${API_BASE_URL}/api/model/train/stream?job_id=${encodeURIComponent(jobId)}&session_id=${encodeURIComponent(sid)}`;
 }
 
+export interface PreprocessingWorkflowStateResponse {
+    current_step_key: string | null;
+    completed_step_keys: string[];
+    skipped_step_keys: string[];
+}
+
+export async function getPreprocessingWorkflowState(): Promise<PreprocessingWorkflowStateResponse> {
+    return apiFetch('/api/preprocessing/workflow-state');
+}
+
+export async function updatePreprocessingWorkflowState(
+    state: PreprocessingWorkflowStateResponse
+): Promise<PreprocessingWorkflowStateResponse & { success: boolean }> {
+    return apiFetch('/api/preprocessing/workflow-state', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(state),
+    });
+}
+
+export interface ModelWorkflowStateResponse {
+    current_step: number;
+    completed_steps: number[];
+    skipped_steps: number[];
+    target_column: string | null;
+    problem_type: 'classification' | 'regression' | null;
+    selected_models: string[];
+    model_params: Record<string, Record<string, unknown>>;
+}
+
+export async function getModelWorkflowState(): Promise<ModelWorkflowStateResponse> {
+    return apiFetch('/api/model/workflow-state');
+}
+
+export async function updateModelWorkflowState(
+    state: ModelWorkflowStateResponse
+): Promise<ModelWorkflowStateResponse & { success: boolean }> {
+    return apiFetch('/api/model/workflow-state', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(state),
+    });
+}
+
 // ============== Auth API ==============
 
 export interface AuthUser {

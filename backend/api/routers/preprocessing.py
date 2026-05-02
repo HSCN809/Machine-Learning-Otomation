@@ -184,6 +184,12 @@ class DropColumnsRequest(BaseModel):
     reason: Optional[str] = None
 
 
+class PreprocessingWorkflowStateRequest(BaseModel):
+    current_step_key: Optional[str] = None
+    completed_step_keys: List[str] = Field(default_factory=list)
+    skipped_step_keys: List[str] = Field(default_factory=list)
+
+
 ALLOWED_EXPRESSION_NODES = (
     ast.Expression,
     ast.BinOp,
@@ -1104,6 +1110,7 @@ async def reset_data(
         ]
         session["history"] = []
         session["history_snapshots"] = []
+        session["metadata"].pop("preprocessing_workflow_state", None)
     persist_session(session_id, db)
     logger.info("Preprocessing reset applied for session %s", session_id)
     
@@ -1113,6 +1120,34 @@ async def reset_data(
         "rows": len(original_df),
         "columns": len(original_df.columns),
     }
+
+
+@router.get("/workflow-state")
+async def get_preprocessing_workflow_state(
+    session_id: str = Depends(require_session),
+):
+    workflow_state = session_manager.get_metadata(session_id, "preprocessing_workflow_state") or {}
+    return {
+        "current_step_key": workflow_state.get("current_step_key"),
+        "completed_step_keys": workflow_state.get("completed_step_keys", []),
+        "skipped_step_keys": workflow_state.get("skipped_step_keys", []),
+    }
+
+
+@router.put("/workflow-state")
+async def update_preprocessing_workflow_state(
+    request: PreprocessingWorkflowStateRequest,
+    session_id: str = Depends(require_session),
+    db: Session = Depends(get_db),
+):
+    workflow_state = {
+        "current_step_key": request.current_step_key,
+        "completed_step_keys": request.completed_step_keys,
+        "skipped_step_keys": request.skipped_step_keys,
+    }
+    session_manager.set_metadata(session_id, "preprocessing_workflow_state", workflow_state)
+    persist_session(session_id, db)
+    return {"success": True, **workflow_state}
 
 
 @router.get("/export")

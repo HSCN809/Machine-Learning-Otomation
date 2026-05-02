@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from starlette.responses import StreamingResponse
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
@@ -65,6 +65,16 @@ class StopTrainingRequest(BaseModel):
 
 class RenameSavedModelRequest(BaseModel):
     model_name: str
+
+
+class ModelWorkflowStateRequest(BaseModel):
+    current_step: int = 0
+    completed_steps: List[int] = Field(default_factory=list)
+    skipped_steps: List[int] = Field(default_factory=list)
+    target_column: Optional[str] = None
+    problem_type: Optional[str] = None
+    selected_models: List[str] = Field(default_factory=list)
+    model_params: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
 
 
 def _serialize_saved_model(record) -> Dict[str, Any]:
@@ -1425,6 +1435,42 @@ async def delete_saved_model(
 
     db.commit()
     return {"success": True}
+
+
+@router.get("/workflow-state")
+async def get_model_workflow_state(
+    session_id: str = Depends(require_session),
+):
+    workflow_state = session_manager.get_metadata(session_id, "model_workflow_state") or {}
+    return {
+        "current_step": workflow_state.get("current_step", 0),
+        "completed_steps": workflow_state.get("completed_steps", []),
+        "skipped_steps": workflow_state.get("skipped_steps", []),
+        "target_column": workflow_state.get("target_column"),
+        "problem_type": workflow_state.get("problem_type"),
+        "selected_models": workflow_state.get("selected_models", []),
+        "model_params": workflow_state.get("model_params", {}),
+    }
+
+
+@router.put("/workflow-state")
+async def update_model_workflow_state(
+    request: ModelWorkflowStateRequest,
+    session_id: str = Depends(require_session),
+    db: Session = Depends(get_db),
+):
+    workflow_state = {
+        "current_step": request.current_step,
+        "completed_steps": request.completed_steps,
+        "skipped_steps": request.skipped_steps,
+        "target_column": request.target_column,
+        "problem_type": request.problem_type,
+        "selected_models": request.selected_models,
+        "model_params": request.model_params,
+    }
+    session_manager.set_metadata(session_id, "model_workflow_state", workflow_state)
+    persist_session(session_id, db)
+    return {"success": True, **workflow_state}
 
 
 @router.get("/comparison")

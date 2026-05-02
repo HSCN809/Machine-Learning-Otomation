@@ -175,6 +175,8 @@ export function useModelSelection(): UseModelSelectionReturn {
     const [trainingJobId, setTrainingJobId] = useState<string | null>(null);
     const eventSourceRef = useRef<EventSource | null>(null);
     const timelineRefreshTimeoutRef = useRef<number | null>(null);
+    const workflowPersistTimeoutRef = useRef<number | null>(null);
+    const workflowHydratedRef = useRef(false);
     const trainingStatusRef = useRef<'idle' | 'queued' | 'running' | 'stopping' | 'completed' | 'failed' | 'stopped'>('idle');
     const loggedStepPayloadsRef = useRef<Record<string, string>>({});
 
@@ -332,10 +334,11 @@ export function useModelSelection(): UseModelSelectionReturn {
     const loadColumns = useCallback(async () => {
         try {
             setIsLoading(true);
-            const [columnTypes, trainingState, savedModelState] = await Promise.all([
+            const [columnTypes, trainingState, savedModelState, workflowState] = await Promise.all([
                 api.getColumnTypes(),
                 api.getTrainingResults(),
                 api.getSavedModels().catch(() => ({ models: [] })),
+                api.getModelWorkflowState().catch(() => null),
             ]);
 
             const cols: ColumnInfo[] = columnTypes.columns.map((col) => ({
@@ -352,9 +355,22 @@ export function useModelSelection(): UseModelSelectionReturn {
                 trainingState.problem_type === 'classification' || trainingState.problem_type === 'regression'
                     ? trainingState.problem_type
                     : null;
-            setProblemTypeState(hydratedProblemType);
-            setTargetColumnState(initialTargetColumn);
-            await loadAvailableModels(hydratedProblemType);
+            const workflowProblemType =
+                workflowState?.problem_type === 'classification' || workflowState?.problem_type === 'regression'
+                    ? workflowState.problem_type
+                    : null;
+            const nextTargetColumn = workflowState?.target_column ?? initialTargetColumn;
+            const nextProblemType = workflowProblemType ?? hydratedProblemType;
+
+            setTargetColumnState(nextTargetColumn);
+            setProblemTypeState(nextProblemType);
+            setCurrentStep(workflowState?.current_step ?? 0);
+            setCompletedSteps(workflowState?.completed_steps ?? []);
+            setSkippedSteps(workflowState?.skipped_steps ?? []);
+            setSelectedModels(workflowState?.selected_models ?? []);
+            setModelParams(workflowState?.model_params ?? {});
+            await loadAvailableModels(nextProblemType);
+            workflowHydratedRef.current = true;
 
             if (trainingState.job) {
                 applyTrainingSnapshot(trainingState.job);
@@ -373,12 +389,15 @@ export function useModelSelection(): UseModelSelectionReturn {
                 setCompletedTrainingModels(hydratedResults.length);
                 setTotalTrainingModels(hydratedResults.length);
                 setCurrentStep(4);
+                setCompletedSteps([0, 1, 2, 3]);
+                setSkippedSteps([]);
             }
         } catch (err) {
             if (api.isSessionRequiredError(err)) {
                 setColumns([]);
                 setAvailableModels([]);
                 setSavedModels([]);
+                workflowHydratedRef.current = false;
                 return;
             }
 
@@ -526,6 +545,38 @@ export function useModelSelection(): UseModelSelectionReturn {
     }, [currentStep, problemType, selectedModels, targetColumn, trainingResults]);
 
     const canGoPrev = currentStep > 0;
+
+    useEffect(() => {
+        if (!workflowHydratedRef.current) {
+            return;
+        }
+
+        if (workflowPersistTimeoutRef.current !== null) {
+            window.clearTimeout(workflowPersistTimeoutRef.current);
+        }
+
+        workflowPersistTimeoutRef.current = window.setTimeout(() => {
+            workflowPersistTimeoutRef.current = null;
+            void api.updateModelWorkflowState({
+                current_step: currentStep,
+                completed_steps: completedSteps,
+                skipped_steps: skippedSteps,
+                target_column: targetColumn,
+                problem_type: problemType,
+                selected_models: selectedModels,
+                model_params: modelParams,
+            }).catch((err) => {
+                logger.error('Model workflow state persist failed', err);
+            });
+        }, 150);
+
+        return () => {
+            if (workflowPersistTimeoutRef.current !== null) {
+                window.clearTimeout(workflowPersistTimeoutRef.current);
+                workflowPersistTimeoutRef.current = null;
+            }
+        };
+    }, [completedSteps, currentStep, modelParams, problemType, selectedModels, skippedSteps, targetColumn]);
 
     const setTargetColumn = useCallback(
         (column: string) => {
@@ -744,6 +795,9 @@ export function useModelSelection(): UseModelSelectionReturn {
 
     useEffect(() => {
         return () => {
+            if (workflowPersistTimeoutRef.current !== null) {
+                window.clearTimeout(workflowPersistTimeoutRef.current);
+            }
             if (timelineRefreshTimeoutRef.current !== null) {
                 window.clearTimeout(timelineRefreshTimeoutRef.current);
             }
