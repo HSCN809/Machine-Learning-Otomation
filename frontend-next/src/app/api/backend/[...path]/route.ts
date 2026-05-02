@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
-import { redisClient, CACHE_TTL } from '@/lib/redis';
+import { CACHE_TTL, getRedisClient } from '@/lib/redis';
 
-const BACKEND_BASE_URL = process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const BACKEND_BASE_URL =
+    process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -49,17 +50,18 @@ async function forward(request: NextRequest, params: { path: string[] }) {
     const isAuthRoute = targetPath.startsWith('api/auth');
     const shouldUseProxyCache = isGet && !hasSessionHeader && !hasAuthCookie && !isAuthRoute;
     const cacheKey = shouldUseProxyCache ? `proxy_cache:${targetUrl.toString()}` : null;
+    const redisClient = cacheKey ? await getRedisClient() : null;
 
-    if (cacheKey) {
+    if (cacheKey && redisClient) {
         try {
             const cachedData = await redisClient.get(cacheKey);
             if (cachedData) {
                 logger.info(`Cache hit for ${targetUrl.toString()}`);
                 const { status, headers: cachedHeaders, body } = JSON.parse(cachedData);
-                
+
                 const responseHeaders = new Headers(cachedHeaders);
                 responseHeaders.set('X-Cache', 'HIT');
-                
+
                 return new NextResponse(body, {
                     status,
                     headers: responseHeaders,
@@ -96,12 +98,12 @@ async function forward(request: NextRequest, params: { path: string[] }) {
             proxyResponse.headers.append('Set-Cookie', setCookie);
         });
 
-        if (cacheKey && response.ok) {
+        if (cacheKey && response.ok && redisClient) {
             try {
                 const cacheData = JSON.stringify({
                     status: response.status,
                     headers: Array.from(responseHeaders.entries()),
-                    body: responseBody
+                    body: responseBody,
                 });
                 await redisClient.setex(cacheKey, CACHE_TTL.SHORT, cacheData);
                 proxyResponse.headers.set('X-Cache', 'MISS');

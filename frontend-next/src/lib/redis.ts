@@ -3,36 +3,56 @@ import { logger } from '@/lib/logger';
 
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379/0';
 
-class RedisClient {
-    private static instance: Redis;
+let redisClient: Redis | null = null;
+let redisInitializationAttempted = false;
 
-    public static getInstance(): Redis {
-        if (!RedisClient.instance) {
-            RedisClient.instance = new Redis(redisUrl, {
-                retryStrategy(times) {
-                    const delay = Math.min(times * 50, 2000);
-                    return delay;
-                },
-                maxRetriesPerRequest: 3,
-            });
+function createRedisClient(): Redis {
+    const client = new Redis(redisUrl, {
+        lazyConnect: true,
+        retryStrategy(times) {
+            const delay = Math.min(times * 50, 2000);
+            return delay;
+        },
+        maxRetriesPerRequest: 3,
+    });
 
-            RedisClient.instance.on('connect', () => {
-                logger.info('Connected to Redis');
-            });
+    client.on('connect', () => {
+        logger.info('Connected to Redis');
+    });
 
-            RedisClient.instance.on('error', (err) => {
-                logger.error('Redis connection error', err);
-            });
-        }
+    client.on('error', (err) => {
+        logger.error('Redis connection error', err);
+    });
 
-        return RedisClient.instance;
+    return client;
+}
+
+export async function getRedisClient(): Promise<Redis | null> {
+    if (redisClient) {
+        return redisClient;
+    }
+
+    if (redisInitializationAttempted) {
+        return null;
+    }
+
+    redisInitializationAttempted = true;
+
+    try {
+        const client = createRedisClient();
+        await client.connect();
+        redisClient = client;
+        return redisClient;
+    } catch (error) {
+        logger.warn('Redis unavailable, continuing without proxy cache', {
+            error: error instanceof Error ? error.message : String(error),
+        });
+        return null;
     }
 }
 
-export const redisClient = RedisClient.getInstance();
-
 export const CACHE_TTL = {
-    DEFAULT: 60 * 5, // 5 minutes
-    LONG: 60 * 60, // 1 hour
-    SHORT: 60, // 1 minute
+    DEFAULT: 60 * 5,
+    LONG: 60 * 60,
+    SHORT: 60,
 };
