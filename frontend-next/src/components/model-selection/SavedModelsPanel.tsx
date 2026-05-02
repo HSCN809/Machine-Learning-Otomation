@@ -214,7 +214,7 @@ export function SavedModelsPanel({
                                                         className="truncate text-base font-semibold text-white"
                                                         title={model.modelName}
                                                     >
-                                                        {truncateText(model.modelName, 30)}
+                                                        {truncateText(model.modelName, 24)}
                                                     </h4>
                                                     <span className="rounded-full border border-cyan-400/30 bg-cyan-400/15 px-2.5 py-1 text-[11px] font-medium text-cyan-100">
                                                         Target sütunu: {model.targetColumn}
