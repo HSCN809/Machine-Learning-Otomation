@@ -98,13 +98,13 @@ export function CategoryDistribution({
             description="Değer sayıları"
             headerActions={headerActions}
         >
-            <div className="h-[420px]">
-                <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                        data={chartData}
-                        layout="vertical"
-                        margin={{ top: 2, right: 8, left: 12, bottom: 2 }}
-                    >
+                <div className="mx-auto h-[420px] w-full max-w-[860px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                            data={chartData}
+                            layout="vertical"
+                            margin={{ top: 2, right: 8, left: 0, bottom: 2 }}
+                        >
                         <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                         <XAxis
                             type="number"
@@ -116,7 +116,8 @@ export function CategoryDistribution({
                             dataKey="name"
                             tick={{ fill: '#9CA3AF', fontSize: 12 }}
                             axisLine={{ stroke: '#374151' }}
-                            width={20}
+                            width={56}
+                            tickMargin={8}
                         />
                         <Tooltip
                             contentStyle={{

@@ -1,6 +1,7 @@
-'use client';
+﻿'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { Minus, Plus, RotateCcw } from 'lucide-react';
 import { CorrelationData } from '@/types/eda';
 import { theme } from '@/styles/theme';
 import { ChartCard } from './ChartCard';
@@ -11,6 +12,9 @@ interface CorrelationMatrixProps {
 }
 
 export function CorrelationMatrix({ data, columns }: CorrelationMatrixProps) {
+    const [zoom, setZoom] = useState(1);
+    const [pan, setPan] = useState({ x: 0, y: 0 });
+    const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
     const matrix = useMemo(() => {
         const matrixData: Record<string, Record<string, number>> = {};
         data.forEach((d) => {
@@ -41,16 +45,99 @@ export function CorrelationMatrix({ data, columns }: CorrelationMatrixProps) {
         { label: '+0.5', color: theme.colors.primary.cyan },
         { label: '+1.0', color: theme.colors.secondary.green },
     ];
+    const canZoomOut = zoom > 0.7;
+    const canZoomIn = zoom < 1.6;
+    const isDragging = dragStart !== null;
+    const minZoom = 0.7;
+    const maxZoom = 1.6;
+
+    const handleResetView = () => {
+        setZoom(1);
+        setPan({ x: 0, y: 0 });
+    };
 
     return (
         <ChartCard
             title="Korelasyon Matrisi"
             description={`${columns.length} değişken arasındaki korelasyon`}
             className="h-full"
+            headerActions={
+                <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-400">{Math.round(zoom * 100)}%</span>
+                    <button
+                        type="button"
+                        onClick={() => setZoom((current) => Math.max(minZoom, Number((current - 0.15).toFixed(2))))}
+                        disabled={!canZoomOut}
+                        className="rounded-lg border border-white/10 p-2 text-gray-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                        title="Uzaklaştır"
+                    >
+                        <Minus className="h-4 w-4" />
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleResetView}
+                        disabled={zoom === 1 && pan.x === 0 && pan.y === 0}
+                        className="rounded-lg border border-white/10 p-2 text-gray-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                        title="Görünümü sıfırla"
+                    >
+                        <RotateCcw className="h-4 w-4" />
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setZoom((current) => Math.min(maxZoom, Number((current + 0.15).toFixed(2))))}
+                        disabled={!canZoomIn}
+                        className="rounded-lg border border-white/10 p-2 text-gray-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                        title="Yakınlaştır"
+                    >
+                        <Plus className="h-4 w-4" />
+                    </button>
+                </div>
+            }
         >
-            <div className="h-[420px] overflow-auto">
-                <div className="flex h-full items-center justify-center gap-8">
-                    <div className="inline-block min-w-fit">
+            <div
+                className="h-[420px] overflow-hidden select-none"
+                onWheel={(event) => {
+                    event.preventDefault();
+                    const delta = -event.deltaY * 0.0015;
+                    setZoom((current) => {
+                        const next = Number((current + delta).toFixed(3));
+                        return Math.min(maxZoom, Math.max(minZoom, next));
+                    });
+                }}
+                onMouseDown={(event) => {
+                    if (event.button !== 0) {
+                        return;
+                    }
+
+                    setDragStart({
+                        x: event.clientX - pan.x,
+                        y: event.clientY - pan.y,
+                    });
+                }}
+                onMouseMove={(event) => {
+                    if (!dragStart) {
+                        return;
+                    }
+
+                    setPan({
+                        x: event.clientX - dragStart.x,
+                        y: event.clientY - dragStart.y,
+                    });
+                }}
+                onMouseUp={() => setDragStart(null)}
+                onMouseLeave={() => setDragStart(null)}
+                style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+            >
+                <div
+                    className="flex h-full w-max items-center gap-8"
+                    style={{
+                        transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                        transformOrigin: 'top left',
+                    }}
+                >
+                    <div
+                        className="inline-block min-w-fit"
+                    >
                         <div className="flex">
                             <div className={`${cornerSpacerClassName} m-0.5`} />
                             {columns.map((col) => (
@@ -116,3 +203,4 @@ export function CorrelationMatrix({ data, columns }: CorrelationMatrixProps) {
         </ChartCard>
     );
 }
+
