@@ -154,7 +154,7 @@ function EDAContent() {
                             />
                         )}
 
-                        {!datasetBootstrap.isChecking && edaData && !isLoading && (
+                        {!datasetBootstrap.isChecking && edaData && (
                             <>
                                 <StepProgress
                                     steps={tabs.map((tab) => ({

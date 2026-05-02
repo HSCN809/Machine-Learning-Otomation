@@ -261,7 +261,7 @@ export default function ModelSelectionPage() {
                             />
                         )}
 
-                        {hasData && !isLoading && (
+                        {hasData && (
                             <>
                                 <StepProgress
                                     steps={STEPS}

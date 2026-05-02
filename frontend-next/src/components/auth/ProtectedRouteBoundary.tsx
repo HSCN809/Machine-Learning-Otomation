@@ -43,7 +43,7 @@ export function ProtectedRouteBoundary({ children }: ProtectedRouteBoundaryProps
         );
     }
 
-    if (status === 'idle' || status === 'loading' || status === 'unauthenticated') {
+    if (status === 'unauthenticated') {
         return <FullPageLoading />;
     }
 

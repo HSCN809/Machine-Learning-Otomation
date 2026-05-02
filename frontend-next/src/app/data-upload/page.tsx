@@ -182,28 +182,26 @@ export default function DataUploadPage() {
                     />
 
                     <main className="space-y-8 p-6">
-                        {showSessionSkeleton && <SessionPageSkeleton variant="upload" />}
+                        <section
+                            className="rounded-2xl border border-white/10 p-6"
+                            style={{
+                                background:
+                                    'linear-gradient(135deg, rgba(17, 24, 39, 0.6) 0%, rgba(31, 41, 55, 0.4) 100%)',
+                            }}
+                        >
+                            <SavedDatasets
+                                datasets={savedDatasets}
+                                activeDatasetId={showDropzone ? null : activeDatasetId}
+                                loading={showSessionSkeleton || isSavedDatasetsLoading}
+                                disabled={showSessionSkeleton || isLoading || isInitializing}
+                                onLoad={handleSavedDatasetLoad}
+                                onRename={handleSavedDatasetRename}
+                                onDelete={handleSavedDatasetDelete}
+                                onNewUpload={handleNewUpload}
+                            />
+                        </section>
 
-                        {!showSessionSkeleton && (
-                            <section
-                                className="rounded-2xl border border-white/10 p-6"
-                                style={{
-                                    background:
-                                        'linear-gradient(135deg, rgba(17, 24, 39, 0.6) 0%, rgba(31, 41, 55, 0.4) 100%)',
-                                }}
-                            >
-                                <SavedDatasets
-                                    datasets={savedDatasets}
-                                    activeDatasetId={showDropzone ? null : activeDatasetId}
-                                    loading={isSavedDatasetsLoading}
-                                    disabled={isLoading || isInitializing}
-                                    onLoad={handleSavedDatasetLoad}
-                                    onRename={handleSavedDatasetRename}
-                                    onDelete={handleSavedDatasetDelete}
-                                    onNewUpload={handleNewUpload}
-                                />
-                            </section>
-                        )}
+                        {showSessionSkeleton && <SessionPageSkeleton variant="upload" />}
 
                         {!showSessionSkeleton && showDropzone && (
                             <>
