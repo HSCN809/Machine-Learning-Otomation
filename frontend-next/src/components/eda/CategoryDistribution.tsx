@@ -33,6 +33,58 @@ const COLORS = [
     theme.colors.status.info,
 ];
 
+function renderPieSliceLabel({
+    cx,
+    cy,
+    midAngle,
+    innerRadius,
+    outerRadius,
+    value,
+    percent,
+}: {
+    cx?: number;
+    cy?: number;
+    midAngle?: number;
+    innerRadius?: number;
+    outerRadius?: number;
+    value?: number;
+    percent?: number;
+}) {
+    if (
+        cx === undefined ||
+        cy === undefined ||
+        midAngle === undefined ||
+        innerRadius === undefined ||
+        outerRadius === undefined ||
+        value === undefined ||
+        percent === undefined
+    ) {
+        return null;
+    }
+
+    if (percent < 0.04) {
+        return null;
+    }
+
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.62;
+    const x = cx + radius * Math.cos((-midAngle * Math.PI) / 180);
+    const y = cy + radius * Math.sin((-midAngle * Math.PI) / 180);
+
+    return (
+        <text
+            x={x}
+            y={y}
+            fill="#ffffff"
+            textAnchor="middle"
+            dominantBaseline="central"
+            fontSize={11}
+            fontWeight={600}
+        >
+            {`${value.toLocaleString('tr-TR')} (${(percent * 100).toFixed(0)}%)`}
+        </text>
+    );
+}
+
 export function CategoryDistribution({
     data,
     column,
@@ -62,6 +114,7 @@ export function CategoryDistribution({
                                 cx="50%"
                                 cy="46%"
                                 outerRadius={148}
+                                label={renderPieSliceLabel}
                                 labelLine={{ stroke: '#6B7280' }}
                             >
                                 {chartData.map((_, index) => (

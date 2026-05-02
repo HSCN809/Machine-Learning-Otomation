@@ -6,6 +6,7 @@ import {
     Bar,
     XAxis,
     YAxis,
+    Label,
     CartesianGrid,
     Tooltip,
     ResponsiveContainer,
@@ -36,11 +37,25 @@ export function HistogramChart({ data, column, headerActions }: HistogramChartPr
                             dataKey="bin"
                             tick={{ fill: '#9CA3AF', fontSize: 12 }}
                             axisLine={{ stroke: '#374151' }}
-                        />
+                        >
+                            <Label
+                                value={`${column} aralığı`}
+                                position="insideBottom"
+                                offset={-4}
+                                style={{ fill: '#9CA3AF', fontSize: 12 }}
+                            />
+                        </XAxis>
                         <YAxis
                             tick={{ fill: '#9CA3AF', fontSize: 12 }}
                             axisLine={{ stroke: '#374151' }}
-                        />
+                        >
+                            <Label
+                                value="Frekans"
+                                angle={-90}
+                                position="insideLeft"
+                                style={{ fill: '#9CA3AF', fontSize: 12, textAnchor: 'middle' }}
+                            />
+                        </YAxis>
                         <Tooltip
                             contentStyle={{
                                 backgroundColor: theme.colors.background.secondary,
