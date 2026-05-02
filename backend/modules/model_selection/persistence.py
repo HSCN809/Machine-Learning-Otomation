@@ -118,6 +118,43 @@ class TrainedModelRepository:
             ).all()
         )
 
+    def rename_model(
+        self,
+        *,
+        model_record_id: str,
+        dataset_session_id: str,
+        user_id: str,
+        model_name: str,
+    ) -> TrainedModel | None:
+        record = self.get_model(
+            model_record_id=model_record_id,
+            dataset_session_id=dataset_session_id,
+            user_id=user_id,
+        )
+        if record is None:
+            return None
+
+        record.model_name = model_name
+        return record
+
+    def delete_model(
+        self,
+        *,
+        model_record_id: str,
+        dataset_session_id: str,
+        user_id: str,
+    ) -> bool:
+        record = self.get_model(
+            model_record_id=model_record_id,
+            dataset_session_id=dataset_session_id,
+            user_id=user_id,
+        )
+        if record is None:
+            return False
+
+        self.db.delete(record)
+        return True
+
     def delete_models_for_session(
         self,
         *,

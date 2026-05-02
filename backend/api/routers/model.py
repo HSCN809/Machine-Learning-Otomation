@@ -63,6 +63,10 @@ class StopTrainingRequest(BaseModel):
     job_id: str
 
 
+class RenameSavedModelRequest(BaseModel):
+    model_name: str
+
+
 def _serialize_saved_model(record) -> Dict[str, Any]:
     return {
         "id": record.id,
@@ -1364,6 +1368,63 @@ async def get_saved_models(
         ]
 
     return {"models": [_serialize_saved_model(record) for record in records]}
+
+
+@router.patch("/saved-models/{model_record_id}")
+async def rename_saved_model(
+    model_record_id: str,
+    request: RenameSavedModelRequest,
+    session_id: str = Depends(require_session),
+    db: Session = Depends(get_db),
+):
+    """Rename a saved trained model for current dataset session."""
+    next_model_name = request.model_name.strip()
+    if not next_model_name:
+        raise HTTPException(status_code=400, detail="Model name cannot be empty")
+
+    session = session_manager.get_session(session_id)
+    user_id = session.get("owner_user_id") if session else None
+    if not user_id:
+        raise HTTPException(status_code=400, detail="Valid session ID required.")
+
+    repo = TrainedModelRepository(db)
+    record = repo.rename_model(
+        model_record_id=model_record_id,
+        dataset_session_id=session_id,
+        user_id=user_id,
+        model_name=next_model_name,
+    )
+    if record is None:
+        raise HTTPException(status_code=404, detail="Requested trained model was not found")
+
+    db.commit()
+    db.refresh(record)
+    return {"success": True, "model": _serialize_saved_model(record)}
+
+
+@router.delete("/saved-models/{model_record_id}")
+async def delete_saved_model(
+    model_record_id: str,
+    session_id: str = Depends(require_session),
+    db: Session = Depends(get_db),
+):
+    """Delete a saved trained model for current dataset session."""
+    session = session_manager.get_session(session_id)
+    user_id = session.get("owner_user_id") if session else None
+    if not user_id:
+        raise HTTPException(status_code=400, detail="Valid session ID required.")
+
+    repo = TrainedModelRepository(db)
+    deleted = repo.delete_model(
+        model_record_id=model_record_id,
+        dataset_session_id=session_id,
+        user_id=user_id,
+    )
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Requested trained model was not found")
+
+    db.commit()
+    return {"success": True}
 
 
 @router.get("/comparison")

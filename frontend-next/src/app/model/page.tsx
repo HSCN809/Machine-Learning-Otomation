@@ -102,6 +102,8 @@ export default function ModelSelectionPage() {
         toggleModelSelection,
         updateModelParams,
         selectSavedModel,
+        renameSavedModel,
+        deleteSavedModel,
         startNewTraining,
         trainModels,
         stopTraining,
@@ -285,6 +287,8 @@ export default function ModelSelectionPage() {
                                             loading={isSavedModelsLoading}
                                             disabled={isTraining}
                                             onSelect={selectSavedModel}
+                                            onRename={renameSavedModel}
+                                            onDelete={deleteSavedModel}
                                         />
                                     </section>
                                 )}

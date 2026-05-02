@@ -57,6 +57,8 @@ interface UseModelSelectionReturn {
     toggleModelSelection: (modelId: string) => void;
     updateModelParams: (modelId: string, params: Record<string, unknown>) => void;
     selectSavedModel: (savedModelId: string) => Promise<void>;
+    renameSavedModel: (savedModelId: string, modelName: string) => Promise<void>;
+    deleteSavedModel: (savedModelId: string) => Promise<void>;
     startNewTraining: () => void;
     trainModels: () => Promise<void>;
     stopTraining: () => Promise<void>;
@@ -630,6 +632,35 @@ export function useModelSelection(): UseModelSelectionReturn {
         setCurrentStep(4);
     }, [closeTrainingStream, loadAvailableModels, savedModels]);
 
+    const renameSavedModel = useCallback(async (savedModelId: string, modelName: string) => {
+        const nextModelName = modelName.trim();
+        if (!nextModelName) {
+            throw new Error('Model adı boş bırakılamaz');
+        }
+
+        try {
+            await api.renameSavedModel(savedModelId, nextModelName);
+            await loadSavedModels();
+            notify.success('Model adı güncellendi');
+        } catch (err) {
+            logger.error('Saved model rename failed', err, { savedModelId });
+            notify.error(err, 'Model adı güncellenemedi');
+            throw err;
+        }
+    }, [loadSavedModels]);
+
+    const deleteSavedModel = useCallback(async (savedModelId: string) => {
+        try {
+            await api.deleteSavedModel(savedModelId);
+            await loadSavedModels();
+            notify.success('Model silindi');
+        } catch (err) {
+            logger.error('Saved model delete failed', err, { savedModelId });
+            notify.error(err, 'Model silinemedi');
+            throw err;
+        }
+    }, [loadSavedModels]);
+
     const startNewTraining = useCallback(() => {
         closeTrainingStream();
         loggedStepPayloadsRef.current = {};
@@ -751,6 +782,8 @@ export function useModelSelection(): UseModelSelectionReturn {
         toggleModelSelection,
         updateModelParams,
         selectSavedModel,
+        renameSavedModel,
+        deleteSavedModel,
         startNewTraining,
         trainModels,
         stopTraining,

@@ -1,9 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { BrainCircuit, Play, Target } from 'lucide-react';
+import { BrainCircuit, Check, Pencil, Play, Target, Trash2, X } from 'lucide-react';
 import type { ProblemType, SavedModelSummary } from '@/types/model-selection';
-import { cn } from '@/lib/utils';
 
 interface SavedModelsPanelProps {
     models: SavedModelSummary[];
@@ -11,7 +10,13 @@ interface SavedModelsPanelProps {
     loading?: boolean;
     disabled?: boolean;
     onSelect: (savedModelId: string) => Promise<void> | void;
+    onRename: (savedModelId: string, modelName: string) => Promise<void> | void;
+    onDelete: (savedModelId: string) => Promise<void> | void;
 }
+
+type PendingAction =
+    | { type: 'open' | 'rename' | 'delete'; modelId: string }
+    | null;
 
 function formatMetric(problemType: ProblemType, metrics: SavedModelSummary['metrics']): string {
     if (problemType === 'classification') {
@@ -48,8 +53,12 @@ export function SavedModelsPanel({
     loading = false,
     disabled = false,
     onSelect,
+    onRename,
+    onDelete,
 }: SavedModelsPanelProps) {
-    const [pendingModelId, setPendingModelId] = useState<string | null>(null);
+    const [renamingModelId, setRenamingModelId] = useState<string | null>(null);
+    const [renameValue, setRenameValue] = useState('');
+    const [pendingAction, setPendingAction] = useState<PendingAction>(null);
 
     const visibleModels = useMemo(() => {
         if (!selectedColumn) {
@@ -59,12 +68,62 @@ export function SavedModelsPanel({
         return models.filter((model) => model.targetColumn === selectedColumn);
     }, [models, selectedColumn]);
 
-    const handleSelect = async (savedModelId: string) => {
+    const pendingModelId = pendingAction?.modelId ?? null;
+    const isActionLocked = disabled || pendingAction !== null;
+
+    const startRename = (model: SavedModelSummary) => {
+        if (isActionLocked) {
+            return;
+        }
+
+        setRenamingModelId(model.id);
+        setRenameValue(model.modelName);
+    };
+
+    const cancelRename = () => {
+        if (pendingAction?.type === 'rename') {
+            return;
+        }
+
+        setRenamingModelId(null);
+        setRenameValue('');
+    };
+
+    const submitRename = async (modelId: string) => {
+        const nextName = renameValue.trim();
+        if (!nextName) {
+            return;
+        }
+
         try {
-            setPendingModelId(savedModelId);
-            await onSelect(savedModelId);
+            setPendingAction({ type: 'rename', modelId });
+            await onRename(modelId, nextName);
+            setRenamingModelId(null);
+            setRenameValue('');
         } finally {
-            setPendingModelId(null);
+            setPendingAction(null);
+        }
+    };
+
+    const handleSelect = async (modelId: string) => {
+        try {
+            setPendingAction({ type: 'open', modelId });
+            await onSelect(modelId);
+        } finally {
+            setPendingAction(null);
+        }
+    };
+
+    const handleDelete = async (modelId: string) => {
+        try {
+            setPendingAction({ type: 'delete', modelId });
+            await onDelete(modelId);
+            if (renamingModelId === modelId) {
+                setRenamingModelId(null);
+                setRenameValue('');
+            }
+        } finally {
+            setPendingAction(null);
         }
     };
 
@@ -107,7 +166,8 @@ export function SavedModelsPanel({
             {visibleModels.length > 0 ? (
                 <div className="flex gap-3 overflow-x-auto">
                     {visibleModels.map((model) => {
-                        const isPending = pendingModelId === model.id;
+                        const isRenaming = model.id === renamingModelId;
+                        const isPending = model.id === pendingModelId;
 
                         return (
                             <article
@@ -117,22 +177,55 @@ export function SavedModelsPanel({
                                 <div className="flex flex-col gap-4">
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="min-w-0 flex-1">
-                                            <div className="flex flex-wrap items-center gap-2">
-                                                <h4
-                                                    className="truncate text-base font-semibold text-white"
-                                                    title={model.modelName}
-                                                >
-                                                    {truncateText(model.modelName, 30)}
-                                                </h4>
-                                                <span className="rounded-full border border-cyan-400/30 bg-cyan-400/15 px-2.5 py-1 text-[11px] font-medium text-cyan-100">
-                                                    {model.targetColumn}
-                                                </span>
-                                                <span className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-gray-300">
-                                                    {model.problemType === 'classification'
-                                                        ? 'Sınıflandırma'
-                                                        : 'Regresyon'}
-                                                </span>
-                                            </div>
+                                            {isRenaming ? (
+                                                <div className="flex flex-col gap-2 sm:flex-row">
+                                                    <input
+                                                        value={renameValue}
+                                                        onChange={(event) => setRenameValue(event.target.value)}
+                                                        disabled={isActionLocked}
+                                                        className="min-w-0 flex-1 rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
+                                                        maxLength={255}
+                                                        placeholder="Model adı"
+                                                    />
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => void submitRename(model.id)}
+                                                            disabled={isActionLocked || renameValue.trim().length === 0}
+                                                            className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-xs font-medium text-emerald-200 transition hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-50"
+                                                        >
+                                                            <Check className="h-4 w-4" />
+                                                            Kaydet
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={cancelRename}
+                                                            disabled={pendingAction?.type === 'rename'}
+                                                            className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-gray-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                                                        >
+                                                            <X className="h-4 w-4" />
+                                                            Vazgeç
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <h4
+                                                        className="truncate text-base font-semibold text-white"
+                                                        title={model.modelName}
+                                                    >
+                                                        {truncateText(model.modelName, 30)}
+                                                    </h4>
+                                                    <span className="rounded-full border border-cyan-400/30 bg-cyan-400/15 px-2.5 py-1 text-[11px] font-medium text-cyan-100">
+                                                        Target sütunu: {model.targetColumn}
+                                                    </span>
+                                                    <span className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-gray-300">
+                                                        {model.problemType === 'classification'
+                                                            ? 'Sınıflandırma'
+                                                            : 'Regresyon'}
+                                                    </span>
+                                                </div>
+                                            )}
 
                                             <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-400">
                                                 <span className="rounded-full border border-white/10 px-2.5 py-1">
@@ -152,15 +245,33 @@ export function SavedModelsPanel({
                                         <button
                                             type="button"
                                             onClick={() => void handleSelect(model.id)}
-                                            disabled={disabled || isPending}
-                                            className={cn(
-                                                'inline-flex cursor-pointer items-center gap-2 rounded-xl bg-cyan-400 px-3.5 py-2 text-sm font-medium text-slate-950 transition hover:bg-cyan-300',
-                                                (disabled || isPending) &&
-                                                    'cursor-not-allowed opacity-50'
-                                            )}
+                                            disabled={isActionLocked}
+                                            className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-cyan-400 px-3.5 py-2 text-sm font-medium text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-50"
                                         >
                                             <Play className="h-4 w-4" />
-                                            {isPending ? 'Açılıyor...' : 'Sonuçları Aç'}
+                                            {isPending && pendingAction?.type === 'open'
+                                                ? 'Açılıyor...'
+                                                : 'Sonuçları Aç'}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => startRename(model)}
+                                            disabled={isActionLocked || isRenaming}
+                                            className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3.5 py-2 text-sm font-medium text-gray-100 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                                        >
+                                            <Pencil className="h-4 w-4" />
+                                            Yeniden adlandır
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => void handleDelete(model.id)}
+                                            disabled={isActionLocked}
+                                            className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3.5 py-2 text-sm font-medium text-red-200 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                            {isPending && pendingAction?.type === 'delete'
+                                                ? 'Siliniyor...'
+                                                : 'Sil'}
                                         </button>
                                     </div>
                                 </div>

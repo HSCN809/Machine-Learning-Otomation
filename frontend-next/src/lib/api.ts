@@ -1059,6 +1059,23 @@ export async function getSavedModels(targetColumn?: string | null): Promise<{ mo
     return apiFetch(`/api/model/saved-models${query}`);
 }
 
+export async function renameSavedModel(
+    modelRecordId: string,
+    modelName: string
+): Promise<{ success: boolean; model: SavedModelSummaryResponse }> {
+    return apiFetch(`/api/model/saved-models/${encodeURIComponent(modelRecordId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model_name: modelName }),
+    });
+}
+
+export async function deleteSavedModel(modelRecordId: string): Promise<{ success: boolean }> {
+    return apiFetch(`/api/model/saved-models/${encodeURIComponent(modelRecordId)}`, {
+        method: 'DELETE',
+    });
+}
+
 export async function startModelTraining(
     targetColumn: string,
     problemType: string,
