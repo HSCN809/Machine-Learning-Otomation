@@ -84,7 +84,9 @@ export function SavedModelsPanel({
 
                 <div className="flex items-center gap-2 text-xs text-gray-400">
                     <Target className="h-4 w-4" />
-                    <span>{selectedColumn ? `Filtre: ${selectedColumn}` : 'Tüm targetlar'}</span>
+                    <span className="rounded-full border border-white/10 px-2.5 py-1">
+                        {selectedColumn ? `Filtre: ${selectedColumn}` : 'Tüm targetlar'}
+                    </span>
                 </div>
             </div>
 
