@@ -29,9 +29,9 @@ export function HistogramChart({ data, column, headerActions }: HistogramChartPr
             description="Değer dağılımı"
             headerActions={headerActions}
         >
-            <div className="mx-auto h-[420px] w-full max-w-[860px]">
+            <div className="mx-auto h-[390px] w-full max-w-[860px]">
                 <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                    <BarChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 24 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                         <XAxis
                             dataKey="bin"
@@ -41,7 +41,7 @@ export function HistogramChart({ data, column, headerActions }: HistogramChartPr
                             <Label
                                 value={`${column} aralığı`}
                                 position="insideBottom"
-                                offset={-4}
+                                offset={-10}
                                 style={{ fill: '#9CA3AF', fontSize: 12 }}
                             />
                         </XAxis>

@@ -74,7 +74,7 @@ function renderPieSliceLabel({
         <text
             x={x}
             y={y}
-            fill="#ffffff"
+            fill="#111827"
             textAnchor="middle"
             dominantBaseline="central"
             fontSize={11}
