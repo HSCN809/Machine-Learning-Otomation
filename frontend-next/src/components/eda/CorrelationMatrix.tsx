@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Minus, Plus, RotateCcw } from 'lucide-react';
 import { CorrelationData } from '@/types/eda';
 import { theme } from '@/styles/theme';
@@ -15,6 +15,8 @@ export function CorrelationMatrix({ data, columns }: CorrelationMatrixProps) {
     const [zoom, setZoom] = useState(1);
     const [pan, setPan] = useState({ x: 0, y: 0 });
     const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
+    const viewportRef = useRef<HTMLDivElement | null>(null);
+    const stageRef = useRef<HTMLDivElement | null>(null);
     const matrix = useMemo(() => {
         const matrixData: Record<string, Record<string, number>> = {};
         data.forEach((d) => {
@@ -51,10 +53,30 @@ export function CorrelationMatrix({ data, columns }: CorrelationMatrixProps) {
     const minZoom = 0.7;
     const maxZoom = 1.6;
 
+    const centerStage = () => {
+        const viewport = viewportRef.current;
+        const stage = stageRef.current;
+        if (!viewport || !stage) {
+            return;
+        }
+
+        const viewportRect = viewport.getBoundingClientRect();
+        const stageRect = stage.getBoundingClientRect();
+
+        setPan({
+            x: (viewportRect.width - stageRect.width) / 2,
+            y: (viewportRect.height - stageRect.height) / 2,
+        });
+    };
+
     const handleResetView = () => {
         setZoom(1);
-        setPan({ x: 0, y: 0 });
+        requestAnimationFrame(centerStage);
     };
+
+    useEffect(() => {
+        centerStage();
+    }, [columns.length]);
 
     return (
         <ChartCard
@@ -95,6 +117,7 @@ export function CorrelationMatrix({ data, columns }: CorrelationMatrixProps) {
             }
         >
             <div
+                ref={viewportRef}
                 className="h-[420px] overflow-hidden select-none"
                 onWheel={(event) => {
                     event.preventDefault();
@@ -129,6 +152,7 @@ export function CorrelationMatrix({ data, columns }: CorrelationMatrixProps) {
                 style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
             >
                 <div
+                    ref={stageRef}
                     className="flex h-full w-max items-center gap-8"
                     style={{
                         transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
