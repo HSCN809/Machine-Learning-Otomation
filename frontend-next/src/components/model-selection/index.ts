@@ -9,3 +9,4 @@ export { ConfusionMatrix } from './ConfusionMatrix';
 export { FeatureImportance } from './FeatureImportance';
 export { ModelComparison } from './ModelComparison';
 export { ResultsExport } from './ResultsExport';
+export { SavedModelsPanel } from './SavedModelsPanel';

@@ -46,6 +46,17 @@ export interface TrainingResult {
     timestamp: Date;
 }
 
+export interface SavedModelSummary {
+    id: string;
+    modelId: string;
+    modelName: string;
+    targetColumn: string;
+    problemType: ProblemType;
+    metrics: ModelMetrics;
+    trainingTime: number | null;
+    createdAt: string | null;
+}
+
 export interface ModelMetrics {
     accuracy?: number;
     precision?: number;

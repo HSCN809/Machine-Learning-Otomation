@@ -11,6 +11,7 @@ import { TimelineDrawerLauncher } from '@/components/timeline';
 import { HyperparameterForm } from '@/components/model-selection/HyperparameterForm';
 import { MetricsDisplay } from '@/components/model-selection/MetricsDisplay';
 import { ModelGrid } from '@/components/model-selection/ModelGrid';
+import { SavedModelsPanel } from '@/components/model-selection/SavedModelsPanel';
 import { TargetSelectorClean as TargetSelector } from '@/components/model-selection/TargetSelectorClean';
 import { TrainingProgress } from '@/components/model-selection/TrainingProgress';
 import { useModelSelection } from '@/hooks/useModelSelection';
@@ -87,6 +88,8 @@ export default function ModelSelectionPage() {
         totalTrainingModels,
         columns,
         availableModels,
+        savedModels,
+        isSavedModelsLoading,
         goToStep,
         nextStep,
         skipStep,
@@ -98,6 +101,8 @@ export default function ModelSelectionPage() {
         setProblemType,
         toggleModelSelection,
         updateModelParams,
+        selectSavedModel,
+        startNewTraining,
         trainModels,
         stopTraining,
     } = useModelSelection();
@@ -121,6 +126,7 @@ export default function ModelSelectionPage() {
                         problemType={problemType}
                         onSelect={setTargetColumn}
                         onProblemTypeChange={setProblemType}
+                        disabled={isTraining}
                     />
                 );
             case 1:
@@ -265,6 +271,24 @@ export default function ModelSelectionPage() {
                                     showActiveLine={false}
                                 />
 
+                                {currentStep === 0 && (
+                                    <section
+                                        className="rounded-2xl border border-white/10 p-6"
+                                        style={{
+                                            background:
+                                                'linear-gradient(135deg, rgba(17, 24, 39, 0.6) 0%, rgba(31, 41, 55, 0.4) 100%)',
+                                        }}
+                                    >
+                                        <SavedModelsPanel
+                                            models={savedModels}
+                                            selectedColumn={targetColumn}
+                                            loading={isSavedModelsLoading}
+                                            disabled={isTraining}
+                                            onSelect={selectSavedModel}
+                                        />
+                                    </section>
+                                )}
+
                                 <div
                                     className="rounded-2xl border border-white/10 p-6"
                                     style={{
@@ -272,9 +296,22 @@ export default function ModelSelectionPage() {
                                             'linear-gradient(135deg, rgba(17, 24, 39, 0.6) 0%, rgba(31, 41, 55, 0.4) 100%)',
                                     }}
                                 >
-                                    <div className="mb-6 flex items-center gap-3 border-b border-white/10 pb-4">
-                                        <div className="text-cyan-400">{currentStepInfo?.icon}</div>
-                                        <h2 className="text-xl font-bold text-white">{currentStepInfo?.name}</h2>
+                                    <div className="mb-6 flex items-center justify-between gap-3 border-b border-white/10 pb-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="text-cyan-400">{currentStepInfo?.icon}</div>
+                                            <h2 className="text-xl font-bold text-white">{currentStepInfo?.name}</h2>
+                                        </div>
+                                        {currentStep === 4 && (
+                                            <button
+                                                type="button"
+                                                onClick={startNewTraining}
+                                                disabled={isTraining}
+                                                className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-2 text-sm font-medium text-cyan-200 transition hover:bg-cyan-400/20 disabled:cursor-not-allowed disabled:opacity-50"
+                                            >
+                                                <Play className="h-4 w-4" />
+                                                Yeni model eğit
+                                            </button>
+                                        )}
                                     </div>
 
                                     {renderStepContent()}

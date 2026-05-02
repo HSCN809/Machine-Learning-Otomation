@@ -987,6 +987,17 @@ export interface TrainingResult {
     training_time: number;
 }
 
+export interface SavedModelSummaryResponse {
+    id: string;
+    model_id: string;
+    model_name: string;
+    target_column: string;
+    problem_type: 'classification' | 'regression';
+    metrics: Record<string, number>;
+    training_time: number | null;
+    created_at: string | null;
+}
+
 export interface TrainResponse {
     success: boolean;
     problem_type: string;
@@ -1041,6 +1052,11 @@ export async function getModelComparison(): Promise<{
     primary_metric: string;
 }> {
     return apiFetch('/api/model/comparison');
+}
+
+export async function getSavedModels(targetColumn?: string | null): Promise<{ models: SavedModelSummaryResponse[] }> {
+    const query = targetColumn ? `?target_column=${encodeURIComponent(targetColumn)}` : '';
+    return apiFetch(`/api/model/saved-models${query}`);
 }
 
 export async function startModelTraining(

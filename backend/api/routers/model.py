@@ -63,6 +63,19 @@ class StopTrainingRequest(BaseModel):
     job_id: str
 
 
+def _serialize_saved_model(record) -> Dict[str, Any]:
+    return {
+        "id": record.id,
+        "model_id": record.model_id,
+        "model_name": record.model_name,
+        "target_column": record.target_column,
+        "problem_type": record.problem_type,
+        "metrics": record.metrics_json,
+        "training_time": record.training_time,
+        "created_at": record.created_at.isoformat() if record.created_at else None,
+    }
+
+
 MODEL_PARAM_CASTERS: Dict[str, Dict[str, Any]] = {
     "logistic_regression": {"C": float, "max_iter": int},
     "random_forest_clf": {"n_estimators": int, "max_depth": int},
@@ -1325,6 +1338,32 @@ async def get_results(
         "target_column": target_column,
         "job": active_job,
     }
+
+
+@router.get("/saved-models")
+async def get_saved_models(
+    target_column: Optional[str] = Query(default=None),
+    session_id: str = Depends(require_session),
+    db: Session = Depends(get_db),
+):
+    """List trained models saved for current dataset session."""
+    session = session_manager.get_session(session_id)
+    user_id = session.get("owner_user_id") if session else None
+    if not user_id:
+        raise HTTPException(status_code=400, detail="Valid session ID required.")
+
+    repo = TrainedModelRepository(db)
+    records = repo.list_models(dataset_session_id=session_id, user_id=user_id)
+
+    if target_column:
+        normalized_target_column = target_column.casefold()
+        records = [
+            record
+            for record in records
+            if record.target_column.casefold() == normalized_target_column
+        ]
+
+    return {"models": [_serialize_saved_model(record) for record in records]}
 
 
 @router.get("/comparison")

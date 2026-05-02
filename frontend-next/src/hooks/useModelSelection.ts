@@ -6,6 +6,7 @@ import {
     ProblemType,
     ModelInfo,
     TrainingResult,
+    SavedModelSummary,
     ModelMetrics,
     FeatureImportance,
     CLASSIFICATION_MODELS,
@@ -42,6 +43,8 @@ interface UseModelSelectionReturn {
     totalTrainingModels: number;
     columns: ColumnInfo[];
     availableModels: ModelInfo[];
+    savedModels: SavedModelSummary[];
+    isSavedModelsLoading: boolean;
     goToStep: (step: number) => void;
     nextStep: () => void;
     skipStep: () => void;
@@ -53,6 +56,8 @@ interface UseModelSelectionReturn {
     setProblemType: (problemType: ProblemType) => void;
     toggleModelSelection: (modelId: string) => void;
     updateModelParams: (modelId: string, params: Record<string, unknown>) => void;
+    selectSavedModel: (savedModelId: string) => Promise<void>;
+    startNewTraining: () => void;
     trainModels: () => Promise<void>;
     stopTraining: () => Promise<void>;
     resetAll: () => void;
@@ -116,6 +121,35 @@ function mapTrainingResults(
     });
 }
 
+function mapSavedModelSummary(result: api.SavedModelSummaryResponse): SavedModelSummary {
+    const metrics: ModelMetrics =
+        result.problem_type === 'classification'
+            ? {
+                  accuracy: result.metrics.accuracy || 0,
+                  precision: result.metrics.precision || 0,
+                  recall: result.metrics.recall || 0,
+                  f1Score: result.metrics.f1_score || 0,
+                  auc: result.metrics.auc,
+              }
+            : {
+                  mse: result.metrics.mse || 0,
+                  rmse: result.metrics.rmse || 0,
+                  mae: result.metrics.mae || 0,
+                  r2: result.metrics.r2 || 0,
+              };
+
+    return {
+        id: result.id,
+        modelId: result.model_id,
+        modelName: result.model_name,
+        targetColumn: result.target_column,
+        problemType: result.problem_type,
+        metrics,
+        trainingTime: result.training_time,
+        createdAt: result.created_at,
+    };
+}
+
 export function useModelSelection(): UseModelSelectionReturn {
     const queryClient = useQueryClient();
     const [currentStep, setCurrentStep] = useState(0);
@@ -134,6 +168,8 @@ export function useModelSelection(): UseModelSelectionReturn {
     const [totalTrainingModels, setTotalTrainingModels] = useState(0);
     const [columns, setColumns] = useState<ColumnInfo[]>([]);
     const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
+    const [savedModels, setSavedModels] = useState<SavedModelSummary[]>([]);
+    const [isSavedModelsLoading, setIsSavedModelsLoading] = useState(false);
     const [trainingJobId, setTrainingJobId] = useState<string | null>(null);
     const eventSourceRef = useRef<EventSource | null>(null);
     const timelineRefreshTimeoutRef = useRef<number | null>(null);
@@ -172,6 +208,24 @@ export function useModelSelection(): UseModelSelectionReturn {
         const currentSessionId = api.getStoredSessionId();
         if (currentSessionId) {
             api.setStoredSessionId(currentSessionId);
+        }
+    }, []);
+
+    const loadSavedModels = useCallback(async () => {
+        try {
+            setIsSavedModelsLoading(true);
+            const response = await api.getSavedModels();
+            setSavedModels(response.models.map(mapSavedModelSummary));
+        } catch (err) {
+            if (api.isSessionRequiredError(err)) {
+                setSavedModels([]);
+                return;
+            }
+
+            logger.error('Saved models load failed', err);
+            notify.error(err, 'Kayitli modeller yuklenemedi');
+        } finally {
+            setIsSavedModelsLoading(false);
         }
     }, []);
 
@@ -218,6 +272,7 @@ export function useModelSelection(): UseModelSelectionReturn {
             closeTrainingStream();
             notifyDatasetMutation();
             scheduleTimelineRefresh(150);
+            void loadSavedModels();
             notify.success('Model eğitimi tamamlandı');
             return;
         }
@@ -241,7 +296,7 @@ export function useModelSelection(): UseModelSelectionReturn {
         }
 
         setCurrentStep(3);
-    }, [closeTrainingStream, loadAvailableModels, notifyDatasetMutation, scheduleTimelineRefresh]);
+    }, [closeTrainingStream, loadAvailableModels, loadSavedModels, notifyDatasetMutation, scheduleTimelineRefresh]);
 
     const connectToTrainingStream = useCallback((jobId: string) => {
         closeTrainingStream();
@@ -275,9 +330,10 @@ export function useModelSelection(): UseModelSelectionReturn {
     const loadColumns = useCallback(async () => {
         try {
             setIsLoading(true);
-            const [columnTypes, trainingState] = await Promise.all([
+            const [columnTypes, trainingState, savedModelState] = await Promise.all([
                 api.getColumnTypes(),
                 api.getTrainingResults(),
+                api.getSavedModels().catch(() => ({ models: [] })),
             ]);
 
             const cols: ColumnInfo[] = columnTypes.columns.map((col) => ({
@@ -287,6 +343,7 @@ export function useModelSelection(): UseModelSelectionReturn {
             }));
 
             setColumns(cols);
+            setSavedModels(savedModelState.models.map(mapSavedModelSummary));
             const initialTargetColumn = trainingState.target_column ?? cols[0]?.name ?? null;
 
             const hydratedProblemType =
@@ -319,6 +376,7 @@ export function useModelSelection(): UseModelSelectionReturn {
             if (api.isSessionRequiredError(err)) {
                 setColumns([]);
                 setAvailableModels([]);
+                setSavedModels([]);
                 return;
             }
 
@@ -523,6 +581,75 @@ export function useModelSelection(): UseModelSelectionReturn {
         }));
     }, []);
 
+    const selectSavedModel = useCallback(async (savedModelId: string) => {
+        const selectedSavedModel = savedModels.find((model) => model.id === savedModelId);
+        if (!selectedSavedModel) {
+            return;
+        }
+
+        const relatedModels = savedModels
+            .filter(
+                (model) =>
+                    model.targetColumn === selectedSavedModel.targetColumn &&
+                    model.problemType === selectedSavedModel.problemType
+            )
+            .sort((left, right) => {
+                if (left.id === selectedSavedModel.id) return -1;
+                if (right.id === selectedSavedModel.id) return 1;
+
+                const leftDate = left.createdAt ? new Date(left.createdAt).getTime() : 0;
+                const rightDate = right.createdAt ? new Date(right.createdAt).getTime() : 0;
+                return rightDate - leftDate;
+            });
+
+        closeTrainingStream();
+        loggedStepPayloadsRef.current = {};
+        setTargetColumnState(selectedSavedModel.targetColumn);
+        setProblemTypeState(selectedSavedModel.problemType);
+        await loadAvailableModels(selectedSavedModel.problemType);
+        setSelectedModels(relatedModels.map((model) => model.modelId));
+        setModelParams({});
+        setTrainingResults(
+            relatedModels.map((model) => ({
+                modelId: model.modelId,
+                modelName: model.modelName,
+                metrics: model.metrics,
+                featureImportance: [],
+                trainingTime: model.trainingTime ?? 0,
+                timestamp: model.createdAt ? new Date(model.createdAt) : new Date(),
+            }))
+        );
+        setTrainingJobId(null);
+        setTrainingStatus('completed');
+        setIsTraining(false);
+        setCurrentTrainingModel(null);
+        setCompletedTrainingModels(relatedModels.length);
+        setTotalTrainingModels(relatedModels.length);
+        setCompletedSteps([0, 1, 2, 3]);
+        setSkippedSteps([]);
+        setCurrentStep(4);
+    }, [closeTrainingStream, loadAvailableModels, savedModels]);
+
+    const startNewTraining = useCallback(() => {
+        closeTrainingStream();
+        loggedStepPayloadsRef.current = {};
+        setCurrentStep(0);
+        setCompletedSteps([]);
+        setSkippedSteps([]);
+        setTargetColumnState(null);
+        setProblemTypeState(null);
+        setAvailableModels([]);
+        setSelectedModels([]);
+        setModelParams({});
+        setTrainingResults([]);
+        setTrainingJobId(null);
+        setTrainingStatus('idle');
+        setIsTraining(false);
+        setCurrentTrainingModel(null);
+        setCompletedTrainingModels(0);
+        setTotalTrainingModels(0);
+    }, [closeTrainingStream]);
+
     const trainModels = useCallback(async () => {
         if (selectedModels.length === 0 || !targetColumn || !problemType) return;
 
@@ -610,6 +737,8 @@ export function useModelSelection(): UseModelSelectionReturn {
         totalTrainingModels,
         columns,
         availableModels,
+        savedModels,
+        isSavedModelsLoading,
         goToStep,
         nextStep,
         skipStep,
@@ -621,6 +750,8 @@ export function useModelSelection(): UseModelSelectionReturn {
         setProblemType,
         toggleModelSelection,
         updateModelParams,
+        selectSavedModel,
+        startNewTraining,
         trainModels,
         stopTraining,
         resetAll,
