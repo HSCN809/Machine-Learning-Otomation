@@ -1,5 +1,9 @@
 # DataScience Copilot 🤖📊
 
+> 🌍 **DataScience Copilot — an intelligent assistant that automates EDA, model recommendation and hyperparameter optimization, built with LangChain + Streamlit.**
+>
+> _(Details in Turkish below.)_
+
 <div align="center">
 
 ![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
